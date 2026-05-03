@@ -59,24 +59,15 @@ This is the single highest-leverage technique in archival imaging, and a real ca
 
 ### 3. Page Cradle / Document Easel — gentle support, no contact damage
 
-Most monthly wall calendars are flat single sheets (often torn off a binding ring). Some may still be bound. The recommendation handles both.
-
-**For flat single-sheet pages (the common case):**
+**Page preparation:** All calendar pages will be cut from their binding at the top before scanning, producing flat single sheets. This eliminates the bound-calendar workflow entirely — every page is handled identically on the easel, no V-cradle, no binding-clearance issues, no per-calendar setup variation.
 
 | Item | Price | Notes |
 |---|---|---|
-| **Daige Pro-Easel 30"** | ~$200 | Solid graphic-arts pro easel, adjustable angle (vertical to ~30° tilt), corner clips, foam-lined work surface. The right tool for flat artwork up to ~30" tall. |
+| **Daige Pro-Easel 30"** | ~$200 | Solid graphic-arts pro easel, adjustable angle (vertical to ~30° tilt), corner clips, foam-lined work surface. The right tool for flat artwork up to ~30" tall. Use the corner clips to hold any residual curl from previously-bound pages — gravity + clips beats glass weights every time. |
 
-**For any bound calendars (V-cradle):**
+**Subtotal: ~$200**
 
-| Item | Price | Notes |
-|---|---|---|
-| **Custom V-cradle from a local conservator/bookbinder** | $300–600 | Foam-core or museum-board V-cradle sized to the bound calendar's dimensions, with weighted polyethylene strapping or magnetic page holders. Talas (talasonline.com) sells preservation supplies; a local conservator can build to fit. |
-| **OR: Foam-core DIY V-cradle**, museum-board + Filmoplast tape | ~$50 in materials | Acceptable if you've handled archival materials before. Conservation By Design publishes plans. |
-
-If the calendars are uniformly flat (e.g., torn from binding rings already), **skip the V-cradle entirely** and just use the Daige.
-
-**Subtotal: $200–800** depending on whether bound calendars exist.
+**Cutting tools** (only if not already on hand): an Olfa rotary cutter (~$25), 18" cork-backed metal ruler (~$15), and a 24"×36" self-healing cutting mat (~$40) — ~$80 total — handle the page-separation prep cleanly. Cut close to the binding perforations but leave a clean margin; don't chase the binding holes themselves.
 
 ### 4. Color Management
 
@@ -140,13 +131,13 @@ Adobe Photography Plan (1 TB) is already an active subscription, so software is 
 |---|---|
 | Lighting (Aputure 100x S × 2, softboxes, stands) | ~$1,000 |
 | Cross-polarization (Heliopan CPL + Rosco sheets + tape) | ~$170–190 |
-| Page cradle (Daige Pro-Easel, V-cradle if needed) | $200–800 |
+| Page cradle (Daige Pro-Easel) | ~$200 |
 | Color management (ColorChecker + display calibrator) | ~$320 |
 | Tethered capture (Lumix Tether free; LR Classic + CC already owned) | $0 |
 | Cable + misc + preservation | ~$110 |
-| **Total** | **~$1,800–2,400 up-front** |
+| **Total** | **~$1,800 up-front** |
 
-If only flat single-sheet calendars exist (no bound), drop the V-cradle and the up-front total is ~$1,600.
+Cutting tools (Olfa rotary cutter + ruler + cutting mat, ~$80) add to that if not already on hand.
 
 ---
 
