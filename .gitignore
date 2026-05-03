@@ -1,0 +1,61 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Build output
+build/
+dist/
+.vite/
+.cache/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local task tracker (td) — personal, not shared
+.todos/
+
+# Logs
+logs/
+*.log
+
+# Coverage / test output
+coverage/
+.nyc_output/
+
+# Image pipeline scratch (originals belong in DO Spaces, not the repo)
+images/
+scans/
+ocr-cache/
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
+*.heic
+*.pdf
+
+# Allow images/PDFs in docs/ if we ever need diagrams committed
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.pdf
+
+# Database dumps
+*.dump
+*.sql.gz
