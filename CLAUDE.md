@@ -7,22 +7,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Session Startup (Do These First, In Order)
 
 1. **Read `cs.md`** — hard rules on debugging methodology, infrastructure details, and historical failures. Non-negotiable.
-2. **Read `docs/calendar-history-system.md`** — the authoritative system architecture and data model.
-3. **Read `docs/Calendar_Digitization_Plan.md`** — the capture-side guide (hardware, lighting, OCR vendor options).
-4. **Check recent devlog** — review the last few entries in `docs/devlog/` for recent decisions and work.
-5. **Task management** — run `td usage --new-session` to see current work (after reading docs).
+2. **Read `docs/calendar-history-system-V2.md`** — the authoritative system spec (architecture, data model, module specs, phases). If other docs conflict, this wins.
+3. **Read `docs/ui-mockups-V1.md`** — first-cut UI mockups for Madonna's correction UI (iPad) and the family viewer (phone).
+4. **Read `docs/equipment-shortlist.md`** — capture-side workflow (G9 II + 60mm + LR Classic → DO Spaces handoff to ingestion).
+5. **Check recent devlog** — review the last few entries in `docs/devlog/` for recent decisions and work.
+6. **Task management** — run `td usage --new-session` to see current work (after reading docs).
 
 ## Project Overview
 
 A private family-access web app that digitizes ~60 years of handwritten family calendar entries into a structured, searchable, and explorable personal history.
 
-**Pipeline**: phone-captured calendar page images → OCR/HTR → human correction UI → structured `calendar_days` rows → search, timeline, AI summaries.
+**Pipeline**: G9 II + 60mm macro captures → LR Classic (catalog/keyword/export) → DO Spaces uploads + DB rows → vendor OCR/HTR → LLM cleanup draft → human correction (Madonna on iPad) → structured `calendar_days` rows → entity extraction → search/timeline/book views (family on phones).
 
-The system has two primary surfaces:
-- **Admin/correction UI** — image alongside OCR draft alongside corrected text, with Save/Accept/Next/Tag controls. This is where the bulk of the work happens.
-- **Family view** — read-only timeline, search, and AI-generated yearly/decade summaries.
+The system has three surfaces:
+- **Admin (Gaylon)** — full read/write, manages users, runs reprocessing jobs, reviews audit log
+- **Correction UI (Madonna, iPad-first)** — three-pane editor (image | OCR draft | corrected text), queue-based session workflow, large touch targets, keyboard shortcuts when paired
+- **Family viewer (phone-first)** — "On this day in family history," day detail, year/decade browse, full-text search, immersive book view, person profiles
 
-Built with Node.js (Express) + React (Zustand for state), PostgreSQL as source of truth, hosted on a shared DigitalOcean droplet behind Nginx + Cloudflare at `madonnahist.gaylon.photos`.
+Built with **SvelteKit** (TypeScript, adapter-node, Svelte 5 with runes), **PostgreSQL** as source of truth (port 5434, db `madonnahist`, user `madonnahist_user`), hosted on a shared DigitalOcean droplet (with gaylonphotos and giftlist) behind Nginx + Cloudflare at `madonnahist.gaylon.photos`. Image storage in DigitalOcean Spaces. AI harness workers (OCR, LLM cleanup, entity extractor, summary generator) are queue-driven (Postgres-based) PM2 processes separate from the web app.
+
+Implementation follows the 4-phase plan in `docs/calendar-history-system-V2.md` § 8.
 
 ## Commands
 
@@ -46,41 +50,50 @@ npm run check
 ## Architecture
 
 ### Document Hierarchy
-- `docs/calendar-history-system.md` — **authoritative system spec** (architecture, data model, pipeline, phases). If other docs conflict, this wins.
-- `docs/Calendar_Digitization_Plan.md` — capture-side guide: hardware (overhead phone stands, ring lights), software (Pen to Print, Transkribus, Photo2Calendar), and best practices for scanning.
+- `docs/calendar-history-system-V2.md` — **authoritative system spec (V2)**. Architecture, data model, full module specs, phases. If other docs conflict, this wins.
+- `docs/calendar-history-system.md` — V1 (preliminary ChatGPT draft). Historical reference only — superseded by V2.
+- `docs/ui-mockups-V1.md` — first-cut UI mockups for Madonna's correction UI (iPad) and the family viewer (phone). Information architecture, not pixel-perfect designs.
+- `docs/equipment-shortlist.md` — capture-side workflow: G9 II + Olympus 60mm macro on tripod (horizontal, conservation-lab geometry), Lumix Tether → LR Classic → exported TIFFs feed the ingestion module.
+- `docs/Calendar_Digitization_Plan.md` — original capture-side guide (hardware vendor research, OCR vendor options). Largely superseded by `equipment-shortlist.md`; retained for historical context.
 
 ### High-Level Data Flow
 
 ```
-Local Capture (iPhone 15 Pro Max + overhead stand)
+G9 II + Olympus 60mm macro (tripod, horizontal capture, page on cradle)
     ↓
-Image Upload → DigitalOcean Spaces (originals + per-day crops, organized by year/month)
+Lumix Tether → watched folder → LR Classic auto-import (catalog, keyword, develop)
     ↓
-OCR / HTR Pipeline (Transkribus / Google Vision / Azure Document Intelligence)
+LR Classic export (TIFF + sidecar) → upload-page.mjs script
     ↓
-LLM Cleanup (correct OCR errors, normalize entities)
+DigitalOcean Spaces (originals + per-day crops) + Postgres (calendar_pages, calendar_days)
     ↓
-PostgreSQL (source of truth — calendar_pages, calendar_days; image paths reference Spaces objects)
+OCR Worker (Transkribus / Google Vision / Azure — pluggable)
     ↓
-Node/Express API
+LLM Cleanup Worker (writes llm_draft_text, NEVER corrected_text)
     ↓
-React UI (Admin correction view + Family read-only view)
+Madonna's correction UI (iPad) — three-pane editor writes corrected_text
     ↓
-nginx → Cloudflare (TLS, edge caching)
+Entity Extractor Worker (tags, entities) → Summary Generator Worker (year/decade narratives)
+    ↓
+SvelteKit family viewer (phone-first) — today, day detail, year/decade, search, book view
+    ↓
+nginx → Cloudflare (TLS, edge caching) at madonnahist.gaylon.photos
 ```
 
 ### Tech Stack
-- **Backend**: Node.js (Express), `pg` (node-postgres)
-- **Frontend**: React, Zustand
-- **Image processing**: Sharp; optional OpenCV for deskew/perspective correction
-- **OCR / HTR**: multi-vendor — Transkribus (trainable on family handwriting), Google Vision API, Azure Document Intelligence. Pipeline should treat OCR as pluggable.
-- **Database**: PostgreSQL (native install, no Docker) — `madonnahist` on port `5434`, user `madonnahist_user`
-- **Image storage**: DigitalOcean Spaces (S3-compatible) — originals and per-day crops; `calendar_pages.page_image_path` / `calendar_days.day_image_path` store Spaces object keys, not local paths
+- **Frontend + server**: **SvelteKit** (TypeScript, adapter-node, Svelte 5 with runes) — chosen over React for smaller mobile runtime, full-stack-in-one-framework simplicity, and operational match with giftlist on the same droplet
+- **Database**: PostgreSQL (native install, no Docker) — `madonnahist` on port `5434`, user `madonnahist_user`. `pg` driver.
+- **Auth**: cookie sessions + argon2id (matches giftlist pattern)
+- **Image processing**: Sharp (Node) for thumbnails and day-cell crops
+- **OCR / HTR**: multi-vendor pluggable — Transkribus (trainable on family handwriting, primary), Google Vision API, Azure Document Intelligence (fallbacks)
+- **LLM**: Anthropic Claude (or pluggable) for cleanup, entity extraction, summary generation
+- **Image storage**: DigitalOcean Spaces (S3-compatible) — originals and per-day crops; `calendar_pages.page_image_path` / `calendar_days.day_image_path` store Spaces object keys
+- **Workers**: PostgreSQL-backed job queue (`SELECT FOR UPDATE SKIP LOCKED` on `job_runs`); each worker is a separate PM2 entry
 - **Hosting**: DigitalOcean droplet (shared with gaylonphotos + giftlist) on port `3002`, nginx reverse proxy, Cloudflare in front at `madonnahist.gaylon.photos`
 
 ### Data Model
 
-Core tables (full DDL in `docs/calendar-history-system.md` Section 4):
+Core tables (full DDL in `docs/calendar-history-system-V2.md` Section 5):
 
 **`calendar_pages`** — one row per scanned page (typically a month).
 - `id`, `year`, `month`, `page_image_path`, `created_at`
@@ -119,28 +132,26 @@ Independent components, each runnable as a worker:
 - **Entity Extractor** — pulls people, places, events into `entities JSONB`
 - **Summary Generator** — per-day, per-month, per-year, per-decade narratives
 
-### API
+### API & Routing
 
-```
-GET  /days                    — list days (filterable by date range, status)
-POST /days/:id/correct        — save corrected_text + status transition
-GET  /timeline                — chronological browse
-GET  /summary/year/:year      — AI-generated year summary
-```
+SvelteKit `+server.js` endpoints + form actions; no separate Express service. Full route map in `docs/calendar-history-system-V2.md` § 6.6–6.8. Summary:
 
-### Routing & Access
+- `/correct/*` — Madonna's correction UI (corrector or admin role)
+  - `/correct` — session home / queue
+  - `/correct/day/[date]` — three-pane editor
+  - `/correct/calendar` — month-grid navigator
+- `/admin/*` — admin surfaces (admin role only)
+- `/app/*` (or `/`) — family viewer (any authenticated user, read-only)
+  - `/app` — "On this day in family history"
+  - `/app/day/[date]`, `/app/year/[year]`, `/app/decade/[decade]`
+  - `/app/search`, `/app/book/[scope]/[key]`, `/app/person/[slug]`
 
-- **Admin/correction routes** — authenticated, full read/write
-- **Family routes** — authenticated read-only, no correction UI
+## Phases (per `docs/calendar-history-system-V2.md` § 8)
 
-(Route layout TBD — define in CLAUDE.md when implementation begins.)
-
-## Phases (per `docs/calendar-history-system.md` §10)
-
-1. **Phase 1 — MVP**: capture pipeline, basic OCR, correction UI, DB writes
-2. **Phase 2 — Search + UI**: full-text search, timeline browse, family read-only view
-3. **Phase 3 — AI enrichment**: entity extraction, AI summaries
-4. **Phase 4 — Advanced automation**: training Transkribus on family handwriting, batch reprocessing, narrative generation
+1. **Phase 1 — Foundation**: DB, auth, page upload script, naive day-cell cropping, OCR worker (one vendor), correction UI three-pane editor + queue, basic day-detail viewer
+2. **Phase 2 — UX & Search**: refined day-cell cropping (template UI), search, tag UI, calendar nav, mobile viewer polish
+3. **Phase 3 — AI enrichment**: LLM cleanup, entity extractor, name aliases, person/place pages
+4. **Phase 4 — Narrative & Polish**: summary generator, book view, decade summaries, Transkribus family-handwriting training, semantic search (pgvector), backup automation
 
 ## Environment Variables
 
