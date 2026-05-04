@@ -233,3 +233,93 @@ Lock these into a Custom Mode (C1) on the dial so you can't fat-finger them mid-
 - [Capture One supported cameras (G9 II not in tethering list)](https://support.captureone.com/hc/en-us/articles/360002718118-Camera-Models-and-RAW-Files-Supported-by-Capture-One)
 - [Gaylord Archival Sure-Grip Cotton Gloves](https://www.gaylord.com/Preservation/Conservation-Supplies/Gloves/Sure-Grip-Cotton-Gloves-(12-Pairs)/p/HYB00484)
 - [Talas conservation supplies (cradles, archival materials)](https://www.talasonline.com/)
+
+---
+
+## Ordering List
+
+Organized by vendor so each batch can be a single cart/checkout. Prices verified May 2026 — confirm before ordering, photo gear pricing drifts ±15% on sales. Quantities and links provided for one-click navigation.
+
+### Order 1 — B&H Photo (largest cart, photo specialist)
+
+B&H is the right default for this list: no sales tax for most states (NY only), reliable stock on archival/pro gear, and they package multi-line orders together. Place this order first.
+
+| ✓ | Item | Qty | Unit | Total | Link |
+|---|------|-----|------|-------|------|
+| ☐ | Aputure Amaran 100x S Bi-Color COB LED | 2 | $299 | $598 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=amaran+100x+s) |
+| ☐ | Aputure Light Dome SE softbox (33") | 2 | $129 | $258 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=aputure+light+dome+se) |
+| ☐ | Manfrotto 1052BAC compact light stand (7.7') | 2 | $60 | $120 | [B&H](https://www.bhphotovideo.com/c/product/45772-REG/Manfrotto_1052BAC_1052BAC_Mini_Compact_Stand.html) |
+| ☐ | Aputure 8.2' light stand bag | 1 | $30 | $30 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=aputure+light+stand+bag) |
+| ☐ | Heliopan 46mm Slim SH-PMC Circular Polarizer | 1 | $100 | $100 | [B&H](https://www.bhphotovideo.com/c/product/430946-REG/Heliopan_704640_46mm_Slim_Circular_Polarizer.html) |
+| ☐ | Rosco #7300 Linear Polarizing Filter 17"×20" sheet | 1 | $60 | $60 | [B&H](https://www.bhphotovideo.com/c/product/45130-REG/Rosco_101073001720_Polarizing_7300_Filter.html) |
+| ☐ | Calibrite ColorChecker Passport Photo 2 | 1 | $119 | $119 | [B&H](https://www.bhphotovideo.com/c/product/1649345-REG/calibrite_ccpp2_colorchecker_passport_photo_2.html) |
+| ☐ | Calibrite Display Plus HL monitor calibrator | 1 | $200 | $200 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=calibrite+display+plus+hl) |
+| ☐ | Tether Tools TetherPro USB-C to USB-C 15' cable, orange | 1 | $40 | $40 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=tetherpro+usb-c+orange) |
+| ☐ | Hama or Manfrotto hot-shoe bubble level | 1 | $15 | $15 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=hot+shoe+bubble+level) |
+| ☐ | Permacel/Pro Gaff 2" black gaffer tape | 1 | $20 | $20 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=gaffer+tape+2+inch+black) |
+| | | | **B&H subtotal** | **~$1,560** | |
+
+### Order 2 — Daige direct (or B&H if available)
+
+| ✓ | Item | Qty | Unit | Total | Link |
+|---|------|-----|------|-------|------|
+| ☐ | Daige Pro-Easel 30" | 1 | $200 | $200 | [Daige](https://daige.com/products/pro-easel) |
+| | | | **Daige subtotal** | **~$200** | |
+
+### Order 3 — Gaylord Archival (preservation-specific)
+
+| ✓ | Item | Qty | Unit | Total | Link |
+|---|------|-----|------|-------|------|
+| ☐ | Sure-Grip Cotton Gloves (12 pairs) | 1 | $10 | $10 | [Gaylord](https://www.gaylord.com/Preservation/Conservation-Supplies/Gloves/Sure-Grip-Cotton-Gloves-(12-Pairs)/p/HYB00484) |
+| ☐ | Lineco archival polyester sleeves (letter or tabloid size, pick to fit pages) | 1 | $25 | $25 | [Gaylord](https://www.gaylord.com/Preservation/Storage/Polyester/) |
+| | | | **Gaylord subtotal** | **~$35** | |
+
+Gaylord and Talas both stock the polyester sleeves; either works. Talas tends to have more size options.
+
+### Order 4 — Amazon (small misc)
+
+| ✓ | Item | Qty | Unit | Total | Link |
+|---|------|-----|------|-------|------|
+| ☐ | Pencil-style anti-static brush (camera lens style works) | 1 | $10 | $10 | [Amazon](https://www.amazon.com/s?k=pencil+anti+static+brush+photography) |
+| | | | **Amazon subtotal** | **~$10** | |
+
+### Order 5 — Cutting tools (only if not on hand)
+
+Skip this whole section if you already own cutting equipment. Available at any of B&H, Amazon, Blick Art Materials, or Dick Blick.
+
+| ✓ | Item | Qty | Unit | Total | Link |
+|---|------|-----|------|-------|------|
+| ☐ | Olfa 45mm rotary cutter | 1 | $25 | $25 | [Amazon](https://www.amazon.com/s?k=olfa+45mm+rotary+cutter) |
+| ☐ | 18" cork-backed stainless steel ruler | 1 | $15 | $15 | [Amazon](https://www.amazon.com/s?k=18+inch+cork+backed+steel+ruler) |
+| ☐ | 24"×36" self-healing cutting mat | 1 | $40 | $40 | [Amazon](https://www.amazon.com/s?k=24x36+self+healing+cutting+mat) |
+| | | | **Cutting tools subtotal** | **~$80** | |
+
+---
+
+### Grand Total
+
+| Order | Vendor | Subtotal |
+|-------|--------|----------|
+| 1 | B&H Photo | ~$1,560 |
+| 2 | Daige direct | ~$200 |
+| 3 | Gaylord Archival | ~$35 |
+| 4 | Amazon | ~$10 |
+| 5 | Cutting tools (optional) | ~$80 |
+| | **Total** | **~$1,805–1,885** |
+
+### Software (already owned — verify only)
+
+| ✓ | Item | Status |
+|---|------|--------|
+| ☐ | Lumix Tether — confirm latest version installed on Mac | [Free download](https://av.jpn.support.panasonic.com/support/global/cs/soft/download/d_lumixtether.html) |
+| ☐ | Lightroom Classic — confirm installed and licensed under existing 1 TB plan | Already paying |
+| ☐ | Lightroom CC — confirm installed on Mac + iPad + iPhone for cross-device sync | Already paying |
+
+### Ordering Notes
+
+- **Place B&H first.** It's the bulk of the spend and they're the most reliable for stock + ship time. Once it ships, Daige and Gaylord can run in parallel — neither depends on B&H gear arriving first.
+- **Verify the Heliopan thread size before ordering.** The Olympus 60mm f/2.8 is 46mm — confirmed in this doc, but worth a glance at the lens before checkout. A 49mm or 52mm CPL will not fit.
+- **The Rosco sheet is one purchase for the project.** A single 17"×20" sheet cut in half covers both light panel softboxes. Don't order two.
+- **Skip the Calibrite Display Plus HL** if you already have any recent ColorChecker or X-Rite display calibrator (i1Display Pro, Spyder X, etc.). Re-calibrating a known-good profile in a year is fine. The ColorChecker Passport Photo 2 is the non-skippable color-management item.
+- **Aputure Amaran model name drift.** Aputure has rebranded the Amaran line a few times. If "Amaran 100x S" is out of stock, the equivalent successor (Amaran 100x or Amaran COB 100x S) at 100W bi-color with CRI 95+/TLCI 95+ is acceptable. Avoid the non-bi-color "100d" daylight-only versions — you want the ability to nudge color temperature.
+- **Cradle alternate.** If Daige Pro-Easel 30" is out of stock or backordered, the Testrite #500 Lite Easel ($150-180) is a workable substitute with similar geometry.
