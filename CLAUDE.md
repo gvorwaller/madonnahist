@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Session Startup (Do These First, In Order)
 
 1. **Read `cs.md`** — hard rules on debugging methodology, infrastructure details, and historical failures. Non-negotiable.
-2. **Read `docs/calendar-history-system-V2.md`** — the authoritative system spec (architecture, data model, module specs, phases). If other docs conflict, this wins.
-3. **Read `docs/ui-mockups-V1.md`** — first-cut UI mockups for Madonna's correction UI (iPad) and the family viewer (phone).
+2. **Read `docs/calendar-history-system-V4.md`** — the authoritative system spec (architecture, data model with append-only history tables, DB role grants, module specs, phases). If other docs conflict, this wins.
+3. **Read `docs/ui-mockups-V2.md`** — UI mockups for Madonna's correction UI (iPad) and the family viewer (phone).
 4. **Read `docs/equipment-shortlist.md`** — capture-side workflow (G9 II + 60mm + LR Classic → DO Spaces handoff to ingestion).
 5. **Check recent devlog** — review the last few entries in `docs/devlog/` for recent decisions and work.
 6. **Task management** — run `td usage --new-session` to see current work (after reading docs).
@@ -26,7 +26,7 @@ The system has three surfaces:
 
 Built with **SvelteKit** (TypeScript, adapter-node, Svelte 5 with runes), **PostgreSQL** as source of truth (port 5434, db `madonnahist`, user `madonnahist_user`), hosted on a shared DigitalOcean droplet (with gaylonphotos and giftlist) behind Nginx + Cloudflare at `madonnahist.gaylon.photos`. Image storage in DigitalOcean Spaces. AI harness workers (OCR, LLM cleanup, entity extractor, summary generator) are queue-driven (Postgres-based) PM2 processes separate from the web app.
 
-Implementation follows the 4-phase plan in `docs/calendar-history-system-V2.md` § 8.
+Implementation follows the 4-phase plan in `docs/calendar-history-system-V4.md` § 11.
 
 ## Commands
 
@@ -50,11 +50,10 @@ npm run check
 ## Architecture
 
 ### Document Hierarchy
-- `docs/calendar-history-system-V2.md` — **authoritative system spec (V2)**. Architecture, data model, full module specs, phases. If other docs conflict, this wins.
-- `docs/calendar-history-system.md` — V1 (preliminary ChatGPT draft). Historical reference only — superseded by V2.
-- `docs/ui-mockups-V1.md` — first-cut UI mockups for Madonna's correction UI (iPad) and the family viewer (phone). Information architecture, not pixel-perfect designs.
+- `docs/calendar-history-system-V4.md` — **authoritative system spec**. Architecture, data model (with append-only `ocr_runs` / `llm_draft_runs` / `day_corrections`), DB roles & grants, trigger-maintained denormalizations, module specs, phases. If other docs conflict, this wins.
+- `docs/ui-mockups-V2.md` — UI mockups for Madonna's correction UI (iPad) and the family viewer (phone). Information architecture, not pixel-perfect designs; visual polish (palette, fonts) deferred.
 - `docs/equipment-shortlist.md` — capture-side workflow: G9 II + Olympus 60mm macro on tripod (horizontal, conservation-lab geometry), Lumix Tether → LR Classic → exported TIFFs feed the ingestion module.
-- `docs/Calendar_Digitization_Plan.md` — original capture-side guide (hardware vendor research, OCR vendor options). Largely superseded by `equipment-shortlist.md`; retained for historical context.
+- `docs/Calendar_Digitization_Plan.md` — original capture-side guide (preliminary research). Superseded by `equipment-shortlist.md`; retained for historical context.
 
 ### High-Level Data Flow
 
@@ -93,48 +92,47 @@ nginx → Cloudflare (TLS, edge caching) at madonnahist.gaylon.photos
 
 ### Data Model
 
-Core tables (full DDL in `docs/calendar-history-system-V2.md` Section 5):
+Full DDL is in `docs/calendar-history-system-V4.md` § 6. Quick orientation:
 
-**`calendar_pages`** — one row per scanned page (typically a month).
-- `id`, `year`, `month`, `page_image_path`, `created_at`
+- **`calendar_pages`** — one row per scanned monthly page
+- **`calendar_days`** — canonical per-day record (`entry_date` UNIQUE). Carries the *current* `corrected_text` as a denormalized read-cache plus FK pointers to the latest machine outputs (`latest_ocr_run_id`, `latest_llm_draft_run_id`, `latest_confidence_score`).
+- **`ocr_runs` / `llm_draft_runs`** — append-only history of every OCR vendor attempt and every LLM cleanup pass. Multiple runs per day coexist; `calendar_days` points at the latest.
+- **`day_corrections`** — append-only history of every human save. The trigger `trg_after_correction_insert` is the *only* writer of `calendar_days.corrected_text`.
+- **`day_tags`** (relational, replaces a `TEXT[]`) — freeform tags with source human/AI
+- **`entities` + `day_entities`** — canonical people/places/events with `alias_of_entity_id` resolution
+- **`crop_templates`** + `calendar_days.crop_bounds` — first-class crop geometry, per year/month
+- **`correction_sessions`** — explicit session state for "resume where you left off"
+- **`narrative_summaries`**, **`audit_log`**, **`job_runs`**, **`app_state`** — supporting tables
 
-**`calendar_days`** — one row per calendar day, with full OCR + correction lifecycle.
-- `id`, `page_id` (FK), `entry_date` (UNIQUE), `day_image_path`
-- `ocr_initial_text` — raw OCR output
-- `corrected_text` — human-validated version
-- `confidence_score` — float, from OCR vendor or post-LLM scoring
-- `correction_status` — workflow state (e.g., `pending`, `in_progress`, `accepted`)
-- `tags TEXT[]`, `entities JSONB` — extracted people/places/events
-- `ai_summary` — per-day or aggregated narrative
-- `created_at`, `updated_at`
+Triggers maintain `calendar_days` denormalizations from inserts on `day_corrections`, `ocr_runs`, `llm_draft_runs`, `day_tags`, and `day_entities` (see V4 § 6.1). The `search_aux_text` column is trigger-maintained and folds tag labels + entity names into the FTS index.
 
-`entry_date` is unique — one canonical row per calendar day, even if multiple page scans cover it.
-
-### OCR Pipeline
+### OCR Pipeline & Human-Truth Invariant
 
 ```
-image → OCR → LLM cleanup → structured text → DB
+image → OCR worker → ocr_runs row → LLM cleanup worker → llm_draft_runs row
+                                  ↓
+                  Madonna's correction UI → day_corrections row
+                                  ↓
+                  trigger updates calendar_days.corrected_text (the only writer)
 ```
 
-Stages are independent and idempotent — a day can be re-OCR'd, re-cleaned, or re-summarized without losing prior corrected text. Human `corrected_text` is sacred and never overwritten by automation.
+**Human `corrected_text` is sacred.** Machine outputs are append-only history that the UI surfaces as suggestions only. The invariant is enforced **at the DB role layer**, not just policy: workers connect as `madonnahist_worker`, which has no UPDATE permission on `calendar_days.corrected_text`/`corrected_by`/`corrected_at`/`correction_status` (see V4 § 8). A buggy worker gets a permission error, not silent corruption.
 
 ### Human Correction UI
 
-Three-pane layout: `[ Image ] | [ OCR ] | [ Corrected ]`
-
-Controls: **Save**, **Accept** (corrected = ocr), **Next**, **Tag**. Optimized for keyboard-driven, high-throughput correction sessions.
+Three-pane layout: `[ Image ] | [ OCR + LLM draft ] | [ Corrected ]`. iPad-first, large touch targets, queue-based session workflow. Full mockups in `docs/ui-mockups-V2.md` § A.
 
 ### AI Harness
 
-Independent components, each runnable as a worker:
-- **OCR Worker** — submits images to vendor, stores raw text + confidence
-- **LLM Cleanup** — fixes obvious OCR errors, normalizes punctuation/dates
-- **Entity Extractor** — pulls people, places, events into `entities JSONB`
-- **Summary Generator** — per-day, per-month, per-year, per-decade narratives
+Independent workers, each as a separate PM2 entry, all reading `job_runs` via `SELECT FOR UPDATE SKIP LOCKED`:
+- **OCR Worker** — submits images to vendor; appends `ocr_runs` row; trigger updates `calendar_days.latest_ocr_run_id`
+- **LLM Cleanup Worker** — appends `llm_draft_runs` row based on the latest OCR run + context
+- **Entity Extractor** — on `accepted` correction, writes to `entities` and `day_entities`, resolves aliases, optionally proposes AI-sourced `day_tags`
+- **Summary Generator** — per-year/decade/person narratives into `narrative_summaries` (unpublished by default; admin gates publication)
 
 ### API & Routing
 
-SvelteKit `+server.js` endpoints + form actions; no separate Express service. Full route map in `docs/calendar-history-system-V2.md` § 6.6–6.8. Summary:
+SvelteKit `+server.ts` endpoints + form actions; no separate Express service. Full route map in `docs/calendar-history-system-V4.md` § 9.6–9.8. Summary:
 
 - `/correct/*` — Madonna's correction UI (corrector or admin role)
   - `/correct` — session home / queue
@@ -146,7 +144,7 @@ SvelteKit `+server.js` endpoints + form actions; no separate Express service. Fu
   - `/app/day/[date]`, `/app/year/[year]`, `/app/decade/[decade]`
   - `/app/search`, `/app/book/[scope]/[key]`, `/app/person/[slug]`
 
-## Phases (per `docs/calendar-history-system-V2.md` § 8)
+## Phases (per `docs/calendar-history-system-V4.md` § 11)
 
 1. **Phase 1 — Foundation**: DB, auth, page upload script, naive day-cell cropping, OCR worker (one vendor), correction UI three-pane editor + queue, basic day-detail viewer
 2. **Phase 2 — UX & Search**: refined day-cell cropping (template UI), search, tag UI, calendar nav, mobile viewer polish

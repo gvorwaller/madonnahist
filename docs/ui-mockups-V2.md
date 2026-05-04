@@ -1,6 +1,8 @@
-# UI Mockups — V1 (First Cut)
+# UI Mockups — V2
 
 > Information-architecture sketches, not pixel-perfect designs. Two surfaces: Madonna's iPad correction UI and the family phone viewer. Visual polish (palette, fonts, exact spacing) intentionally deferred — covers the *what* and *where*, not the *prettiness*.
+
+> Changes from V1: the correction editor now gives more space to image + final text than raw OCR, and book view is now entered contextually rather than from global bottom navigation.
 
 ## A. Madonna's Correction UI (iPad-first)
 
@@ -50,7 +52,7 @@ iPad landscape primary, iPad portrait acceptable, desktop fine. Touch-first; key
 
 ### A2. Day Correction (`/correct/day/[date]`) — iPad landscape
 
-The main work surface. Three columns, equal width, with a bottom action bar.
+The main work surface. Three columns with weighted emphasis: image `35%`, OCR/drafts `25%`, corrected text `40%`. Raw OCR can collapse when Madonna wants more writing room.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────┐
@@ -86,9 +88,9 @@ The main work surface. Three columns, equal width, with a bottom action bar.
 ```
 
 **Three columns:**
-1. **Image** (left) — the day-cell crop. Pinch-to-zoom, double-tap to fit. "View full month page" link expands to the full scanned page in a modal.
-2. **OCR draft** (middle) — read-only. Top half: raw OCR. Bottom half: LLM-cleaned suggestion with "Use this suggestion" button (one tap copies it into the right pane).
-3. **Corrected text** (right) — the editable field. Auto-saves on debounce. Tags below. Status indicator.
+1. **Image** (left, wider) — the day-cell crop. Pinch-to-zoom, double-tap to fit. "View full month page" link expands to the full scanned page in a modal.
+2. **OCR draft** (middle, narrower) — read-only by default. Top half: raw OCR. Bottom half: LLM-cleaned suggestion with "Use this suggestion" button. The raw OCR subsection can collapse to a single summary row.
+3. **Corrected text** (right, widest) — the editable field. Auto-saves on debounce. Tags below. Status indicator.
 
 **Bottom action bar (always visible, large buttons):**
 - `Flag illegible` — sets `correction_status = 'flagged'`, prompts for an optional note
@@ -236,15 +238,16 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 │  [ See all of May 1972 ▸ ]  │
 │                             │
 ├─────────────────────────────┤
-│  [🏠]  [📅]  [🔍]  [📖]      │
+│  [🏠]  [📅]  [🔍]            │
 └─────────────────────────────┘
 ```
 
-**Bottom nav (4 items):**
+**Bottom nav (3 items):**
 - 🏠 Today / On this day
 - 📅 Browse (year/decade)
 - 🔍 Search
-- 📖 Book mode
+
+**Book view entry:** Contextual only. Readers enter book mode from a year, person, or day context where the scope is already clear.
 
 **Cards:**
 - Image thumbnail (lazy-loaded, served from Cloudflare cache)
@@ -303,7 +306,7 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 │  See full page: March 1972  │
 │                             │
 ├─────────────────────────────┤
-│  [🏠]  [📅]  [🔍]  [📖]      │
+│  [🏠]  [📅]  [🔍]            │
 └─────────────────────────────┘
 ```
 
@@ -315,6 +318,7 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 5. AI-generated context paragraph (when present; gracefully absent otherwise). Marked `— generated` so readers know it's not from the calendar.
 6. Prev/next day swipe arrows (also: swipe gesture on the image)
 7. Link to the full month page
+8. Contextual action such as "Read 1972 as a book" when the surrounding scope is obvious
 
 ---
 
@@ -350,14 +354,14 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 │  [ Read 1972 as a book ▸ ]  │
 │                             │
 ├─────────────────────────────┤
-│  [🏠]  [📅]  [🔍]  [📖]      │
+│  [🏠]  [📅]  [🔍]            │
 └─────────────────────────────┘
 ```
 
 **Behavior:**
 - Each month section: micro-grid of day numbers (tappable) + 3 highlighted entries (tap → day detail)
 - Year chevrons at top
-- Footer: "Read 1972 as a book" → enters book view
+- Footer: "Read 1972 as a book" → enters book view from the current year context
 
 ---
 
@@ -396,7 +400,7 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 │  [ ... more results ... ]   │
 │                             │
 ├─────────────────────────────┤
-│  [🏠]  [📅]  [🔍]  [📖]      │
+│  [🏠]  [📅]  [🔍]            │
 └─────────────────────────────┘
 ```
 
@@ -508,7 +512,7 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 │   Tap a decade for the list │
 │                             │
 ├─────────────────────────────┤
-│  [🏠]  [📅]  [🔍]  [📖]      │
+│  [🏠]  [📅]  [🔍]            │
 └─────────────────────────────┘
 ```
 
@@ -533,7 +537,7 @@ Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacen
 - Tap targets ≥48×48px (≥56×56pt on the iPad correction UI)
 - No gesture-only navigation; everything reachable via visible labeled controls
 
-### What's NOT in V1
+### What's NOT in V2
 - Visual polish (will iterate after Madonna does her first real session and tells us what's annoying)
 - Comments / annotations on entries (Phase 3+)
 - Sharing entries to family group chats (Phase 4)
