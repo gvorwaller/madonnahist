@@ -376,7 +376,9 @@ Four triggers keep `calendar_days` read-fast without violating the append-only i
 
 **c) `trg_after_correction_insert`** — on `day_corrections` AFTER INSERT, splits behavior by `NEW.status_after`:
   - **`status_after = 'accepted'`** → updates `calendar_days.corrected_text`, `corrected_by`, `corrected_at`, `correction_status`, `review_note`. The accepted text is now what `/app/*` viewers see.
-  - **`status_after IN ('in_progress', 'flagged', 'illegible')`** → updates only the editing-state columns (`correction_status`, `review_note`, `current_session_id`, `editing_started_at`). **Does NOT touch `corrected_text`/`corrected_by`/`corrected_at`.** Auto-saves of half-typed drafts are preserved as audit history in `day_corrections` but never become the public canonical text.
+  - **`status_after IN ('in_progress', 'flagged', 'illegible')`** → updates only `correction_status` and `review_note` from the new row. **Does NOT touch `corrected_text`/`corrected_by`/`corrected_at`.** Auto-saves of half-typed drafts are preserved as audit history in `day_corrections` but never become the public canonical text.
+
+(Session-tracking columns — `current_session_id`, `editing_started_at`, `last_opened_by`, `last_opened_at` — are *not* touched by this trigger; they're set by the app on day-open via a direct `UPDATE`. None of those columns are in the §8 `REVOKE` list, so the app role can write them.)
 
 This is the only mechanism by which `calendar_days.corrected_text` gets written. The web app and admin scripts both go through `INSERT INTO day_corrections`; the trigger propagates conditionally.
 
@@ -547,11 +549,11 @@ Phase 1 ships with one default crop template (5×7 grid for standard wall calend
 - `/correct/done` — session summary
 
 **Key behaviors:**
-- Opening a day attaches it to the user's active `correction_sessions` row, sets `current_day_id`, and updates `last_opened_*` on `calendar_days`
-- Auto-save fires on debounce (1s of inactivity) — inserts a new `day_corrections` row with current text and `status_after = 'in_progress'`. The trigger updates `calendar_days.correction_status` and editing-state columns but **does NOT propagate the draft text into `calendar_days.corrected_text`** (see §6.1.c). Half-typed drafts stay in `day_corrections` history; the family viewer continues to show the most recent *accepted* version.
+- Opening a day: the app inserts/updates the user's active `correction_sessions` row (sets `current_day_id`), then issues a direct `UPDATE` on `calendar_days` to set `last_opened_by`, `last_opened_at`, `editing_started_at`, and `current_session_id`. These columns aren't in the §8 `REVOKE` list, so the app role can write them. This is the only path that touches the session-tracking columns; the save-trigger never does.
+- Auto-save fires on debounce (1s of inactivity) — inserts a new `day_corrections` row with current text and `status_after = 'in_progress'`. The trigger updates only `calendar_days.correction_status` and `review_note`. It **does NOT propagate the draft text into `calendar_days.corrected_text`** (see §6.1.c). Half-typed drafts stay in `day_corrections` history; the family viewer continues to show the most recent *accepted* version.
 - The editor reads the latest `day_corrections` row regardless of status, so Madonna's in-progress draft restores on reopen — even after a crash or session timeout.
-- "Save & Next" inserts with `status_after = 'accepted'`. *This* is the moment `calendar_days.corrected_text` updates; the queue advances.
-- "Flag illegible" prompts for a `review_note` and inserts with `status_after = 'flagged'` — updates editing-state columns only, not text.
+- "Save & Next" inserts with `status_after = 'accepted'`. *This* is the moment `calendar_days.corrected_text` updates; the queue advances; an `entity_extract` job is enqueued.
+- "Flag illegible" prompts for a `review_note` and inserts with `status_after = 'flagged'` — trigger updates `correction_status` and `review_note` only, not text.
 - The editor surfaces the latest OCR run and LLM draft via the `latest_*_run_id` pointers; a "history" button opens older runs side-by-side.
 
 **Correction session lifecycle:**
@@ -636,10 +638,10 @@ SvelteKit `+server.ts` endpoints + form actions; no separate API service.
 ### 10.2 Correction session (Madonna)
 1. Open `madonnahist.gaylon.photos/correct` on iPad
 2. Sees "47 days waiting for review" + "Resume where you left off"
-3. Tap Resume → opens last `current_day_id` from her active session, or starts a new session if the prior one was abandoned
+3. Tap Resume → opens last `current_day_id` from her active session, or starts a new session if the prior one was abandoned. The app sets `last_opened_*`, `editing_started_at`, and `current_session_id` on `calendar_days` via direct `UPDATE`.
 4. Three-pane editor: image left, OCR + LLM suggestion middle, corrected text right
-5. Edits text, taps Save (or auto-save fires after 1s) — inserts a new `day_corrections` row; trigger updates `calendar_days.corrected_text`
-6. Taps Save & Next → marks `accepted`, advances queue, enqueues an `entity_extract` job
+5. Edits text. Auto-save fires after 1s of inactivity — inserts a `day_corrections` row with `status_after = 'in_progress'`. The trigger updates `calendar_days.correction_status` (and `review_note` if any) but **does not** propagate the draft text into `calendar_days.corrected_text`. Family viewers continue to see the prior accepted version (or nothing, if none yet). Drafts are preserved in `day_corrections` history; the editor restores them on reopen.
+6. Taps Save & Next → inserts `day_corrections` with `status_after = 'accepted'`. *Now* the trigger propagates the corrected text into `calendar_days.corrected_text`, the queue advances, and an `entity_extract` job is enqueued.
 7. After 30 minutes: taps Done → session summary "27 corrected, 3 flagged, 0 skipped"
 
 ### 10.3 "On this day" browse (family viewer)
