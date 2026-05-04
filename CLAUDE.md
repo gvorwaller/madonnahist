@@ -113,10 +113,11 @@ image → OCR worker → ocr_runs row → LLM cleanup worker → llm_draft_runs 
                                   ↓
                   Madonna's correction UI → day_corrections row
                                   ↓
-                  trigger updates calendar_days.corrected_text (the only writer)
+                  trigger conditionally updates calendar_days.corrected_text
+                  (only when status_after='accepted' — drafts stay in history)
 ```
 
-**Human `corrected_text` is sacred.** Machine outputs are append-only history that the UI surfaces as suggestions only. The invariant is enforced **at the DB role layer**, not just policy: workers connect as `madonnahist_worker`, which has no UPDATE permission on `calendar_days.corrected_text`/`corrected_by`/`corrected_at`/`correction_status` (see V4 § 8). A buggy worker gets a permission error, not silent corruption.
+**Human `corrected_text` is sacred.** Machine outputs are append-only history that the UI surfaces as suggestions only. The invariant is enforced **at the DB role layer**, not just policy: neither `madonnahist_app` nor `madonnahist_worker` has UPDATE permission on `calendar_days.corrected_text`/`corrected_by`/`corrected_at`/`correction_status` (see V4 § 8). All writes flow through `INSERT INTO day_corrections`; the `SECURITY DEFINER` trigger does the canonical update. A buggy app or worker that tries direct UPDATE gets a permission error, not silent corruption. Half-typed auto-saves are preserved as audit history but do not propagate to canonical until status hits `accepted`.
 
 ### Human Correction UI
 

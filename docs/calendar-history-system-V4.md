@@ -368,13 +368,21 @@ CREATE TABLE app_state (
 
 ### 6.1 Trigger-Maintained Denormalizations
 
-Three triggers keep `calendar_days` read-fast without violating the append-only invariant on the history tables:
+Four triggers keep `calendar_days` read-fast without violating the append-only invariant on the history tables. **All four are defined `SECURITY DEFINER` and owned by `madonnahist_owner`** so they can perform privileged UPDATEs on `calendar_days` even though the calling app/worker roles cannot (see §8).
 
-**a) `trg_after_ocr_run_insert`** — on `ocr_runs` AFTER INSERT, updates `calendar_days.latest_ocr_run_id` and `latest_confidence_score` for the affected day.
+**a) `trg_after_ocr_run_insert`** — on `ocr_runs` AFTER INSERT, updates `calendar_days.latest_ocr_run_id` and `latest_confidence_score` for the affected day. **Additionally, when `NEW.confidence_score < app_state.flag_confidence_threshold` (default 0.4) AND the day's `correction_status = 'pending'`, sets `correction_status = 'flagged'` and `review_note = 'auto-flagged: low OCR confidence'`.** Never overwrites a status the human has set (`accepted`, `flagged`, `illegible`) — the gating predicate is explicit.
 
 **b) `trg_after_llm_draft_insert`** — on `llm_draft_runs` AFTER INSERT, updates `calendar_days.latest_llm_draft_run_id`.
 
-**c) `trg_after_correction_insert`** — on `day_corrections` AFTER INSERT, updates `calendar_days.corrected_text`, `corrected_by`, `corrected_at`, `correction_status` (from `status_after`), `review_note`. **This is the only mechanism by which `corrected_text` gets written.** Application code inserts into `day_corrections`; the trigger propagates.
+**c) `trg_after_correction_insert`** — on `day_corrections` AFTER INSERT, splits behavior by `NEW.status_after`:
+  - **`status_after = 'accepted'`** → updates `calendar_days.corrected_text`, `corrected_by`, `corrected_at`, `correction_status`, `review_note`. The accepted text is now what `/app/*` viewers see.
+  - **`status_after IN ('in_progress', 'flagged', 'illegible')`** → updates only the editing-state columns (`correction_status`, `review_note`, `current_session_id`, `editing_started_at`). **Does NOT touch `corrected_text`/`corrected_by`/`corrected_at`.** Auto-saves of half-typed drafts are preserved as audit history in `day_corrections` but never become the public canonical text.
+
+This is the only mechanism by which `calendar_days.corrected_text` gets written. The web app and admin scripts both go through `INSERT INTO day_corrections`; the trigger propagates conditionally.
+
+**Read paths:**
+- Family viewer (`/app/*`) reads `calendar_days.corrected_text` — always the latest *accepted* version
+- Correction UI (`/correct/*`) reads the latest `day_corrections` row for the day regardless of status — Madonna's in-progress draft restores on reopen
 
 **d) `trg_refresh_search_aux_text`** — on `day_tags` and `day_entities` AFTER INSERT/UPDATE/DELETE, recomputes `calendar_days.search_aux_text` for the affected day from `string_agg(tag_label) || string_agg(entities.display_name)`. Keeps the FTS index covering tags and entity names with one stored column.
 
@@ -384,25 +392,44 @@ Trigger SQL is implementation detail — kept out of this doc but lives in `back
 
 ## 8. Database Roles & Grants
 
-The "human truth wins" invariant is enforced at the DB layer, not just by application policy. Two database roles:
+The "human truth wins" and "history is append-only" invariants are enforced at the DB layer, not just by application policy. Three database roles:
 
-| Role | Used by | Permissions |
+| Role | Used by | Permissions (summary) |
 |---|---|---|
-| `madonnahist_app` | SvelteKit web app, admin scripts | Full SELECT/INSERT/UPDATE/DELETE on all tables |
-| `madonnahist_worker` | OCR / LLM cleanup / entity extractor / summary generator workers | INSERT on `ocr_runs`, `llm_draft_runs`, `narrative_summaries`, `entities`, `day_entities`, `audit_log`; INSERT/UPDATE on `job_runs`; INSERT on `day_tags WHERE source='ai'`; **NO** UPDATE on any of `calendar_days.corrected_text`, `corrected_by`, `corrected_at`, `correction_status`, `review_note`, `current_session_id` |
+| `madonnahist_owner` | Migrations only; owns all tables and triggers | Full power. Used to apply DDL and to define `SECURITY DEFINER` triggers. Not used for normal request handling. |
+| `madonnahist_app` | SvelteKit web app | SELECT/INSERT/UPDATE/DELETE on most tables, **but no UPDATE on the canonical correction columns** of `calendar_days` and **no DELETE on the history tables** (`ocr_runs`, `llm_draft_runs`, `day_corrections`). Must go through `INSERT INTO day_corrections` to change `corrected_text`. |
+| `madonnahist_worker` | OCR / LLM cleanup / entity extractor / summary generator workers | INSERT on history tables, `narrative_summaries`, `entities`, `day_entities`, `day_tags` (RLS-scoped to `source = 'ai'`), `audit_log`; INSERT/UPDATE on `job_runs`; **no** UPDATE on `calendar_days`; **no** DELETE on history tables. |
 
 Concrete grants (lives in `backend/db/migrations/0002_roles.sql`):
 
 ```sql
-CREATE ROLE madonnahist_app LOGIN PASSWORD :'app_password';
+-- Roles
+CREATE ROLE madonnahist_owner LOGIN PASSWORD :'owner_password';
+CREATE ROLE madonnahist_app   LOGIN PASSWORD :'app_password';
 CREATE ROLE madonnahist_worker LOGIN PASSWORD :'worker_password';
 
 GRANT CONNECT ON DATABASE madonnahist TO madonnahist_app, madonnahist_worker;
 GRANT USAGE ON SCHEMA public TO madonnahist_app, madonnahist_worker;
 
--- App role: full access
+-- Owner owns the tables and triggers; baseline DDL runs as owner.
+ALTER DEFAULT PRIVILEGES FOR ROLE madonnahist_owner IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO madonnahist_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE madonnahist_owner IN SCHEMA public
+  GRANT SELECT ON TABLES TO madonnahist_worker;
+
+-- App role: broad access, but human-truth columns and history tables are guarded
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO madonnahist_app;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO madonnahist_app;
+
+-- App cannot UPDATE the canonical correction columns directly. All writes flow through
+-- INSERT INTO day_corrections; trg_after_correction_insert (SECURITY DEFINER) propagates.
+REVOKE UPDATE (corrected_text, corrected_by, corrected_at,
+               correction_status, review_note,
+               latest_ocr_run_id, latest_llm_draft_run_id, latest_confidence_score,
+               search_aux_text) ON calendar_days FROM madonnahist_app;
+
+-- App cannot DELETE history tables. Append-only is structural.
+REVOKE DELETE ON ocr_runs, llm_draft_runs, day_corrections FROM madonnahist_app;
 
 -- Worker role: scoped access
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO madonnahist_worker;
@@ -411,17 +438,43 @@ GRANT INSERT ON ocr_runs, llm_draft_runs, narrative_summaries, entities,
 GRANT INSERT, UPDATE ON job_runs TO madonnahist_worker;
 GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO madonnahist_worker;
 
--- Workers may NOT update calendar_days at all (the trigger-maintained columns are
--- updated by triggers running with the table owner's privileges, not the worker's).
--- Workers may not even update calendar_days.search_aux_text directly; they go through
--- day_tags / day_entities and let the trigger refresh it.
 REVOKE UPDATE ON calendar_days FROM madonnahist_worker;
-REVOKE DELETE ON ALL TABLES IN SCHEMA public FROM madonnahist_worker;
+REVOKE DELETE ON ocr_runs, llm_draft_runs, day_corrections, narrative_summaries,
+                 entities, day_entities, day_tags, audit_log FROM madonnahist_worker;
+
+-- Row-Level Security: workers can only INSERT AI-sourced tags and entity links
+ALTER TABLE day_tags ENABLE ROW LEVEL SECURITY;
+ALTER TABLE day_entities ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY day_tags_app_full ON day_tags
+  FOR ALL TO madonnahist_app
+  USING (true) WITH CHECK (true);
+
+CREATE POLICY day_tags_worker_select ON day_tags
+  FOR SELECT TO madonnahist_worker USING (true);
+
+CREATE POLICY day_tags_worker_insert_ai_only ON day_tags
+  FOR INSERT TO madonnahist_worker
+  WITH CHECK (source = 'ai');
+
+CREATE POLICY day_entities_app_full ON day_entities
+  FOR ALL TO madonnahist_app
+  USING (true) WITH CHECK (true);
+
+CREATE POLICY day_entities_worker_select ON day_entities
+  FOR SELECT TO madonnahist_worker USING (true);
+
+CREATE POLICY day_entities_worker_insert_ai_only ON day_entities
+  FOR INSERT TO madonnahist_worker
+  WITH CHECK (source = 'ai');
 ```
 
-The triggers in §6.1 run as the table owner (typically `postgres` or a dedicated `madonnahist_owner` role), bypassing the worker's `UPDATE` revocation — that's the standard PostgreSQL `SECURITY DEFINER` pattern. Workers can INSERT into the history tables; the triggers do the cache update.
+**Why this structure works:**
 
-A worker that develops a bug and tries to UPDATE `calendar_days.corrected_text` directly will get a permission error, not silent corruption.
+- All four propagation triggers (§6.1) are `CREATE FUNCTION ... SECURITY DEFINER` owned by `madonnahist_owner`. When the app or worker INSERTs into a history table (`day_corrections`, `ocr_runs`, `llm_draft_runs`, `day_tags`, `day_entities`), the trigger fires with owner privileges and updates `calendar_days` — even though neither caller has direct UPDATE permission on the affected columns.
+- A buggy worker (or app) that tries to UPDATE `calendar_days.corrected_text` directly gets a permission error, not silent corruption.
+- A buggy worker that tries to INSERT a `day_tags` row with `source = 'human'` gets blocked by the RLS `WITH CHECK` — even though the table-level INSERT grant is unconditional.
+- `madonnahist_owner` is *not* used for request handling. If a true escape hatch is needed (data scrub for legal request, manual cache rebuild), an admin connects as `owner` directly via psql — a documented and audited operation, not a code path.
 
 ## 9. Module Specifications
 
@@ -451,9 +504,9 @@ Phase 1 ships with one default crop template (5×7 grid for standard wall calend
 **Re-run safety:** OCR reruns create new `ocr_runs` rows. The trigger updates `latest_ocr_run_id` to the new row. Older runs are preserved for audit; `corrected_text` is untouchable.
 
 **Failure modes:**
-- Vendor 5xx → exponential backoff (1m, 5m, 25m), then mark `failed`
+- Vendor 5xx → exponential backoff (1m, 5m, 25m), then mark `job_runs.status = 'failed'`
 - Image not in Spaces → mark `failed`, write to `audit_log`
-- Confidence below `app_state.flag_confidence_threshold` (default 0.4) → set `correction_status = 'flagged'` and write `review_note = 'auto-flagged: low OCR confidence'`
+- Confidence below `app_state.flag_confidence_threshold` (default 0.4) → handled by the `trg_after_ocr_run_insert` trigger (§6.1.a), which sets `correction_status = 'flagged'` and `review_note = 'auto-flagged: low OCR confidence'` only when the day was previously `pending`. The worker itself just inserts the `ocr_runs` row; the trigger does the conditional canonical-side update.
 
 ### 9.3 LLM Cleanup Worker
 
@@ -495,10 +548,11 @@ Phase 1 ships with one default crop template (5×7 grid for standard wall calend
 
 **Key behaviors:**
 - Opening a day attaches it to the user's active `correction_sessions` row, sets `current_day_id`, and updates `last_opened_*` on `calendar_days`
-- Auto-save fires on debounce (1s of inactivity) — inserts a new `day_corrections` row with current text and `status_after = 'in_progress'`. The trigger updates `calendar_days.corrected_text` and status.
-- "Save & Next" inserts with `status_after = 'accepted'` and advances the queue
-- "Flag illegible" prompts for a `review_note` and inserts with `status_after = 'flagged'`
-- The editor surfaces the latest OCR run and LLM draft via the `latest_*_run_id` pointers; a "history" button opens older runs side-by-side
+- Auto-save fires on debounce (1s of inactivity) — inserts a new `day_corrections` row with current text and `status_after = 'in_progress'`. The trigger updates `calendar_days.correction_status` and editing-state columns but **does NOT propagate the draft text into `calendar_days.corrected_text`** (see §6.1.c). Half-typed drafts stay in `day_corrections` history; the family viewer continues to show the most recent *accepted* version.
+- The editor reads the latest `day_corrections` row regardless of status, so Madonna's in-progress draft restores on reopen — even after a crash or session timeout.
+- "Save & Next" inserts with `status_after = 'accepted'`. *This* is the moment `calendar_days.corrected_text` updates; the queue advances.
+- "Flag illegible" prompts for a `review_note` and inserts with `status_after = 'flagged'` — updates editing-state columns only, not text.
+- The editor surfaces the latest OCR run and LLM draft via the `latest_*_run_id` pointers; a "history" button opens older runs side-by-side.
 
 **Correction session lifecycle:**
 - `active` — the user has interacted in the last 60 minutes
