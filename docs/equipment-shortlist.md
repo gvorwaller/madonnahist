@@ -6,6 +6,8 @@
 
 **Pricing as of May 2026.** Verify before purchase — pro photo gear pricing drifts ±15% on sales.
 
+> **Design principle**: This system is optimized for repeatability and low-friction deployment in a shared living space. Setup speed and consistency are prioritized over maximum theoretical image quality. Two equipment tiers are documented below — a **Pro tier** (~$1,800) and a **Compact tier** (~$1,100–1,300); the dual-light 45° geometry, cross-polarization, ColorChecker, and tripod-based capture are mandatory in both.
+
 ---
 
 ## What You Already Have (Don't Re-Buy)
@@ -123,21 +125,66 @@ This is the single highest-leverage technique in archival imaging, and a real ca
 
 ---
 
+## Compact Deployment Configuration ($1,100–1,300)
+
+A second tier optimized for tighter budget and the smaller footprint of the small-space deployment. **Quality cost is bounded**: dual-light 45° geometry, cross-polarization, ColorChecker, manual WB, and tripod-based capture all carry over unchanged. Only panel wattage, softbox size, and CPL brand are downgraded. For 8.5"×11" calendar pages at ~50" working distance, 60W panels are bright enough for f/5.6 / ISO 200 / ~1/60s with margin to spare.
+
+### What changes (vs. Pro tier)
+
+| Component | Pro tier | Compact tier | Compact savings |
+|-----------|----------|--------------|-----------------|
+| Lighting panels | Aputure Amaran 100x S × 2 (~$598) | **Aputure Amaran 60x S** or **Godox SL60II Bi** × 2 (~$300) | ~$300 |
+| Softboxes | Aputure Light Dome SE 33" × 2 (~$258) | 24–28" Bowens-mount softbox × 2 (~$140) | ~$118 |
+| CPL filter | Heliopan 46mm Slim SH-PMC (~$100) | **Hoya HD3 46mm CPL** or **B+W F-Pro Kaesemann** (~$50) | ~$50 |
+| Page support | Daige Pro-Easel 30" (~$200) | **Foamcore-backed rigid board + bulldog clips** on a tabletop easel (~$30) — or keep the Daige if the budget allows | ~$170 |
+| Display calibrator | Calibrite Display Plus HL (~$200) | **Optional** — defer or skip; ColorChecker still required | ~$200 |
+
+### What stays mandatory (no Compact downgrade)
+
+- **Dual-light 45° geometry** — single-light setups produce shadow gradients that no software step can fully correct
+- **Cross-polarization** — Rosco #7300 sheets on the lights + a CPL on the lens; the CPL brand is negotiable, the technique is not
+- **Calibrite ColorChecker Passport Photo 2** — every session, every batch; this is what makes the archive normalizable across years
+- **Manual white balance** — set per session from the ColorChecker, never auto WB
+- **Tripod-based capture** — the G9 II + 60mm needs a stable platform for High Res Mode
+- **Lightroom Classic workflow** — auto-import from the Lumix Tether watched folder, hierarchical keywords, local catalog
+
+### Compact-tier cost breakdown
+
+| Category | Compact cost |
+|----------|--------------|
+| Lighting (60W panels × 2, 24–28" softboxes, stands, bag) | ~$500 |
+| Cross-polarization (Hoya CPL + Rosco sheets + gaffer tape) | ~$130 |
+| Page support (rigid board + bulldog clips) | ~$30 |
+| Color management (ColorChecker only; calibrator deferred) | ~$120 |
+| Cable + misc + preservation | ~$110 |
+| **Total** | **~$1,100–1,300 up-front** |
+
+Keeping the Daige easel (worth it; one-time buy that lasts the project) and deferring the calibrator lands around $1,300. Dropping both lands ~$1,100.
+
+### When to choose which tier
+
+- **Choose Pro** if: budget allows; you want maximum optical margin; the lights will be reused for portraits, art reproduction, or video; or you want headroom for years-long workflow drift.
+- **Choose Compact** if: budget is the binding constraint; the small-space deployment (60W is more than enough for a 5'×5' rig) is the actual setting; or you'd rather invest the ~$700 difference in archival storage / backup drives / OCR vendor credits.
+
+The 60W panels are demonstrably sufficient for static documents at ~50" working distance. The Heliopan CPL is the only line item where the Pro tier offers a measurable optical advantage; on faded handwriting that the OCR will read either way, even that advantage is academic.
+
+---
+
 ## Total Cost Summary
 
 Adobe Photography Plan (1 TB) is already an active subscription, so software is $0 marginal for this project.
 
-| Category | Up-front |
-|---|---|
-| Lighting (Aputure 100x S × 2, softboxes, stands) | ~$1,000 |
-| Cross-polarization (Heliopan CPL + Rosco sheets + tape) | ~$170–190 |
-| Page cradle (Daige Pro-Easel) | ~$200 |
-| Color management (ColorChecker + display calibrator) | ~$320 |
-| Tethered capture (Lumix Tether free; LR Classic + CC already owned) | $0 |
-| Cable + misc + preservation | ~$110 |
-| **Total** | **~$1,800 up-front** |
+| Category | Pro tier | Compact tier |
+|---|---|---|
+| Lighting (panels + softboxes + stands + bag) | ~$1,000 | ~$500 |
+| Cross-polarization (CPL + Rosco sheets + tape) | ~$170–190 | ~$130 |
+| Page support | ~$200 (Daige Pro-Easel) | ~$30 (rigid board + clips) |
+| Color management | ~$320 (ColorChecker + calibrator) | ~$120 (ColorChecker only) |
+| Tethered capture (Lumix Tether free; LR Classic + CC already owned) | $0 | $0 |
+| Cable + misc + preservation | ~$110 | ~$110 |
+| **Total** | **~$1,800 up-front** | **~$1,100–1,300 up-front** |
 
-Cutting tools (Olfa rotary cutter + ruler + cutting mat, ~$80) add to that if not already on hand.
+Cutting tools (Olfa rotary cutter + ruler + cutting mat, ~$80) add to either tier if not already on hand.
 
 ---
 
@@ -191,6 +238,84 @@ Lock these into a Custom Mode (C1) on the dial so you can't fat-finger them mid-
 
 ---
 
+## Small-Space Deployment (800 sq ft home)
+
+The system lives in a shared dining/living area with zero permanent installation. Every session is a clean setup-and-teardown. The goals: hit the marks fast, get repeatable framing across sessions years apart, and never block the walk-through path to the kitchen.
+
+### Constraints
+
+- Full setup and teardown each session — no permanent rig
+- Walk-through path to the kitchen preserved at all times
+- Total usable footprint **5 ft × 5 ft** (operator zone)
+- Equipment lightweight enough for one-person setup in under 10 minutes
+
+### Fixed Floor Position System
+
+A coordinate grid taped to the floor turns "set up the rig" into "put each foot on its mark." Repeatability across sessions becomes mechanical — no measuring, no guessing, no day-to-day drift in lighting angle or framing.
+
+**Reference origin**: front-left corner of the dining table (nearest the piano).
+**Axis convention**: X positive = right of the corner along the table edge. Y positive = into the room, away from the table edge.
+**Marking material**: blue painter's tape with sharpie cross marks. Lifts cleanly, leaves no residue, re-mark once at the start of each year.
+
+#### Tripod
+
+- **Center**: X = -18", Y = 36"
+- **Foot 1**: (-18, 30)
+- **Foot 2**: (-26, 42)
+- **Foot 3**: (-10, 42)
+
+#### Lights
+
+- **Left light stand base**: (-6, 18)
+- **Right light stand base**: (46, 18)
+
+#### Operator zone
+
+- X = -20" to -10", Y = 48" to 60"
+
+(Operator stands behind and slightly left of the tripod, with the Mac on a small rolling cart, side table, or chair within reach.)
+
+### Table Alignment System
+
+The page itself needs the same precision as the rig.
+
+- **Page center**: (26", 16") — measured to the centerpoint of the easel/cradle face
+- **Edge guides**: two corner brackets (3D-printed, or cut foamcore) taped to the table at fixed offsets from the page-center mark. Place every page into the same corners. No measuring per page; no creeping rotation across a session.
+
+### Setup / Teardown Workflow
+
+**Targets**: setup ≤ 8 minutes, teardown ≤ 5 minutes. If a session blows past these, something is wrong with the marks or the workflow — fix the system, not the session.
+
+**Setup**:
+1. Clear table (move centerpiece, mail, etc. to the piano top)
+2. Place easel/cradle on the table edge guides
+3. Move tripod to floor marks; extend to the marked height (record the leg-section height once and write it on the tripod leg)
+4. Place light stands on floor marks; mount panels + softboxes; aim at the page (~45° each side)
+5. **Close blinds fully** (see lighting control below)
+6. Power on lights, set 5000K, equal output
+7. Power on camera, connect Lumix Tether, confirm live view
+8. Shoot ColorChecker frame + WB target frame
+9. Begin capture
+
+**Teardown**:
+1. Power off lights and camera; cap lens
+2. Disconnect tether cable; coil onto velcro reel
+3. Remove softboxes from panels (they collapse fast); panels back to case
+4. Collapse light stands; into stand bag
+5. Collapse tripod (don't dismount the camera + lens — leave them on, in a padded case if room allows)
+6. Lift easel; pages back into archival sleeves; everything to closet
+7. Pull table edge guides if guests are coming; otherwise leave them — they're inert tape
+
+### Lighting Control Requirement
+
+**MANDATORY**: blinds fully closed during capture. **No mixed daylight + LED lighting.**
+
+Daylight color temperature shifts from ~5500K (mid-morning) to ~4000K (late afternoon, overcast) to neutral-ish (north-facing diffuse). Mixing it with the 5000K LED panels means every session has a different color cast that can't be fully corrected from the ColorChecker because the mix ratio also varies. The CPL adds another wrinkle: ambient daylight bouncing off the page from the wrong angle isn't blocked by the cross-polarization (its polarization state is random), so glare control degrades.
+
+Closed blinds is non-negotiable, not a preference. If the dining room has any direct-sun window, schedule sessions for after sunset for an extra margin.
+
+---
+
 ## Per-Session Shooting Workflow
 
 1. **Set up**: assemble lights, position tripod, mount camera, tether to Mac via Lumix Tether
@@ -239,6 +364,8 @@ Lock these into a Custom Mode (C1) on the dial so you can't fat-finger them mid-
 ## Ordering List
 
 Organized by vendor so each batch can be a single cart/checkout. Prices verified May 2026 — confirm before ordering, photo gear pricing drifts ±15% on sales. Quantities and links provided for one-click navigation.
+
+> **Tier note**: Listed items are the **Pro tier**. If going **Compact tier** (~$1,100–1,300, see [Compact Deployment Configuration](#compact-deployment-configuration-1100-1300) above), substitute line by line: Aputure 100x S → 60x S (~$150 ea), Light Dome SE 33" → 24–28" Bowens softbox (~$70 ea), Heliopan 46mm CPL → Hoya HD3 46mm (~$50), Daige Pro-Easel → foamcore + bulldog clips (~$30), Display Plus HL → defer/skip. Everything else (Rosco sheets, ColorChecker, stands, cable, gloves, tape, sleeves) stays the same.
 
 ### Order 1 — B&H Photo (largest cart, photo specialist)
 
