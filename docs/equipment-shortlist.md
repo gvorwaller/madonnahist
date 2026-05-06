@@ -371,20 +371,30 @@ Organized by vendor so each batch can be a single cart/checkout. Prices verified
 
 B&H is the right default for this list: no sales tax for most states (NY only), reliable stock on archival/pro gear, and they package multi-line orders together. Place this order first.
 
+> **Availability verified 2026-05-06.** All items below confirmed in stock at B&H Photo as of this date. Discontinued items from prior versions of this list (Aputure Light Dome SE — replaced by Aputure Quick Dome at the same B&H product slot; "Aputure 8.2' light stand bag" — not actually stocked at B&H under that name, replaced with Manfrotto LBAG90) have been swapped to current equivalents. Prices/links should still be re-verified at checkout — photo gear pricing drifts ±15%.
+
 | ✓ | Item | Qty | Unit | Total | Link |
 |---|------|-----|------|-------|------|
-| ☐ | Aputure Amaran 100x S Bi-Color COB LED | 2 | $299 | $598 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=amaran+100x+s) |
-| ☐ | Aputure Light Dome SE softbox (33") | 2 | $129 | $258 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=aputure+light+dome+se) |
-| ☐ | Manfrotto 1052BAC compact light stand (7.7') | 2 | $60 | $120 | [B&H](https://www.bhphotovideo.com/c/product/45772-REG/Manfrotto_1052BAC_1052BAC_Mini_Compact_Stand.html) |
-| ☐ | Aputure 8.2' light stand bag | 1 | $30 | $30 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=aputure+light+stand+bag) |
-| ☐ | Heliopan 46mm Slim SH-PMC Circular Polarizer | 1 | $100 | $100 | [B&H](https://www.bhphotovideo.com/c/product/430946-REG/Heliopan_704640_46mm_Slim_Circular_Polarizer.html) |
-| ☐ | Rosco #7300 Linear Polarizing Filter 17"×20" sheet | 1 | $60 | $60 | [B&H](https://www.bhphotovideo.com/c/product/45130-REG/Rosco_101073001720_Polarizing_7300_Filter.html) |
-| ☐ | Calibrite ColorChecker Passport Photo 2 | 1 | $119 | $119 | [B&H](https://www.bhphotovideo.com/c/product/1649345-REG/calibrite_ccpp2_colorchecker_passport_photo_2.html) |
-| ☐ | Calibrite Display Plus HL monitor calibrator | 1 | $200 | $200 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=calibrite+display+plus+hl) |
-| ☐ | Tether Tools TetherPro USB-C to USB-C 15' cable, orange | 1 | $40 | $40 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=tetherpro+usb-c+orange) |
-| ☐ | Hama or Manfrotto hot-shoe bubble level | 1 | $15 | $15 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=hot+shoe+bubble+level) |
-| ☐ | Permacel/Pro Gaff 2" black gaffer tape | 1 | $20 | $20 | [B&H](https://www.bhphotovideo.com/c/search?Ntt=gaffer+tape+2+inch+black) |
-| | | | **B&H subtotal** | **~$1,560** | |
+| ☐ | Aputure amaran COB 100x S Bi-Color LED Monolight | 2 | $299 | $598 | [B&H 1753603-REG](https://www.bhphotovideo.com/c/product/1753603-REG/amaran_apm021xa10_cob_100x_s_bi_color.html) |
+| ☐ | Aputure Quick Dome 33" softbox (Bowens mount) — official replacement for Light Dome SE | 2 | $129 | $258 | [B&H 1622464-REG](https://www.bhphotovideo.com/c/product/1622464-REG/aputure_amolightdomese_lantern_90.html) |
+| ☐ | Manfrotto 1052BAC Alu Air-Cushioned Compact Stand (7.7') | 2 | $95 | $190 | [B&H 609058-REG](https://www.bhphotovideo.com/c/product/609058-REG/Manfrotto_1052BAC_1052BAC_Alu_Air_Cushioned.html) |
+| ☐ | Manfrotto LBAG90 Quick Stack Light Stand Bag (replaces unavailable Aputure bag) | 1 | $40 | $40 | [B&H 682757-REG](https://www.bhphotovideo.com/c/product/682757-REG/Manfrotto_LBAG90_LBAG90_4_Quick_Stack.html) |
+| ☐ | Heliopan 46mm Slim Circular Polarizer SH-PMC | 1 | $100 | $100 | [B&H 399985-REG](https://www.bhphotovideo.com/c/product/399985-REG/Heliopan_704640_46mm_SH_PMC_Circular_Polarizer.html) |
+| ☐ | Rosco Polarizing #7300 Filter (17"×20" sheet) | 1 | $60 | $60 | [B&H 45130-REG](https://www.bhphotovideo.com/c/product/45130-REG/Rosco_101073001720_Polarizing_7300_Filter.html) |
+| ☐ | Calibrite ColorChecker Passport Photo 2 | 1 | $119 | $119 | [B&H 1649345-REG](https://www.bhphotovideo.com/c/product/1649345-REG/calibrite_ccpp2_colorchecker_passport_photo_2.html) |
+| ☐ | Calibrite Display Plus HL Colorimeter (current price $379, was $200 — see note) | 1 | $379 | $379 | [B&H 1770372-REG](https://www.bhphotovideo.com/c/product/1770372-REG/calibrite_ccdis3plhl_display_plus_hl.html) |
+| ☐ | Tether Tools TetherPro USB-C to USB-C 15', orange | 1 | $40 | $40 | [B&H 1619202-REG](https://www.bhphotovideo.com/c/product/1619202-REG/tether_tools_cuc15rt_org_tetherpro_usb_c_to_usb_c.html) |
+| ☐ | Manfrotto 337 2-Axis Hot Shoe Double Bubble Level | 1 | $20 | $20 | [B&H 263729-REG](https://www.bhphotovideo.com/c/product/263729-REG/Manfrotto_337_337_2_Axis_Flash_Hot.html) |
+| ☐ | ProTapes Pro Gaffer Tape (2" × 30 yd, black) | 1 | $25 | $25 | [B&H 20009-REG](https://www.bhphotovideo.com/c/product/20009-REG/General_Brand_Gaffer_Cloth_Tape.html) |
+| | | | **B&H subtotal** | **~$1,830** | |
+
+**Notes on substitutions and price changes since previous draft:**
+
+- **Aputure Light Dome SE → Aputure Quick Dome.** B&H's product slot 1622464-REG is now flagged "Replacement for Aputure Light Dome SE APA0218A30." The Quick Dome is Aputure's newer quick-folding circular Bowens softbox; functionally equivalent for cross-polarized document work, and the faster setup actually helps the small-space deployment workflow. Same ~33" diameter, same Bowens mount, same diffusion-fabric face. Buy this without hesitation.
+- **Aputure 8.2' light stand bag → Manfrotto LBAG90.** Aputure does not currently stock a stand bag under that name at B&H; what came up in search were Light Storm transport bags (for the lights themselves, not stands). The Manfrotto LBAG90 holds 4 stands up to 35" collapsed — fits two 1052BAC stands with room for the tripod or accessories.
+- **Manfrotto 1052BAC pricing:** the prior draft listed $60/each, which was an outdated estimate. Current B&H price is ~$95/each ($190 for two). Up $70 total.
+- **Calibrite Display Plus HL pricing:** the prior draft listed $200, which was the *Display Pro HL* (sibling product). The **Plus HL** model is the right SKU for handling high-brightness displays (mini-LED, OLED) — current price is $379 at B&H. Up $179. **This is the largest single price correction.** If budget is tight, the Compact tier still defers this item entirely; the ColorChecker Passport remains the non-negotiable color-management piece.
+- **Heliopan URL fix:** prior URL pointed at a non-existent SKU (704640 actually maps to 399985-REG at B&H, not 430946-REG). Same product, correct page now linked.
 
 ### Order 2 — Daige direct (or B&H if available)
 
@@ -427,12 +437,15 @@ Skip this whole section if you already own cutting equipment. Available at any o
 
 | Order | Vendor | Subtotal |
 |-------|--------|----------|
-| 1 | B&H Photo | ~$1,560 |
+| 1 | B&H Photo | ~$1,830 |
 | 2 | Daige direct | ~$200 |
 | 3 | Gaylord Archival | ~$35 |
 | 4 | Amazon | ~$10 |
 | 5 | Cutting tools (optional) | ~$80 |
-| | **Total** | **~$1,805–1,885** |
+| | **Total (Pro tier)** | **~$2,075–2,155** |
+| | **Total (Compact tier, B&H + same other vendors)** | **~$1,375–1,455** |
+
+The Pro-tier total moved up from ~$1,805 to ~$2,075 primarily because the Display Plus HL re-prices to $379 and the 1052BAC re-prices to ~$95. If the calibrator is deferred (it's marked optional in the Compact tier and can be added later as the project matures), Pro-tier B&H drops to ~$1,450 and Pro-tier total to ~$1,696. **The ColorChecker Passport Photo 2 stays mandatory in either case.**
 
 ### Software (already owned — verify only)
 
