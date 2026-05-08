@@ -119,7 +119,7 @@ This is the single highest-leverage technique in archival imaging, and a real ca
 | **Hot-shoe bubble level** (Hama or Manfrotto) | ~$15 | Squaring the camera to the page is non-negotiable for horizontal capture. Visual estimation isn't tight enough; geared head adjustments without a level cause cumulative drift. |
 | **Gaylord Sure-Grip cotton archival gloves**, 12 pairs | ~$10 | Skin oils on 1972 paper will discolor it over decades. Cheap insurance. |
 | **Lineco archival polyester sleeves** for original pages | ~$25 / pack | Optional: store original calendar pages in archival sleeves after photographing. Worth it for the irreplaceable originals. |
-| **Pencil-style anti-static brush** | ~$10 | Removes loose paper dust before each shot. A microfiber cloth pushes oils into the paper; a dry brush flicks dust off. |
+| **Drafting brush** (Alvin or Staedtler, ~12" wide, soft horsehair) | ~$15 | Removes loose paper dust before each shot — one or two light sweeps covers a 14×16" calendar page. A microfiber cloth pushes skin oils into the paper; a soft drafting brush flicks dust off without contact pressure. **Avoid stiff ESD/electronics brushes** — bristles designed for PCBs are too rigid for fragile aged paper and can lift fibers from the page itself. |
 
 **Subtotal: ~$60**
 
@@ -417,8 +417,10 @@ Gaylord and Talas both stock the polyester sleeves; either works. Talas tends to
 
 | ✓ | Item | Qty | Unit | Total | Link |
 |---|------|-----|------|-------|------|
-| ☐ | Pencil-style anti-static brush (camera lens style works) | 1 | $10 | $10 | [Amazon](https://www.amazon.com/s?k=pencil+anti+static+brush+photography) |
-| | | | **Amazon subtotal** | **~$10** | |
+| ☐ | Drafting brush (Alvin or Staedtler, ~12" wide, soft horsehair) | 1 | $15 | $15 | [Amazon](https://www.amazon.com/s?k=alvin+drafting+brush) |
+| | | | **Amazon subtotal** | **~$15** | |
+
+**Brush selection note:** Skip the wide ESD/anti-static brushes marketed for keyboards and PCBs (uxcell, Haojiaho, etc.). Those are designed for stiff electronics work; their bristles are too rigid for 60-year-old paper and can lift fibers from the page itself. The right tool is a soft-bristle drafting brush — same form factor (wide bench-brush shape, fast to sweep), but with horsehair or soft synthetic bristles meant for paper. Alvin and Staedtler are the established drafting-brush brands; either works.
 
 ### Order 5 — Cutting tools (only if not on hand)
 
@@ -440,7 +442,7 @@ Skip this whole section if you already own cutting equipment. Available at any o
 | 1 | B&H Photo | ~$1,830 |
 | 2 | Daige direct | ~$200 |
 | 3 | Gaylord Archival | ~$35 |
-| 4 | Amazon | ~$10 |
+| 4 | Amazon | ~$15 |
 | 5 | Cutting tools (optional) | ~$80 |
 | | **Total (Pro tier)** | **~$2,075–2,155** |
 | | **Total (Compact tier, B&H + same other vendors)** | **~$1,375–1,455** |
