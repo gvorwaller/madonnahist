@@ -69,7 +69,12 @@ This is the single highest-leverage technique in archival imaging, and a real ca
 
 **Subtotal: ~$200**
 
-**Cutting tools** (only if not already on hand): an Olfa rotary cutter (~$25), 18" cork-backed metal ruler (~$15), and a 24"×36" self-healing cutting mat (~$40) — ~$80 total — handle the page-separation prep cleanly. Cut close to the binding perforations but leave a clean margin; don't chase the binding holes themselves.
+**Cutting tools** (only if not already on hand): a **Carl DC-210N rotary trimmer** (15" cutting capacity, ~$70) plus a heavy-duty utility knife and steel ruler (~$25) for the initial through-stack cut. Two-pass workflow:
+
+1. **Pass 1 — gross release** (heavy utility knife + steel ruler, on a sturdy surface): one cut through the full stack, just below the binding holes. This frees the pages from the binding strip without trying to be precise. The trimmer can't handle a full calendar's stack thickness — utility knife is the right tool for this single destructive cut.
+2. **Pass 2 — clean even-up** (Carl DC-210N, one page at a time): each freed page goes through the trimmer at a fixed offset from the (now ragged) top edge, producing a consistent clean edge across all pages of the calendar. Per-page handling here matters: aged paper compresses unevenly, and stacking multiple pages on the trimmer risks tear-instead-of-cut on bottom sheets.
+
+If the binding is twin-loop wire (Wire-O), spiral, or stapled (saddle-stitched), Pass 1 isn't needed — the binding can be unfastened mechanically and pages slide off intact. Pass 2 still applies for trimming away the binding-hole row to a clean edge.
 
 ### 4. Color Management
 
@@ -184,7 +189,7 @@ Adobe Photography Plan (1 TB) is already an active subscription, so software is 
 | Cable + misc + preservation | ~$110 | ~$110 |
 | **Total** | **~$1,800 up-front** | **~$1,100–1,300 up-front** |
 
-Cutting tools (Olfa rotary cutter + ruler + cutting mat, ~$80) add to either tier if not already on hand.
+Cutting tools (Carl DC-210N rotary trimmer + heavy utility knife + steel ruler, ~$95) add to either tier if not already on hand. Two-pass workflow: utility-knife through-stack cut to free pages from binding, then trimmer per-page for a clean even edge.
 
 ---
 
@@ -424,14 +429,16 @@ Gaylord and Talas both stock the polyester sleeves; either works. Talas tends to
 
 ### Order 5 — Cutting tools (only if not on hand)
 
-Skip this whole section if you already own cutting equipment. Available at any of B&H, Amazon, Blick Art Materials, or Dick Blick.
+Skip this whole section if you already own cutting equipment. Two-pass workflow: utility knife for the gross through-stack release cut, rotary trimmer for the per-page clean even-up.
 
 | ✓ | Item | Qty | Unit | Total | Link |
 |---|------|-----|------|-------|------|
-| ☐ | Olfa 45mm rotary cutter | 1 | $25 | $25 | [Amazon](https://www.amazon.com/s?k=olfa+45mm+rotary+cutter) |
+| ☐ | Carl DC-210N Professional Rotary Trimmer (15" cutting capacity) | 1 | $70 | $70 | [Amazon](https://www.amazon.com/CARL-Professional-Trimmer-15-inch-capacity/dp/B004I2KKGK) |
+| ☐ | Olfa LA-X heavy-duty utility knife (or equivalent — 25mm wide blade) | 1 | $15 | $15 | [Amazon](https://www.amazon.com/s?k=olfa+heavy+duty+utility+knife+LA-X) |
 | ☐ | 18" cork-backed stainless steel ruler | 1 | $15 | $15 | [Amazon](https://www.amazon.com/s?k=18+inch+cork+backed+steel+ruler) |
-| ☐ | 24"×36" self-healing cutting mat | 1 | $40 | $40 | [Amazon](https://www.amazon.com/s?k=24x36+self+healing+cutting+mat) |
-| | | | **Cutting tools subtotal** | **~$80** | |
+| | | | **Cutting tools subtotal** | **~$100** | |
+
+The cutting mat is no longer needed — the trimmer's built-in cutting strip handles Pass 2, and Pass 1 (utility knife on the binding edge) is done over a piece of cardboard or the cutting strip from an unused desk pad. If you want a mat for general project use, add a 24"×36" self-healing mat (~$40); not required for this workflow.
 
 ---
 
@@ -443,7 +450,7 @@ Skip this whole section if you already own cutting equipment. Available at any o
 | 2 | Daige direct | ~$200 |
 | 3 | Gaylord Archival | ~$35 |
 | 4 | Amazon | ~$15 |
-| 5 | Cutting tools (optional) | ~$80 |
+| 5 | Cutting tools (optional) | ~$100 |
 | | **Total (Pro tier)** | **~$2,075–2,155** |
 | | **Total (Compact tier, B&H + same other vendors)** | **~$1,375–1,455** |
 
