@@ -6,7 +6,7 @@
 
 **Pricing as of May 2026.** Verify before purchase — pro photo gear pricing drifts ±15% on sales.
 
-> **Design principle**: This system is optimized for repeatability and low-friction deployment in a shared living space. Setup speed and consistency are prioritized over maximum theoretical image quality. Two equipment tiers are documented below — a **Pro tier** (~$1,800) and a **Compact tier** (~$1,100–1,300); the dual-light 45° geometry, cross-polarization, ColorChecker, and tripod-based capture are mandatory in both.
+> **Design principle**: This system is optimized for repeatability and low-friction deployment in a shared living space. Setup speed and consistency are prioritized over maximum theoretical image quality. Two equipment tiers are documented below — a **Pro tier** (~$1,950) and a **Compact tier** (~$1,200); the dual-light 45° geometry, cross-polarization, ColorChecker, and tripod-based capture are mandatory in both.
 
 ---
 
@@ -65,9 +65,14 @@ This is the single highest-leverage technique in archival imaging, and a real ca
 
 | Item | Price | Notes |
 |---|---|---|
-| **Daige Pro-Easel 30"** | ~$200 | Solid graphic-arts pro easel, adjustable angle (vertical to ~30° tilt), corner clips, foam-lined work surface. The right tool for flat artwork up to ~30" tall. Use the corner clips to hold any residual curl from previously-bound pages — gravity + clips beats glass weights every time. |
+| **Tabletop easel + foamcore backing + bulldog clips** (3-piece kit) | ~$50 | The right setup for flat-artwork capture, sourced as separate components: |
+| ↳ U.S. Art Supply Cancun (or equivalent) tabletop easel, beechwood, ~23" canvas capacity | ~$30 | Holds the foamcore at the desired angle. Adjustable vertical to slight back-tilt, fits the small-space deployment. |
+| ↳ 24"×30" black foamcore backing board | ~$15 | The actual page-mounting surface — gives you a true flat plane for the page (most tabletop easels have only a narrow bottom ledge, which won't keep aged/curled paper flat). Black reads as clean negative space behind the page in the captured frame. Replaceable when dinged. |
+| ↳ Bulldog clips × 4 (medium, 1.25" capacity) | ~$5 | Hold the page flat against the foamcore at top corners and bottom corners. Beats glass weights and tape; doesn't touch the writing area. |
 
-**Subtotal: ~$200**
+**Subtotal: ~$50**
+
+**Note on the previous "Daige Pro-Easel" reference:** earlier drafts of this doc cited a Daige Pro-Easel at ~$200. That product is no longer available (Daige.com is dead, and search returns nothing). The 3-piece kit above is what's actually in stock and a better fit for the project anyway — the foamcore gives a true flat backing plane that a graphic-arts easel's bottom-ledge design doesn't.
 
 **Cutting tools** (only if not already on hand): a **Carl DC-210N rotary trimmer** (15" cutting capacity, ~$70) plus a heavy-duty utility knife and steel ruler (~$25) for the initial through-stack cut. Two-pass workflow:
 
@@ -141,7 +146,7 @@ A second tier optimized for tighter budget and the smaller footprint of the smal
 | Lighting panels | Aputure Amaran 100x S × 2 (~$598) | **Aputure Amaran 60x S** or **Godox SL60II Bi** × 2 (~$300) | ~$300 |
 | Softboxes | Aputure Light Dome SE 33" × 2 (~$258) | 24–28" Bowens-mount softbox × 2 (~$140) | ~$118 |
 | CPL filter | Heliopan 46mm Slim SH-PMC (~$100) | **Hoya HD3 46mm CPL** or **B+W F-Pro Kaesemann** (~$50) | ~$50 |
-| Page support | Daige Pro-Easel 30" (~$200) | **Foamcore-backed rigid board + bulldog clips** on a tabletop easel (~$30) — or keep the Daige if the budget allows | ~$170 |
+| Page support | Tabletop easel + foamcore + bulldog clips (~$50) — same kit as Compact | Same — tabletop easel + foamcore + bulldog clips (~$50) | $0 |
 | Display calibrator | Calibrite Display Plus HL (~$200) | **Optional** — defer or skip; ColorChecker still required | ~$200 |
 
 ### What stays mandatory (no Compact downgrade)
@@ -159,12 +164,12 @@ A second tier optimized for tighter budget and the smaller footprint of the smal
 |----------|--------------|
 | Lighting (60W panels × 2, 24–28" softboxes, stands, bag) | ~$500 |
 | Cross-polarization (Hoya CPL + Rosco sheets + gaffer tape) | ~$130 |
-| Page support (rigid board + bulldog clips) | ~$30 |
+| Page support (tabletop easel + foamcore + bulldog clips) | ~$50 |
 | Color management (ColorChecker only; calibrator deferred) | ~$120 |
 | Cable + misc + preservation | ~$110 |
-| **Total** | **~$1,100–1,300 up-front** |
+| **Total** | **~$1,120–1,320 up-front** |
 
-Keeping the Daige easel (worth it; one-time buy that lasts the project) and deferring the calibrator lands around $1,300. Dropping both lands ~$1,100.
+Page support (tabletop easel + foamcore + bulldog clips, ~$50) is a one-time buy that's the same in both tiers — there's no Pro-tier upgrade path here. Deferring the calibrator alone lands around $1,250.
 
 ### When to choose which tier
 
@@ -183,7 +188,7 @@ Adobe Photography Plan (1 TB) is already an active subscription, so software is 
 |---|---|---|
 | Lighting (panels + softboxes + stands + bag) | ~$1,000 | ~$500 |
 | Cross-polarization (CPL + Rosco sheets + tape) | ~$170–190 | ~$130 |
-| Page support | ~$200 (Daige Pro-Easel) | ~$30 (rigid board + clips) |
+| Page support (tabletop easel + foamcore + clips) | ~$50 | ~$50 |
 | Color management | ~$320 (ColorChecker + calibrator) | ~$120 (ColorChecker only) |
 | Tethered capture (Lumix Tether free; LR Classic + CC already owned) | $0 | $0 |
 | Cable + misc + preservation | ~$110 | ~$110 |
@@ -370,7 +375,7 @@ Closed blinds is non-negotiable, not a preference. If the dining room has any di
 
 Organized by vendor so each batch can be a single cart/checkout. Prices verified May 2026 — confirm before ordering, photo gear pricing drifts ±15% on sales. Quantities and links provided for one-click navigation.
 
-> **Tier note**: Listed items are the **Pro tier**. If going **Compact tier** (~$1,100–1,300, see [Compact Deployment Configuration](#compact-deployment-configuration-1100-1300) above), substitute line by line: Aputure 100x S → 60x S (~$150 ea), Light Dome SE 33" → 24–28" Bowens softbox (~$70 ea), Heliopan 46mm CPL → Hoya HD3 46mm (~$50), Daige Pro-Easel → foamcore + bulldog clips (~$30), Display Plus HL → defer/skip. Everything else (Rosco sheets, ColorChecker, stands, cable, gloves, tape, sleeves) stays the same.
+> **Tier note**: Listed items are the **Pro tier**. If going **Compact tier** (~$1,375–1,475, see [Compact Deployment Configuration](#compact-deployment-configuration-1100-1300) above), substitute line by line: Aputure 100x S → 60x S (~$150 ea), Light Dome SE 33" → 24–28" Bowens softbox (~$70 ea), Heliopan 46mm CPL → Hoya HD3 46mm (~$50), Display Plus HL → defer/skip. Page support (tabletop easel + foamcore + bulldog clips), Rosco sheets, ColorChecker, stands, cable, gloves, tape, sleeves stay identical in both tiers.
 
 ### Order 1 — B&H Photo (largest cart, photo specialist)
 
@@ -401,12 +406,14 @@ B&H is the right default for this list: no sales tax for most states (NY only), 
 - **Calibrite Display Plus HL pricing:** the prior draft listed $200, which was the *Display Pro HL* (sibling product). The **Plus HL** model is the right SKU for handling high-brightness displays (mini-LED, OLED) — current price is $379 at B&H. Up $179. **This is the largest single price correction.** If budget is tight, the Compact tier still defers this item entirely; the ColorChecker Passport remains the non-negotiable color-management piece.
 - **Heliopan URL fix:** prior URL pointed at a non-existent SKU (704640 actually maps to 399985-REG at B&H, not 430946-REG). Same product, correct page now linked.
 
-### Order 2 — Daige direct (or B&H if available)
+### Order 2 — Amazon (page-support kit)
 
 | ✓ | Item | Qty | Unit | Total | Link |
 |---|------|-----|------|-------|------|
-| ☐ | Daige Pro-Easel 30" | 1 | $200 | $200 | [Daige](https://daige.com/products/pro-easel) |
-| | | | **Daige subtotal** | **~$200** | |
+| ☐ | U.S. Art Supply Cancun Solid Wooden Tabletop Easel (beechwood, ~23" canvas capacity) | 1 | $30 | $30 | [Amazon](https://www.amazon.com/Art-Supply-Studio-Adjustable-Tabletop/dp/B01M6TLCSC) |
+| ☐ | Black foamcore backing board, 24"×30" (or larger; 32"×40" also works) | 1 | $15 | $15 | [Amazon](https://www.amazon.com/s?k=24x30+black+foamcore+board) |
+| ☐ | Bulldog binder clips, medium (1.25" capacity), pack of 12 | 1 | $5 | $5 | [Amazon](https://www.amazon.com/s?k=bulldog+binder+clips+medium+1.25) |
+| | | | **Amazon (page support) subtotal** | **~$50** | |
 
 ### Order 3 — Gaylord Archival (preservation-specific)
 
@@ -447,14 +454,14 @@ The cutting mat is no longer needed — the trimmer's built-in cutting strip han
 | Order | Vendor | Subtotal |
 |-------|--------|----------|
 | 1 | B&H Photo | ~$1,830 |
-| 2 | Daige direct | ~$200 |
+| 2 | Amazon (page support) | ~$50 |
 | 3 | Gaylord Archival | ~$35 |
 | 4 | Amazon | ~$15 |
 | 5 | Cutting tools (optional) | ~$100 |
-| | **Total (Pro tier)** | **~$2,075–2,155** |
-| | **Total (Compact tier, B&H + same other vendors)** | **~$1,375–1,455** |
+| | **Total (Pro tier)** | **~$1,930–2,030** |
+| | **Total (Compact tier, B&H + same other vendors)** | **~$1,395–1,475** |
 
-The Pro-tier total moved up from ~$1,805 to ~$2,075 primarily because the Display Plus HL re-prices to $379 and the 1052BAC re-prices to ~$95. If the calibrator is deferred (it's marked optional in the Compact tier and can be added later as the project matures), Pro-tier B&H drops to ~$1,450 and Pro-tier total to ~$1,696. **The ColorChecker Passport Photo 2 stays mandatory in either case.**
+Pro-tier total dropped ~$150 from prior versions of this list because the bogus $200 Daige Pro-Easel reference was replaced with the actual $50 page-support kit (tabletop easel + foamcore + clips). If the calibrator is deferred (it's marked optional in the Compact tier and can be added later as the project matures), Pro-tier B&H drops to ~$1,450 and Pro-tier total to ~$1,550. **The ColorChecker Passport Photo 2 stays mandatory in either case.**
 
 ### Software (already owned — verify only)
 
@@ -466,9 +473,9 @@ The Pro-tier total moved up from ~$1,805 to ~$2,075 primarily because the Displa
 
 ### Ordering Notes
 
-- **Place B&H first.** It's the bulk of the spend and they're the most reliable for stock + ship time. Once it ships, Daige and Gaylord can run in parallel — neither depends on B&H gear arriving first.
+- **Place B&H first.** It's the bulk of the spend and they're the most reliable for stock + ship time. Once it ships, the Amazon and Gaylord orders can run in parallel — neither depends on B&H gear arriving first.
 - **Verify the Heliopan thread size before ordering.** The Olympus 60mm f/2.8 is 46mm — confirmed in this doc, but worth a glance at the lens before checkout. A 49mm or 52mm CPL will not fit.
 - **The Rosco sheet is one purchase for the project.** A single 17"×20" sheet cut in half covers both light panel softboxes. Don't order two.
 - **Skip the Calibrite Display Plus HL** if you already have any recent ColorChecker or X-Rite display calibrator (i1Display Pro, Spyder X, etc.). Re-calibrating a known-good profile in a year is fine. The ColorChecker Passport Photo 2 is the non-skippable color-management item.
 - **Aputure Amaran model name drift.** Aputure has rebranded the Amaran line a few times. If "Amaran 100x S" is out of stock, the equivalent successor (Amaran 100x or Amaran COB 100x S) at 100W bi-color with CRI 95+/TLCI 95+ is acceptable. Avoid the non-bi-color "100d" daylight-only versions — you want the ability to nudge color temperature.
-- **Cradle alternate.** If Daige Pro-Easel 30" is out of stock or backordered, the Testrite #500 Lite Easel ($150-180) is a workable substitute with similar geometry.
+- **Page-support alternates.** If the U.S. Art Supply Cancun is out of stock, any beechwood A-frame tabletop easel rated for 18"+ canvas works (Pro Art, Mont Marte, Royal & Langnickel — all $25-40 on Amazon). The foamcore can be substituted with any rigid 24"×30" or larger flat board (gatorboard, mat board, even thin masonite painted matte black). The bulldog clips are commodity — any 1.25" capacity binder clip works.
