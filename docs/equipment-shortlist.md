@@ -349,6 +349,41 @@ Daylight color temperature shifts from ~5500K (mid-morning) to ~4000K (late afte
 
 The institutional best practice ([FADGI 3rd Edition](https://www.digitizationguidelines.gov/guidelines/FADGI%20Technical%20Guidelines%20for%20Digitizing%20Cultural%20Heritage%20Materials_3rd%20Edition_05092023.pdf) §6) is **controlled, repeatable illumination** — meaning closed blinds, fixed panels, and a known-state color profile. Closed blinds is the easy way to meet that bar in a home setup. If the dining room has any direct-sun window, schedule sessions for after sunset for an extra margin.
 
+### Window Blackout Test + Supplemental Blocking
+
+Most household blinds **don't block 100% of light** — they reduce ambient by 80-95% but leave enough leakage that, in a multi-year archival project, it can introduce session-to-session inconsistency and partial glare. Before deciding whether to add supplemental blocking, **run a quick test once during initial setup**:
+
+#### The Test (5 minutes, do this once)
+
+1. Deploy the rig per the Setup Geometry section. Close blinds fully.
+2. Power on the LED panels at session-realistic settings (5000K, equal output).
+3. Place a glossy reference on the cradle — a ColorChecker patch, a piece of laminated paper, or a glossy magazine cover.
+4. Shoot one frame as you would during a session. Note the exposure.
+5. **Turn off both LED panels.**
+6. Without changing anything else, look at the page in live view (or shoot another frame at a much longer exposure, e.g. 1-2 seconds).
+7. **Decision criterion**: with the LED panels off, is the page meaningfully illuminated by the residual window light?
+   - **Page is essentially black** → blinds are sufficient. No supplemental blocking needed. Skip the rest of this section.
+   - **Page has visible illumination** (any color cast, any directional shadow from the window side, any reading on a meter) → ambient is leaking through. **Supplemental blocking will improve consistency and glare control.** Continue below.
+
+#### Why this matters even for "small" leaks
+
+- **Glare control degrades.** The cross-polarization rig only blocks light in the polarization state matching the Rosco sheets on the panels. Random ambient daylight passes through the CPL partially, so even a 5% leak can show up as low-contrast glare on the page.
+- **Cross-session color drift.** Daylight shifts ~1500K from morning to afternoon. A 5-10% ambient mix means the *effective* light source changes color across the day; the ColorChecker frame corrects the **average** color but can't perfectly correct **spatial** variation (window-side warmer than shadow-side) or **temporal** variation within a long session.
+- **Multi-year reproducibility.** The goal of this archive is making session 47 in 2028 look like session 1 in 2026. Eliminating ambient as a variable removes a drift factor you'd otherwise spend hours chasing in post.
+
+#### Supplemental blocking options (if the test shows leakage)
+
+| Option | Cost | Setup speed | Notes |
+|--------|------|-------------|-------|
+| **Magnetic blackout panel** sized to your window | ~$30–80 | ~30 sec | Best fit for the teardown workflow. Magnets clip onto the metal window frame (or stick-on metal strips for non-metal frames). Search Amazon for "magnetic blackout window cover" + your window dimensions. |
+| **Velcro-mounted blackout fabric** | ~$25–50 | ~1 min | Velcro pads stay on the frame; the fabric panel attaches and detaches. Slightly slower per session, more permanent fit. |
+| **Foamcore + binder clips against the window frame** | $0 (already buying foamcore for the easel) | ~1 min | DIY zero-cost option. Use a second piece of foamcore (you can buy a 32×40 sheet and cut to fit) clipped to a tension rod or pressed against the frame during sessions. Ugly but effective. Add an extra ~$15 foamcore sheet to Order 2 if going this route. |
+| **Blackout curtain** (rod-mounted) | ~$30–100 | ~15 sec to draw | Cheapest active solution but introduces a furniture item to the dining room. Defeats the "no permanent setup" constraint slightly. |
+
+**Recommendation if the test fails**: **magnetic blackout panel** for the small-space deployment workflow. Fast to deploy, fast to remove, no permanent change to the room, sized exactly to your window. Add to Order 4 (Amazon) at checkout. Measure the window opening (height × width) before ordering — most magnetic panels are sold in standard sizes (e.g., 36×48", 48×60") and you want one slightly larger than the opening.
+
+**If you have multiple windows in the room**, you may need one panel per window. Test each window separately by selectively un-covering one at a time during the test above.
+
 ---
 
 ## Per-Session Shooting Workflow
