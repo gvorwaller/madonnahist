@@ -10,6 +10,7 @@ build/
 dist/
 .vite/
 .cache/
+.svelte-kit/
 
 # Env / secrets
 .env
