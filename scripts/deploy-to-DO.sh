@@ -24,7 +24,6 @@ PM2_APP="madonnahist"
 NGINX_CONF_SRC="deploy/nginx.conf"
 NGINX_CONF_DST="/etc/nginx/sites-available/madonnahist.gaylon.photos"
 NGINX_LINK="/etc/nginx/sites-enabled/madonnahist.gaylon.photos"
-ORIGIN_CERT="/etc/ssl/cloudflare/madonnahist.crt"
 HEALTH_URL_INTERNAL="http://127.0.0.1:3002/api/health"
 HEALTH_URL_PUBLIC="https://madonnahist.gaylon.photos/api/health"
 
@@ -90,7 +89,7 @@ ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
     NGINX_CHECKSUM_LOCAL="${NGINX_CHECKSUM_LOCAL}" \
     APP_DIR="${APP_DIR}" PM2_APP="${PM2_APP}" \
     NGINX_CONF_SRC="${NGINX_CONF_SRC}" NGINX_CONF_DST="${NGINX_CONF_DST}" \
-    NGINX_LINK="${NGINX_LINK}" ORIGIN_CERT="${ORIGIN_CERT}" \
+    NGINX_LINK="${NGINX_LINK}" \
     HEALTH_URL_INTERNAL="${HEALTH_URL_INTERNAL}" \
     bash -se <<'REMOTE'
 set -euo pipefail
@@ -118,10 +117,6 @@ fi
 
 if [[ "${NGINX_CHECKSUM_LOCAL}" != "${NGINX_CHECKSUM_REMOTE}" ]]; then
   echo "==> nginx config changed; installing and reloading"
-  if [[ ! -f "${ORIGIN_CERT}" ]]; then
-    echo "!! origin cert missing at ${ORIGIN_CERT} — install before nginx reload." >&2
-    exit 1
-  fi
   cp "${APP_DIR}/${NGINX_CONF_SRC}" "${NGINX_CONF_DST}"
   [[ -L "${NGINX_LINK}" ]] || ln -s "${NGINX_CONF_DST}" "${NGINX_LINK}"
   nginx -t
@@ -130,8 +125,13 @@ else
   echo "==> nginx config unchanged"
 fi
 
-echo "==> pm2 restart"
-pm2 restart "${PM2_APP}" --update-env
+echo "==> pm2 (start if absent, restart otherwise)"
+if pm2 describe "${PM2_APP}" > /dev/null 2>&1; then
+  pm2 restart "${PM2_APP}" --update-env
+else
+  pm2 start ecosystem.config.cjs
+  pm2 save
+fi
 
 # Health gate: db must be ok. spaces==not_configured is tolerated (bootstrap).
 echo "==> health check (internal)"
