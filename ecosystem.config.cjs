@@ -8,14 +8,17 @@
 //   pm2 save
 //
 // Secrets (PGPASSWORD, MIGRATION_PGPASSWORD, AUTH_SECRET, etc.) live in
-// /opt/madonnahist/.env, mode 600, owned root:root, loaded by adapter-node
-// via the standard process.env mechanism (env-file flag below).
+// /opt/madonnahist/.env, mode 600, owned root:root. Loaded into process.env
+// at boot via Node's built-in --env-file flag (Node ≥ 20.6). This means
+// `process.env.PGPASSWORD` etc. resolve before any SvelteKit module reads
+// them via $env/dynamic/private.
 
 module.exports = {
 	apps: [
 		{
 			name: 'madonnahist',
 			script: 'build/index.js',
+			node_args: '--env-file=.env',
 			cwd: '/opt/madonnahist',
 
 			instances: 1,
