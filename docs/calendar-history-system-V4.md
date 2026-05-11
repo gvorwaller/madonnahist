@@ -94,7 +94,7 @@ Sessions are cookie-based, `httpOnly`, `secure`, `SameSite=Strict`. No public re
 | Auth | Cookie sessions + argon2id | Existing pattern (matches giftlist) |
 | Image storage | **DigitalOcean Spaces** | Settled |
 | Image processing | Sharp (Node) | Thumbnails, day-cell crops |
-| OCR vendors | Transkribus primary; Google Vision/Azure fallback | Pluggable via vendor adapter interface |
+| OCR vendors | **Local VLM via Ollama** default (olmOCR-2-7B, Qwen3-VL); Transkribus fallback for low-confidence pages; Google Vision/Azure as additional fallbacks | Pluggable via vendor adapter interface; local VLM runs on Apple Silicon (~8GB unified memory), $0 cost, full data privacy |
 | LLM | Anthropic Claude (or OpenAI) | Cleanup, entity extraction, summaries — pluggable |
 | Reverse proxy | nginx | Settled |
 | Edge | Cloudflare | TLS, cache, DDoS |
@@ -215,7 +215,7 @@ CREATE INDEX idx_calendar_days_low_confidence
 CREATE TABLE ocr_runs (
   id BIGSERIAL PRIMARY KEY,
   day_id INT NOT NULL REFERENCES calendar_days(id) ON DELETE CASCADE,
-  vendor TEXT NOT NULL,                     -- 'transkribus' | 'google-vision' | 'azure'
+  vendor TEXT NOT NULL,                     -- 'local-ollama' | 'transkribus' | 'google-vision' | 'azure'
   source_image_path TEXT NOT NULL,
   raw_text TEXT NOT NULL,
   confidence_score FLOAT,
@@ -501,7 +501,17 @@ Phase 1 ships with one default crop template (5×7 grid for standard wall calend
 
 **Where it lives:** `workers/ocr-worker.mjs` — long-running PM2 process, idempotent.
 
-**Vendor selection:** `src/lib/ocr/vendors/{transkribus,google,azure}.ts` implements `transcribe(imageUrl) -> { text, confidence, vendorMeta }`. Default vendor in `app_state.default_ocr_vendor`; per-job override via `payload.vendor`.
+**Vendor selection:** `src/lib/ocr/vendors/{local-ollama,transkribus,google,azure}.ts` implements `transcribe(imageUrl) -> { text, confidence, vendorMeta }`. Default vendor in `app_state.default_ocr_vendor`; per-job override via `payload.vendor`.
+
+**Local VLM option (recommended default):** The `local-ollama` adapter runs vision-language models locally via Ollama on Apple Silicon. Primary models are **olmOCR-2-7B** (fine-tuned from Qwen2.5-VL, 82.4 on olmOCR-bench, trained on 270K pages including 20K handwritten/historical documents) and **Qwen3-VL**. VLMs combine visual understanding with contextual reasoning — when a character is ambiguous (e.g., 'a' vs 'o'), they consider surrounding words and document type rather than classifying glyphs in isolation. Benchmarks show 80–85% accuracy on legible handwriting vs ~64% for traditional OCR engines (cursive is 10–15% lower than print). Cost is $0 per page and all data stays on-premises — no family content leaves the local network.
+
+**Recommended strategy:** Use the local VLM as the default OCR vendor. When a local VLM run produces a `confidence_score` below the `app_state.flag_confidence_threshold` (default 0.4), automatically enqueue a Transkribus re-run for that page. This gives the best of both worlds: free, private processing for the majority of pages, with Transkribus's trainable handwriting models as a safety net for difficult ones.
+
+**Cost comparison (for ~720 calendar pages):**
+- Local VLM via Ollama: **$0** (runs on existing hardware)
+- Transkribus: **~€108** (at €0.15/page, or less with credit packs)
+- Google Vision: **free** at this volume (1,000 pages/month free tier)
+- Azure Document Intelligence: **free** at this volume (500 pages/month free tier)
 
 **Re-run safety:** OCR reruns create new `ocr_runs` rows. The trigger updates `latest_ocr_run_id` to the new row. Older runs are preserved for audit; `corrected_text` is untouchable.
 
