@@ -59,7 +59,11 @@ ocr-cache/
 
 # Database dumps
 *.dump
+*.pgdump
 *.sql.gz
+
+# CCC preflight outputs (PG dumps, prod env/configs, Spaces inventory)
+data/backup/
 .sidecar/
 .sidecar-agent
 .sidecar-task
