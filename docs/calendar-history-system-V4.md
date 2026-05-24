@@ -425,10 +425,26 @@ GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO madonnahist_app
 
 -- App cannot UPDATE the canonical correction columns directly. All writes flow through
 -- INSERT INTO day_corrections; trg_after_correction_insert (SECURITY DEFINER) propagates.
-REVOKE UPDATE (corrected_text, corrected_by, corrected_at,
-               correction_status, review_note,
-               latest_ocr_run_id, latest_llm_draft_run_id, latest_confidence_score,
-               search_aux_text) ON calendar_days FROM madonnahist_app;
+--
+-- NOTE on grant semantics: column-level REVOKE only removes column-level
+-- grants. A table-level UPDATE grant covers every column implicitly and
+-- silently neutralizes a follow-up column-level REVOKE on the same role.
+-- The correct pattern for an "UPDATE all-but-these-columns" policy is to
+-- REVOKE table-level UPDATE first and then GRANT UPDATE only on the
+-- columns the role is allowed to write — an allow-list, not a deny-list.
+REVOKE UPDATE ON calendar_days FROM madonnahist_app;
+
+GRANT UPDATE (
+  day_image_path,
+  crop_template_id,
+  crop_bounds,
+  last_opened_by,
+  last_opened_at,
+  editing_started_at,
+  current_session_id,
+  ai_summary,
+  updated_at
+) ON calendar_days TO madonnahist_app;
 
 -- App cannot DELETE history tables. Append-only is structural.
 REVOKE DELETE ON ocr_runs, llm_draft_runs, day_corrections FROM madonnahist_app;

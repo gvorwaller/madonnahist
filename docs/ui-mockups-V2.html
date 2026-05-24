@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UI Mockups — V2</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #fdfdfc;
+  --muted: #555;
+  --border: #d8d8d4;
+  --accent: #2b5e8c;
+  --code-bg: #f4f2ee;
+  --code-fg: #2d2d2d;
+  --table-stripe: #f7f5f1;
+  --blockquote-border: #c8c4bc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e4df;
+    --bg: #1a1a1a;
+    --muted: #9a978f;
+    --border: #333;
+    --accent: #6fa9d6;
+    --code-bg: #242424;
+    --code-fg: #e6e4df;
+    --table-stripe: #1f1f1f;
+    --blockquote-border: #444;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 2.5rem 1.25rem 6rem;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.25;
+  margin: 2em 0 0.6em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2.1rem; margin-top: 0.2em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+h2 { font-size: 1.55rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.08rem; }
+h5, h6 { font-size: 1rem; color: var(--muted); }
+p { margin: 0.9em 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 650; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+ul, ol { padding-left: 1.6em; margin: 0.8em 0; }
+li { margin: 0.25em 0; }
+li > p { margin: 0.3em 0; }
+blockquote {
+  margin: 1em 0;
+  padding: 0.4em 1.1em;
+  border-left: 3px solid var(--blockquote-border);
+  color: var(--muted);
+  background: var(--code-bg);
+  border-radius: 0 4px 4px 0;
+}
+blockquote p:first-child { margin-top: 0; }
+blockquote p:last-child { margin-bottom: 0; }
+code, pre, kbd, samp {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+}
+:not(pre) > code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1em 1.1em;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+  font-size: 0.92em;
+}
+table {
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  width: 100%;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  padding: 0.55em 0.85em;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--code-bg);
+  font-weight: 650;
+}
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+img { max-width: 100%; height: auto; border-radius: 4px; }
+.doc-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-meta a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<div class="doc-meta">ui-mockups-V2.md</div>
+<h1 id="ui-mockups-v2">UI Mockups — V2</h1>
+<blockquote>
+<p>Information-architecture sketches, not pixel-perfect designs. Two surfaces: Madonna&rsquo;s iPad correction UI and the family phone viewer. Visual polish (palette, fonts, exact spacing) intentionally deferred — covers the <em>what</em> and <em>where</em>, not the <em>prettiness</em>.</p>
+<p>Changes from V1: the correction editor now gives more space to image + final text than raw OCR, and book view is now entered contextually rather than from global bottom navigation.</p>
+</blockquote>
+<h2 id="a-madonnas-correction-ui-ipad-first">A. Madonna&rsquo;s Correction UI (iPad-first)</h2>
+<p>iPad landscape primary, iPad portrait acceptable, desktop fine. Touch-first; keyboard shortcuts as a power-user accelerator. Large tap targets (minimum 56×56pt — bigger than the 48px guideline because Madonna&rsquo;s older and on a tablet).</p>
+<hr />
+<h3 id="a1-sign-in-session-home-correct">A1. Sign-in &amp; Session Home (<code>/correct</code>)</h3>
+<pre class="codehilite"><code>┌──────────────────────────────────────────────────────────────────────┐
+│  madonnahist                            [ Madonna ▾ ]   [ Sign out ] │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│   Welcome back, Madonna.                                             │
+│                                                                      │
+│   You have 47 days waiting for review.                               │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────┐    │
+│   │                                                            │    │
+│   │   [▶  Resume where you left off ]                          │    │
+│   │      Last: March 1968, day 12                              │    │
+│   │                                                            │    │
+│   └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────┐    │
+│   │   [📅  Pick a specific month ]                              │    │
+│   └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│   ┌────────────────────────────────────────────────────────────┐    │
+│   │   [🏷️  Days flagged 'illegible' (8)  ]                      │    │
+│   │      Days you marked as needing another look                │    │
+│   └────────────────────────────────────────────────────────────┘    │
+│                                                                      │
+│   ─────────────────────────────────────────────────────────────      │
+│   This week you corrected 73 days. (See progress ▸)                  │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Three big buttons. No menus, no settings. Madonna has one job: review days.
+- &ldquo;Resume where you left off&rdquo; is the dominant CTA.
+- Progress link is muted; positive reinforcement, not pressure.</p>
+<hr />
+<h3 id="a2-day-correction-correctdaydate-ipad-landscape">A2. Day Correction (<code>/correct/day/[date]</code>) — iPad landscape</h3>
+<p>The main work surface. Three columns with weighted emphasis: image <code>35%</code>, OCR/drafts <code>25%</code>, corrected text <code>40%</code>. Raw OCR can collapse when Madonna wants more writing room.</p>
+<pre class="codehilite"><code>┌───────────────────────────────────────────────────────────────────────────────────┐
+│ ← Back                  Tuesday, March 12, 1968                       Day 12 / 31 │
+├──────────────────────────────┬────────────────────────────┬───────────────────────┤
+│                              │                            │                       │
+│   [ scanned image ]          │  OCR draft                 │  What it says         │
+│                              │  ─────────────             │  ────────────         │
+│   ┌──────────────────────┐   │                            │                       │
+│   │                      │   │  Marcus to dentist 9am.    │  ┌─────────────────┐  │
+│   │                      │   │  Snow ail day.             │  │ Marcus to       │  │
+│   │   [ image of the     │   │  Pot roast - too dry.      │  │ dentist 9am.    │  │
+│   │     day-cell crop ]  │   │  Bill called from work.    │  │ Snow all day.   │  │
+│   │                      │   │                            │  │ Pot roast — too │  │
+│   │                      │   │  ─────────────             │  │ dry. Bill called│  │
+│   │   pinch to zoom      │   │  Suggested fix:            │  │ from work.      │  │
+│   │   double-tap to fit  │   │  ──────────                │  └─────────────────┘  │
+│   └──────────────────────┘   │                            │                       │
+│                              │  Marcus to dentist 9am.    │  Tags: ┌────────────┐ │
+│   View full month page ▸     │  Snow all day.             │       │ marcus     │ │
+│                              │  Pot roast — too dry.      │       │ snowstorm  │ │
+│                              │  Bill called from work.    │       │ + add tag  │ │
+│                              │                            │       └────────────┘ │
+│                              │  [✓ Use this suggestion]   │                       │
+│                              │                            │                       │
+│                              │  Confidence: ●●●○○         │  Status: in progress  │
+│                              │                            │                       │
+├──────────────────────────────┴────────────────────────────┴───────────────────────┤
+│                                                                                   │
+│  [⚑ Flag illegible]      [↩ Skip for now]      [💾 Save]      [→ Save &amp; Next]    │
+│                                                                                   │
+└───────────────────────────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Three columns:</strong>
+1. <strong>Image</strong> (left, wider) — the day-cell crop. Pinch-to-zoom, double-tap to fit. &ldquo;View full month page&rdquo; link expands to the full scanned page in a modal.
+2. <strong>OCR draft</strong> (middle, narrower) — read-only by default. Top half: raw OCR. Bottom half: LLM-cleaned suggestion with &ldquo;Use this suggestion&rdquo; button. The raw OCR subsection can collapse to a single summary row.
+3. <strong>Corrected text</strong> (right, widest) — the editable field. Auto-saves on debounce. Tags below. Status indicator.</p>
+<p><strong>Bottom action bar (always visible, large buttons):</strong>
+- <code>Flag illegible</code> — sets <code>correction_status = 'flagged'</code>, prompts for an optional note
+- <code>Skip for now</code> — leaves status <code>pending</code>, advances to next
+- <code>Save</code> — saves and stays on this day
+- <code>Save &amp; Next</code> — saves and advances (the dominant action)</p>
+<p><strong>Keyboard shortcuts</strong> (when paired keyboard present):
+- <code>⌘S</code> — save
+- <code>⌘→</code> — save &amp; next
+- <code>⌘↑</code> — accept LLM suggestion
+- <code>⌘F</code> — flag illegible
+- <code>⌘Z</code> — undo last save (within 30s)</p>
+<p><strong>Surrounding-day context</strong> (optional sidebar, dismissible):
+- Tap an &ldquo;i&rdquo; icon top-right → reveals &ldquo;Day before&rdquo; and &ldquo;Day after&rdquo; already-corrected entries from the same year. Helps Madonna recognize handwriting patterns and disambiguate.</p>
+<hr />
+<h3 id="a3-calendar-navigation-correctcalendar">A3. Calendar Navigation (<code>/correct/calendar</code>)</h3>
+<pre class="codehilite"><code>┌──────────────────────────────────────────────────────────────────────┐
+│  ← Back                                                              │
+├──────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│    [ ◂ 1967 ]      March  1968      [ April ▸ ]      [ 1969 ▸ ]      │
+│                                                                      │
+│    ┌────┬────┬────┬────┬────┬────┬────┐                              │
+│    │  S │  M │  T │  W │  T │  F │  S │                              │
+│    ├────┼────┼────┼────┼────┼────┼────┤                              │
+│    │    │    │    │    │    │  1 │  2 │  ●  done                     │
+│    │    │    │    │    │    │  ● │  ● │                              │
+│    ├────┼────┼────┼────┼────┼────┼────┤  ◐  in progress              │
+│    │  3 │  4 │  5 │  6 │  7 │  8 │  9 │                              │
+│    │  ● │  ● │  ◐ │  ◐ │  ◐ │  ○ │  ○ │  ○  pending                  │
+│    ├────┼────┼────┼────┼────┼────┼────┤                              │
+│    │ 10 │ 11 │ 12 │ 13 │ 14 │ 15 │ 16 │  ⚑  flagged                  │
+│    │  ○ │  ○ │  ◐ │  ○ │  ⚑ │  ○ │  ○ │                              │
+│    ├────┼────┼────┼────┼────┼────┼────┤                              │
+│    │ 17 │ 18 │ 19 │ 20 │ 21 │ 22 │ 23 │                              │
+│    │  ○ │  ○ │  ○ │  ○ │  ○ │  ○ │  ○ │                              │
+│    ├────┼────┼────┼────┼────┼────┼────┤                              │
+│    │ 24 │ 25 │ 26 │ 27 │ 28 │ 29 │ 30 │                              │
+│    │  ○ │  ○ │  ○ │  ○ │  ○ │  ○ │  ○ │                              │
+│    ├────┼────┴────┴────┴────┴────┴────┘                              │
+│    │ 31 │                                                            │
+│    │  ○ │                                                            │
+│    └────┘                                                            │
+│                                                                      │
+│    Progress: 10 / 31 days corrected this month                       │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Tap any day → opens that day in the editor.
+- Status dot under each day number; matches the legend on the right.
+- Year and month chevrons for moving across time. Year picker is a single tap → big year-grid.
+- Bottom shows progress for the current month.</p>
+<hr />
+<h3 id="a4-session-done-correctdone">A4. Session Done (<code>/correct/done</code>)</h3>
+<pre class="codehilite"><code>┌──────────────────────────────────────────────────────────────────────┐
+│  Nice work, Madonna.                                                 │
+│                                                                      │
+│   Today's session                                                    │
+│   ───────────────                                                    │
+│                                                                      │
+│   ✓ 27 days corrected                                                │
+│   ⚑  3 days flagged for another look                                 │
+│   ↩  1 day skipped                                                   │
+│                                                                      │
+│   Time:  41 minutes                                                  │
+│                                                                      │
+│   [ Continue with the next month ]                                   │
+│   [ Stop for now ]                                                   │
+│                                                                      │
+│   ─────────────────────────────────                                  │
+│                                                                      │
+│   This week:  73 days                                                │
+│   This month: 287 days                                               │
+│   All time:  1,142 days corrected (of 21,915 total — 5%)             │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+</code></pre>
+
+<p><strong>Tone:</strong> warm, encouraging. The &ldquo;all time&rdquo; progress is shown but as an aside — not a guilt trip.</p>
+<hr />
+<h2 id="b-family-viewer-phone-first">B. Family Viewer (phone-first)</h2>
+<p>Mobile-first single column. Vertical scroll dominant. Swipe gestures for adjacent-day navigation. Works fine on tablet/desktop; layout stretches but information density stays modest.</p>
+<hr />
+<h3 id="b1-home-on-this-day-app-or-phone-portrait">B1. Home / &ldquo;On This Day&rdquo; (<code>/app</code> or <code>/</code>) — phone portrait</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  madonnahist          [ ☰ ] │
+├─────────────────────────────┤
+│                             │
+│  On May 3 in our history    │
+│  ─────────────────────────  │
+│                             │
+│  ┌───────────────────────┐  │
+│  │                       │  │
+│  │  [thumb of day cell]  │  │
+│  │                       │  │
+│  │  May 3, 2018          │  │
+│  │  ──                   │  │
+│  │  Marcus moved into    │  │
+│  │  the new place. Big   │  │
+│  │  rain. Pizza after.   │  │
+│  │                       │  │
+│  │  marcus · seattle     │  │
+│  └───────────────────────┘  │
+│                             │
+│  ┌───────────────────────┐  │
+│  │                       │  │
+│  │  [thumb of day cell]  │  │
+│  │                       │  │
+│  │  May 3, 1995          │  │
+│  │  ──                   │  │
+│  │  G. graduated.        │  │
+│  │  Family lunch at      │  │
+│  │  Olive Garden.        │  │
+│  │                       │  │
+│  │  gaylon · graduation  │  │
+│  └───────────────────────┘  │
+│                             │
+│  ┌───────────────────────┐  │
+│  │  May 3, 1972          │  │
+│  │  ──                   │  │
+│  │  Marcus's first       │  │
+│  │  steps! Bill home     │  │
+│  │  early to see.        │  │
+│  └───────────────────────┘  │
+│                             │
+│  [ See all of May 1972 ▸ ]  │
+│                             │
+├─────────────────────────────┤
+│  [🏠]  [📅]  [🔍]            │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Bottom nav (3 items):</strong>
+- 🏠 Today / On this day
+- 📅 Browse (year/decade)
+- 🔍 Search</p>
+<p><strong>Book view entry:</strong> Contextual only. Readers enter book mode from a year, person, or day context where the scope is already clear.</p>
+<p><strong>Cards:</strong>
+- Image thumbnail (lazy-loaded, served from Cloudflare cache)
+- Date in human form
+- First ~2 sentences of corrected text
+- Inline tags as muted chips
+- Tap card → day detail</p>
+<hr />
+<h3 id="b2-day-detail-appdaydate-phone-portrait">B2. Day Detail (<code>/app/day/[date]</code>) — phone portrait</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  ← Back                     │
+├─────────────────────────────┤
+│                             │
+│  Tuesday, May 3, 1972       │
+│                             │
+│  ┌───────────────────────┐  │
+│  │                       │  │
+│  │   [ day-cell image,   │  │
+│  │     full-width,       │  │
+│  │     tap to zoom ]     │  │
+│  │                       │  │
+│  └───────────────────────┘  │
+│                             │
+│  Marcus's first steps!      │
+│  Bill home early to see.    │
+│  Pot roast for dinner.      │
+│  Marc fell asleep on        │
+│  Bill's lap watching the    │
+│  Tonight Show.              │
+│                             │
+│  ───                        │
+│                             │
+│  Tags                       │
+│  [ marcus ] [ bill ]        │
+│  [ first-steps ]            │
+│                             │
+│  ───                        │
+│                             │
+│  In context                 │
+│                             │
+│  Marcus was 11 months old.  │
+│  This was the first         │
+│  documented walking in      │
+│  the calendars. The next    │
+│  mention of his walking     │
+│  is May 7. — generated      │
+│                             │
+│  ───                        │
+│                             │
+│  [ ◂ May 2 ]   [ May 4 ▸ ]  │
+│                             │
+│  See full page: March 1972  │
+│                             │
+├─────────────────────────────┤
+│  [🏠]  [📅]  [🔍]            │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Sections:</strong>
+1. Date header
+2. Day-cell image (tap to zoom; pinch in modal)
+3. Corrected text in full
+4. Tag chips (tappable; lead to <code>/app/person/marcus</code> or <code>/app/tag/first-steps</code>)
+5. AI-generated context paragraph (when present; gracefully absent otherwise). Marked <code>— generated</code> so readers know it&rsquo;s not from the calendar.
+6. Prev/next day swipe arrows (also: swipe gesture on the image)
+7. Link to the full month page
+8. Contextual action such as &ldquo;Read 1972 as a book&rdquo; when the surrounding scope is obvious</p>
+<hr />
+<h3 id="b3-year-browse-timeline-appyearyear-phone">B3. Year Browse / Timeline (<code>/app/year/[year]</code>) — phone</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  ← Back                     │
+├─────────────────────────────┤
+│                             │
+│   [ ◂ 1971 ]   1972         │
+│                  [ 1973 ▸ ] │
+│                             │
+│  ─── January                │
+│                             │
+│  ┌───┬───┬───┬───┬───┬───┐  │
+│  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │  │
+│  └───┴───┴───┴───┴───┴───┘  │
+│  3rd: Bill back to work...  │
+│  7th: Snow day, no school...│
+│  15th: Marcus pulled up...  │
+│                             │
+│  [ See January in detail ▸ ]│
+│                             │
+│  ─── February               │
+│                             │
+│  ┌───┬───┬───┬───┬───┬───┐  │
+│  │ 1 │ 2 │ 3 │ 4 │ 5 │ 6 │  │
+│  └───┴───┴───┴───┴───┴───┘  │
+│  4th: Madonna sick all...   │
+│  ...                        │
+│                             │
+│  [ Read 1972 as a book ▸ ]  │
+│                             │
+├─────────────────────────────┤
+│  [🏠]  [📅]  [🔍]            │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Each month section: micro-grid of day numbers (tappable) + 3 highlighted entries (tap → day detail)
+- Year chevrons at top
+- Footer: &ldquo;Read 1972 as a book&rdquo; → enters book view from the current year context</p>
+<hr />
+<h3 id="b4-search-appsearch">B4. Search (<code>/app/search</code>)</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  ← Back                     │
+├─────────────────────────────┤
+│                             │
+│  ┌───────────────────────┐  │
+│  │ 🔍  marcus and snow   │  │
+│  └───────────────────────┘  │
+│                             │
+│  Filter: any year ▾         │
+│                             │
+│  ───                        │
+│                             │
+│  37 results                 │
+│                             │
+│  ┌─────────────────────┐    │
+│  │ Mar 12, 1968        │    │
+│  │ &quot;Marcus to dentist  │    │
+│  │  9am. Snow all day.&quot; │    │
+│  │ marcus · snowstorm  │    │
+│  └─────────────────────┘    │
+│                             │
+│  ┌─────────────────────┐    │
+│  │ Feb 4, 1974         │    │
+│  │ &quot;Marcus and the     │    │
+│  │  neighbor kids made │    │
+│  │  a snow fort...&quot;    │    │
+│  │ marcus · snow       │    │
+│  └─────────────────────┘    │
+│                             │
+│  [ ... more results ... ]   │
+│                             │
+├─────────────────────────────┤
+│  [🏠]  [📅]  [🔍]            │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Full-text search via Postgres <code>tsvector</code>. Supports natural-language queries.
+- Match snippet shows the surrounding text. Match terms highlighted.
+- Year filter, tag filter, person filter (Phase 2+).
+- Tap a result → day detail.</p>
+<hr />
+<h3 id="b5-book-view-appbookyear1972-phone-immersive">B5. Book View (<code>/app/book/year/1972</code>) — phone, immersive</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  ⨯                          │
+├─────────────────────────────┤
+│                             │
+│     1972                    │
+│     ──── March              │
+│                             │
+│     Tuesday, March 12       │
+│                             │
+│     [thumb]  Marcus to      │
+│              dentist 9am.   │
+│              Snow all day.  │
+│              Pot roast      │
+│              too dry. Bill  │
+│              called from    │
+│              work.          │
+│                             │
+│     ───                     │
+│                             │
+│     Wednesday, March 13     │
+│                             │
+│     [thumb]  More snow.     │
+│              School closed. │
+│              Marcus and I   │
+│              made a fort    │
+│              in the kitchen │
+│              with chairs    │
+│              and the kept   │
+│              quilts.        │
+│                             │
+│     ───                     │
+│                             │
+│     Thursday, March 14      │
+│                             │
+│     [thumb]  Roads cleared. │
+│              ...            │
+│                             │
+│                             │
+│  ◂ swipe                    │
+│            page 23 / 92     │
+│                             swipe ▸ │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Distraction-free. No bottom nav. Single close button (X) returns to wherever you came from.
+- Each &ldquo;page&rdquo; of the book holds 3–5 days, depending on text length.
+- Chapter breaks at month boundaries — month name shown big.
+- Swipe horizontally to advance pages. Optional auto-paginate-on-tap-edge.
+- Image thumbs are small left-margin elements; tap any thumb → modal with full image.
+- End of year: &ldquo;Continue to 1973&rdquo; button.</p>
+<hr />
+<h3 id="b6-person-profile-apppersonmarcus-phone">B6. Person Profile (<code>/app/person/marcus</code>) — phone</h3>
+<pre class="codehilite"><code>┌─────────────────────────────┐
+│  ← Back                     │
+├─────────────────────────────┤
+│                             │
+│         Marcus              │
+│                             │
+│   142 days mention Marcus   │
+│   1971 — 2018               │
+│                             │
+│   [ See on a timeline ▸ ]   │
+│                             │
+│  ───                        │
+│                             │
+│   Earliest                  │
+│                             │
+│  ┌───────────────────────┐  │
+│  │ June 4, 1971          │  │
+│  │ &quot;Marcus born at 3am.  │  │
+│  │  6 lbs 4 oz. Healthy.&quot; │  │
+│  └───────────────────────┘  │
+│                             │
+│   Most recent               │
+│                             │
+│  ┌───────────────────────┐  │
+│  │ Dec 25, 2018          │  │
+│  │ &quot;Marcus brought the   │  │
+│  │  kids for Christmas...&quot; │  │
+│  └───────────────────────┘  │
+│                             │
+│   By decade                 │
+│                             │
+│   1970s — 47 mentions       │
+│   1980s — 61 mentions       │
+│   1990s — 18 mentions       │
+│   2000s — 8 mentions        │
+│   2010s — 8 mentions        │
+│                             │
+│   Tap a decade for the list │
+│                             │
+├─────────────────────────────┤
+│  [🏠]  [📅]  [🔍]            │
+└─────────────────────────────┘
+</code></pre>
+
+<p><strong>Behavior:</strong>
+- Phase 3 surface (depends on entity extractor + alias resolution)
+- Earliest + most-recent give a quick frame
+- Decade roll-ups link to filtered list views</p>
+<hr />
+<h2 id="cross-surface-notes">Cross-Surface Notes</h2>
+<h3 id="color-typography-deferred-but-baseline">Color &amp; typography (deferred, but baseline)</h3>
+<ul>
+<li><strong>Body</strong>: a serif (Georgia / &ldquo;Iowan Old Style&rdquo;) for the corrected-text reading experience — feels like a written record, not a database</li>
+<li><strong>UI chrome</strong>: sans (system-ui / &ldquo;SF Pro Text&rdquo;)</li>
+<li><strong>Palette</strong>: warm domestic, similar to giftlist — cream backgrounds, paper cards, evergreen primary, amber attention. Avoid the BTC dashboard&rsquo;s clinical white/gray.</li>
+</ul>
+<h3 id="accessibility-floor-non-negotiable">Accessibility floor (non-negotiable)</h3>
+<ul>
+<li>Base font 18px (correction UI), 17px (viewer); larger on tablet</li>
+<li>WCAG AAA contrast (7:1) for body text</li>
+<li>All status indicators use color + icon + text label, never color alone</li>
+<li>Tap targets ≥48×48px (≥56×56pt on the iPad correction UI)</li>
+<li>No gesture-only navigation; everything reachable via visible labeled controls</li>
+</ul>
+<h3 id="whats-not-in-v2">What&rsquo;s NOT in V2</h3>
+<ul>
+<li>Visual polish (will iterate after Madonna does her first real session and tells us what&rsquo;s annoying)</li>
+<li>Comments / annotations on entries (Phase 3+)</li>
+<li>Sharing entries to family group chats (Phase 4)</li>
+<li>Print/PDF export (Phase 4 — would feed the &ldquo;book&rdquo; form factor for real)</li>
+<li>Notification system for &ldquo;new entries this week&rdquo;</li>
+</ul>
+<p>These mockups should be enough to start coding Phase 1 from. Everything else iterates from there.</p>
+</main>
+</body>
+</html>

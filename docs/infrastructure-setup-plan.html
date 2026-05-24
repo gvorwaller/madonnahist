@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Infrastructure Setup (td-9c6107)</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #fdfdfc;
+  --muted: #555;
+  --border: #d8d8d4;
+  --accent: #2b5e8c;
+  --code-bg: #f4f2ee;
+  --code-fg: #2d2d2d;
+  --table-stripe: #f7f5f1;
+  --blockquote-border: #c8c4bc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e4df;
+    --bg: #1a1a1a;
+    --muted: #9a978f;
+    --border: #333;
+    --accent: #6fa9d6;
+    --code-bg: #242424;
+    --code-fg: #e6e4df;
+    --table-stripe: #1f1f1f;
+    --blockquote-border: #444;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 2.5rem 1.25rem 6rem;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.25;
+  margin: 2em 0 0.6em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2.1rem; margin-top: 0.2em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+h2 { font-size: 1.55rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.08rem; }
+h5, h6 { font-size: 1rem; color: var(--muted); }
+p { margin: 0.9em 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 650; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+ul, ol { padding-left: 1.6em; margin: 0.8em 0; }
+li { margin: 0.25em 0; }
+li > p { margin: 0.3em 0; }
+blockquote {
+  margin: 1em 0;
+  padding: 0.4em 1.1em;
+  border-left: 3px solid var(--blockquote-border);
+  color: var(--muted);
+  background: var(--code-bg);
+  border-radius: 0 4px 4px 0;
+}
+blockquote p:first-child { margin-top: 0; }
+blockquote p:last-child { margin-bottom: 0; }
+code, pre, kbd, samp {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+}
+:not(pre) > code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1em 1.1em;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+  font-size: 0.92em;
+}
+table {
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  width: 100%;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  padding: 0.55em 0.85em;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--code-bg);
+  font-weight: 650;
+}
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+img { max-width: 100%; height: auto; border-radius: 4px; }
+.doc-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-meta a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<div class="doc-meta">infrastructure-setup-plan.md</div>
+<h1 id="infrastructure-setup-td-9c6107">Infrastructure Setup (td-9c6107)</h1>
+<h2 id="context">Context</h2>
+<p>The madonnahist repo currently contains only documentation — no SvelteKit scaffold, no <code>backend/</code>, no <code>scripts/</code>, no PG cluster locally or on the production droplet. <code>td-9c6107</code> (&ldquo;Set up infrastructure&rdquo;) gates every other Phase 1 task in the V4 plan (<code>docs/calendar-history-system-V4.md</code> § 11): scaffold (<code>td-2e0416</code>), schema/roles/triggers (<code>td-8a7e64</code>), auth (<code>td-510a34</code>), upload script (<code>td-ccb503</code>), OCR worker (<code>td-9a30ae</code>), correction UI (<code>td-3adb8a</code>), viewer (<code>td-bb8def</code>), and the end-to-end smoke (<code>td-7229cc</code>) all need this to land first.</p>
+<p>The intended outcome of this task: a working local dev environment, a provisioned production droplet slot (PG cluster, app dir, PM2 entry, nginx server block, TLS, Spaces bucket), and a deploy script that gets code from local → prod with a green <code>/api/health</code> check. After this completes, the schema migration task (<code>td-8a7e64</code>) can apply V4 § 6 / § 8 DDL against both boxes.</p>
+<p>Authoritative references:
+- <code>docs/calendar-history-system-V4.md</code> § 5 (stack), § 6 (schema), § 8 (DB roles)
+- <code>cs.md</code> § Production Infrastructure (droplet IP <code>134.199.211.199</code>, app port 3002, PG port 5434, app dir <code>/opt/madonnahist</code>, PM2 process name <code>madonnahist</code>, no domain-based SSH)
+- <code>CLAUDE.md</code> (dev port 5176, no Tailwind, no Docker)</p>
+<h2 id="decisions-from-interview">Decisions (from interview)</h2>
+<ol>
+<li><strong>PG topology on droplet</strong>: separate cluster on port 5434 via <code>pg_createcluster</code>. Matches BTC=5433 / siblings pattern; full isolation.</li>
+<li><strong>Cloudflare TLS</strong>: Full (Strict) with a Cloudflare origin cert installed in nginx; listen on 443.</li>
+<li><strong>Spaces</strong>: new bucket <code>madonnahist</code> in the same DO account, region <code>nyc3</code> (verify against droplet region), with one new access key/secret stored in <code>private_data.api_credentials</code>.</li>
+<li><strong>DNS</strong>: hold the <code>madonnahist</code> A record in Cloudflare until first successful deploy + green health check; verify pre-DNS via Host header / curl-resolve.</li>
+</ol>
+<h2 id="decisions-clarifying-locked-before-implementation">Decisions (clarifying — locked before implementation)</h2>
+<ol start="5">
+<li><strong>PostgreSQL major version</strong>: <strong>PG 17</strong> on both local and droplet. Reuses the Homebrew <code>postgresql@17</code> binaries already installed on the Mac (BTC Dashboard runs on PG17 :5433). No PG 16 install. On the droplet, install <code>postgresql-17</code> if not already present; create a second cluster from those same binaries.</li>
+<li><strong>DB roles are the only roles</strong>. There is no <code>madonnahist_user</code>. The three V4 § 8 roles are the entire set:
+   - <code>madonnahist_owner</code> — owns tables and triggers; used <strong>only</strong> by <code>migrate_pg.sh</code> and admin escape-hatch psql sessions.
+   - <code>madonnahist_app</code> — used by the SvelteKit web app process. Connection string env vars below reference this role.
+   - <code>madonnahist_worker</code> — used by every PM2 worker process (none in this task, but reserved).
+   Any prior reference to <code>madonnahist_user</code> in this doc, <code>CLAUDE.md</code>, or <code>cs.md</code> is wrong and should be replaced with the correct V4 role. Local and prod use the same role names; only passwords differ.</li>
+<li><strong><code>/api/health</code> shape</strong>: returns <code>{ db: "ok" | "error", spaces: "ok" | "not_configured" | "error", version: "&lt;git sha&gt;" }</code>. <strong>Only <code>db</code> gates the deploy script.</strong> <code>spaces: "not_configured"</code> is non-fatal and is the expected value between droplet provisioning (step D) and Spaces credential seeding (step E). Once Spaces creds are present, <code>spaces</code> must be <code>ok</code> or the deploy fails — but during initial bootstrap the deploy can complete green with Spaces not yet configured.</li>
+<li><strong>Deploy / ownership model on droplet</strong> (no ambiguity):
+   - Deploy user: <strong><code>root</code></strong> (matches sibling apps on this droplet per <code>cs.md</code>).
+   - App dir owner: <code>root:root</code> for <code>/opt/madonnahist/</code> and everything under it.
+   - PM2 daemon: runs as <code>root</code>; <code>pm2 startup</code> registers the root daemon.
+   - Production <code>.env</code>: <code>/opt/madonnahist/.env</code>, mode <code>600</code>, owned <code>root:root</code>. Loaded by PM2 via <code>ecosystem.config.cjs</code> (<code>env_file</code> or explicit <code>dotenv</code> import in the entrypoint).
+   - Origin cert + key: <code>/etc/ssl/cloudflare/madonnahist.{crt,key}</code>, mode <code>600</code>, owned <code>root:root</code>.</li>
+</ol>
+<h2 id="approach">Approach</h2>
+<p>Sequenced so each step is independently verifiable. Don&rsquo;t move on until the previous step&rsquo;s check passes.</p>
+<h3 id="a-local-dev-infrastructure-mac">A. Local dev infrastructure (Mac)</h3>
+<p>The Mac already has Homebrew <code>postgresql@17</code> installed and serving BTC Dashboard on port 5433. We reuse those binaries to stand up a <strong>second cluster</strong> on port 5434 — same Postgres major version, separate data dir, separate service.</p>
+<ol>
+<li>Stand up a second PG 17 cluster for madonnahist on port <code>5434</code>:
+   - Create a new data directory: <code>/opt/homebrew/var/postgresql@17-madonnahist</code>.
+   - <code>/opt/homebrew/opt/postgresql@17/bin/initdb -D /opt/homebrew/var/postgresql@17-madonnahist --encoding=UTF8 --locale=en_US.UTF-8</code>.
+   - Edit <code>&lt;data_dir&gt;/postgresql.conf</code>: <code>port = 5434</code>, <code>timezone = 'UTC'</code>, <code>listen_addresses = '127.0.0.1'</code>.
+   - Edit <code>&lt;data_dir&gt;/pg_hba.conf</code>: local + 127.0.0.1 only; <code>scram-sha-256</code> for all roles.
+   - Register a second Homebrew service that runs the same <code>postgres</code> binary against this data dir — either a hand-written LaunchAgent at <code>~/Library/LaunchAgents/homebrew.mxcl.postgresql@17-madonnahist.plist</code> (copy the canonical one, swap <code>-D</code> and label) or a wrapper script invoked via <code>brew services</code> (<code>brew services run</code>/<code>start</code> does not natively support two clusters on the same formula; LaunchAgent is the cleaner path). Confirm autostart at login.</li>
+<li>As the bootstrap superuser, create the three V4 § 8 roles <strong>and</strong> the database. No <code>madonnahist_user</code>:
+   <code>sql
+   CREATE ROLE madonnahist_owner  LOGIN PASSWORD :'owner_password';
+   CREATE ROLE madonnahist_app    LOGIN PASSWORD :'app_password';
+   CREATE ROLE madonnahist_worker LOGIN PASSWORD :'worker_password';
+   CREATE DATABASE madonnahist OWNER madonnahist_owner;</code>
+   Passwords live in <code>.env</code> (gitignored) locally; not committed.</li>
+<li>Add <code>~/.pgpass</code> entries (mode 600) for all three roles on <code>localhost:5434:madonnahist:…</code> so <code>psql -U madonnahist_app -d madonnahist</code> works without prompting.</li>
+<li>Write <code>.env</code> (committed <code>.env.example</code> with placeholders, ignored <code>.env</code> with real values):
+   - <code>PGHOST=127.0.0.1</code>, <code>PGPORT=5434</code>, <code>PGUSER=madonnahist_app</code>, <code>PGDATABASE=madonnahist</code>, <code>PGPASSWORD=…</code> — <strong>app role only</strong>; the SvelteKit dev server uses this connection.
+   - <code>MIGRATION_PGUSER=madonnahist_owner</code>, <code>MIGRATION_PGPASSWORD=…</code> — read only by <code>backend/db/migrate_pg.sh</code>. Owner credentials never reach the web app process.
+   - <code>AUTH_SECRET=…</code> (long random)
+   - <code>PORT=5176</code>
+   - No Spaces / vendor secrets here — those go in <code>private_data.api_credentials</code> per <code>cs.md</code>.</li>
+</ol>
+<p><strong>Verify</strong>:
+- <code>psql -p 5434 -U madonnahist_app -d madonnahist -c "SELECT current_user, current_database();"</code> returns <code>madonnahist_app | madonnahist</code>.
+- <code>psql -p 5434 -U madonnahist_owner -d madonnahist -c "SELECT current_user;"</code> returns <code>madonnahist_owner</code>.
+- The existing BTC Dashboard cluster on 5433 still responds to <code>psql -p 5433 -U btc_user -d btc_dashboard -c "SELECT 1;"</code> (we did not disturb it).</p>
+<h3 id="b-repo-scaffold">B. Repo scaffold</h3>
+<p>Files to create (paths are authoritative):</p>
+<ul>
+<li><code>package.json</code>, <code>svelte.config.js</code>, <code>vite.config.ts</code>, <code>tsconfig.json</code> — SvelteKit init w/ TypeScript, <code>@sveltejs/adapter-node</code>, Svelte 5 runes. Mirror giftlist&rsquo;s setup; pin Node to match the droplet&rsquo;s version.</li>
+<li><code>.gitignore</code>, <code>.npmrc</code>, <code>.nvmrc</code>.</li>
+<li><code>src/app.html</code>, <code>src/routes/+layout.svelte</code>, <code>src/routes/+page.svelte</code> (placeholder homepage).</li>
+<li><code>src/routes/api/health/+server.ts</code> — returns <code>{ db: "ok"|"error", spaces: "ok"|"not_configured"|"error", version: &lt;git sha&gt; }</code> per Decision 7. <code>db</code> is the deploy gate; <code>spaces: "not_configured"</code> is non-fatal during bootstrap. Connects as <code>madonnahist_app</code> (the app&rsquo;s normal pool).</li>
+<li><code>src/lib/db.ts</code> — <code>pg</code> Pool singleton, reads <code>PG*</code> env vars (<code>PGUSER=madonnahist_app</code>), exports <code>query()</code> helper. No ORM. Does NOT have access to owner credentials.</li>
+<li><code>src/lib/credentials.ts</code> — <code>credentialService.getCredential(service_name, credential_key)</code> per <code>cs.md</code> § Database &amp; Schema. Caches per-process.</li>
+<li><code>backend/db/migrate_pg.sh</code> — wraps <code>psql</code>, applies any <code>backend/db/migrations/*.sql</code> not yet recorded in <code>admin.schema_migrations(filename TEXT PK, applied_at TIMESTAMPTZ)</code>. Idempotent. Exits non-zero on any failure. <strong>Connects as <code>madonnahist_owner</code> (via <code>MIGRATION_PGUSER</code> / <code>MIGRATION_PGPASSWORD</code>), not <code>madonnahist_app</code></strong> — DDL and grants need owner privileges that the runtime role lacks by design (V4 § 8).</li>
+<li><code>backend/db/migrations/0001_admin_migrations.sql</code> — creates the <code>admin</code> schema and <code>schema_migrations</code> tracking table itself (chicken/egg: the script bootstraps this if missing).</li>
+<li><code>backend/db/migrations/0002_private_data.sql</code> — creates <code>private_data</code> schema + <code>api_credentials</code> table per <code>cs.md</code> (<code>service_name</code>, <code>credential_key</code>, <code>credential_value</code>, <code>description</code>, <code>is_active</code>, <code>created_at</code>, <code>updated_at</code>; uniqueness on <code>(service_name, credential_key, is_active)</code> where <code>is_active = true</code>).</li>
+<li><code>scripts/upload-page.mjs</code> — stub only (real impl is <code>td-ccb503</code>); exits with a &ldquo;not implemented&rdquo; notice so the file path is reserved.</li>
+<li><code>scripts/deploy-to-DO.sh</code> — see step F.</li>
+<li><code>ecosystem.config.cjs</code> — PM2 entry for the web app (<code>madonnahist</code>, port <code>3002</code>). Worker entries added later.</li>
+<li><code>deploy/nginx.conf</code> — committed nginx server block (template); deploy script copies it into <code>/etc/nginx/sites-available/</code> only when its checksum changes.</li>
+</ul>
+<p>V4 schema DDL (§ 6) and role grants (§ 8) — those land in <code>td-8a7e64</code>, not here. This task only creates the migration <em>infrastructure</em> and the two bootstrap migrations above.</p>
+<p><strong>Verify</strong>: <code>npm install &amp;&amp; npm run check &amp;&amp; npm run build</code> all clean (0 warnings baseline per <code>CLAUDE.md</code>). <code>npm run dev</code> serves the placeholder homepage on <code>:5176</code>. <code>backend/db/migrate_pg.sh</code> applies the two bootstrap migrations and is no-op on re-run.</p>
+<h3 id="c-droplet-pg-cluster">C. Droplet PG cluster</h3>
+<p>SSH as <code>root@134.199.211.199</code> (IP, never domain — per <code>cs.md</code>).</p>
+<ol>
+<li>Verify Postgres 17 is installed (<code>dpkg -l postgresql-17</code>); if not, follow the PGDG repo path: add <code>apt.postgresql.org</code> to sources, then <code>apt install postgresql-17</code>.</li>
+<li><code>pg_createcluster 17 madonnahist --port=5434</code> (Debian/Ubuntu helper). If the helper isn&rsquo;t available, fall back to a manual <code>initdb</code> into <code>/var/lib/postgresql/17/madonnahist</code> + a dedicated systemd unit <code>postgresql@17-madonnahist.service</code> cloned from the default.</li>
+<li>Edit <code>/etc/postgresql/17/madonnahist/postgresql.conf</code>:
+   - <code>port = 5434</code>
+   - <code>timezone = 'UTC'</code>
+   - <code>listen_addresses = '127.0.0.1'</code> (no public exposure)
+   - <code>shared_buffers</code>, <code>effective_cache_size</code>: conservative — droplet hosts three apps.</li>
+<li><code>/etc/postgresql/17/madonnahist/pg_hba.conf</code>: local + 127.0.0.1 only; <code>scram-sha-256</code>.</li>
+<li><code>pg_ctlcluster 17 madonnahist start</code>; <code>systemctl enable postgresql@17-madonnahist</code>; confirm autostart on boot.</li>
+<li>As the bootstrap superuser (<code>sudo -u postgres psql -p 5434</code>), create the V4 § 8 roles + database (fresh passwords, distinct from local). No <code>madonnahist_user</code>:
+   <code>sql
+   CREATE ROLE madonnahist_owner  LOGIN PASSWORD '…';
+   CREATE ROLE madonnahist_app    LOGIN PASSWORD '…';
+   CREATE ROLE madonnahist_worker LOGIN PASSWORD '…';
+   CREATE DATABASE madonnahist OWNER madonnahist_owner;</code></li>
+</ol>
+<p><strong>Verify</strong>: <code>sudo -u postgres psql -p 5434 -d madonnahist -c "SELECT 1;"</code> returns 1; <code>psql -h 127.0.0.1 -p 5434 -U madonnahist_app -d madonnahist -c "SELECT current_user;"</code> returns <code>madonnahist_app</code>. From outside, <code>nc -zv 134.199.211.199 5434</code> is refused (PG not public).</p>
+<h3 id="d-droplet-app-slot">D. Droplet app slot</h3>
+<p>All paths owned by <code>root:root</code> per Decision 8.</p>
+<ol>
+<li><code>mkdir -p /opt/madonnahist</code>, owner <code>root:root</code>, mode <code>755</code>.</li>
+<li><code>git clone</code> the repo into <code>/opt/madonnahist</code> (deploy script does this on first run; manual the first time).</li>
+<li><code>npm ci &amp;&amp; npm run build</code> (will fail until the scaffold from step B is committed and pulled).</li>
+<li>Write <code>/opt/madonnahist/.env</code>, mode <code>600</code>, owner <code>root:root</code>:
+   - <strong>Runtime (loaded by the web app process)</strong>: <code>PGHOST=127.0.0.1</code>, <code>PGPORT=5434</code>, <code>PGUSER=madonnahist_app</code>, <code>PGDATABASE=madonnahist</code>, <code>PGPASSWORD=&lt;app password&gt;</code>, <code>AUTH_SECRET=&lt;long random&gt;</code>, <code>PORT=3002</code>, <code>NODE_ENV=production</code>.
+   - <strong>Migration-only (read by <code>migrate_pg.sh</code>, not by the app process)</strong>: <code>MIGRATION_PGUSER=madonnahist_owner</code>, <code>MIGRATION_PGPASSWORD=&lt;owner password&gt;</code>.
+   - No Spaces or vendor secrets — those live in <code>private_data.api_credentials</code> (loaded into the DB during step E).</li>
+<li>Apply bootstrap migrations: <code>backend/db/migrate_pg.sh</code> (connects as <code>madonnahist_owner</code>).</li>
+<li>Seed <code>private_data.api_credentials</code> with Spaces creds (step E) — until done, <code>/api/health</code> returns <code>spaces: "not_configured"</code>, which is acceptable for an initial deploy.</li>
+<li>PM2 register as root: <code>pm2 start ecosystem.config.cjs</code>; <code>pm2 save</code>; <code>pm2 startup systemd -u root --hp /root</code> so the daemon survives reboot.</li>
+</ol>
+<p><strong>Verify</strong>:
+- <code>pm2 status</code> shows <code>madonnahist</code> online running as <code>root</code>.
+- <code>curl -s http://127.0.0.1:3002/api/health | jq</code> returns 200 with <code>db: "ok"</code>. <code>spaces</code> is either <code>"ok"</code> (if Spaces creds already seeded) or <code>"not_configured"</code> (if not yet) — both are acceptable for this step. <code>version</code> reflects the deployed git sha.
+- <code>stat -c '%U:%G %a' /opt/madonnahist/.env</code> → <code>root:root 600</code>.</p>
+<h3 id="e-digitalocean-spaces">E. DigitalOcean Spaces</h3>
+<ol>
+<li>Create bucket <code>madonnahist</code> in <code>nyc3</code> (verify droplet region first; if droplet is elsewhere, match it).</li>
+<li>Default ACL: <strong>private</strong>. Phase 1 viewer fetches via signed URLs from the SvelteKit server — defer the public-prefix decision until image paths are actually wired (<code>td-ccb503</code> / viewer).</li>
+<li>CORS rule: allow GET from <code>https://madonnahist.gaylon.photos</code> only.</li>
+<li>Generate a Spaces access key dedicated to madonnahist (don&rsquo;t reuse sibling keys).</li>
+<li>Insert one row per credential into <code>private_data.api_credentials</code> on <strong>both</strong> local and prod PG:
+   - <code>SPACES_KEY</code>, <code>SPACES_SECRET</code>, <code>SPACES_BUCKET</code>, <code>SPACES_REGION</code>, <code>SPACES_ENDPOINT</code> under <code>service_name = 'do_spaces'</code>.</li>
+</ol>
+<p><strong>Verify</strong>: A throwaway <code>aws s3 ls s3://madonnahist --endpoint-url=https://nyc3.digitaloceanspaces.com</code> (with the new key) succeeds. After credential seeding, <code>/api/health</code> flips <code>spaces</code> from <code>"not_configured"</code> to <code>"ok"</code>. From this point forward, <code>spaces: "ok"</code> is the expected steady-state and <code>spaces: "error"</code> (credentials present but request failing) is a deploy failure.</p>
+<h3 id="f-nginx-cloudflare-tls">F. Nginx + Cloudflare TLS</h3>
+<ol>
+<li>Generate a Cloudflare origin certificate (<code>gaylon.photos</code>, includes <code>*.gaylon.photos</code> and <code>madonnahist.gaylon.photos</code>); install at <code>/etc/ssl/cloudflare/madonnahist.crt</code> + <code>.key</code>, mode 600.</li>
+<li>Create <code>/etc/nginx/sites-available/madonnahist.gaylon.photos</code>:
+   - <code>listen 443 ssl http2;</code> with the origin cert.
+   - <code>listen 80;</code> → <code>return 301 https://...;</code>
+   - <code>server_name madonnahist.gaylon.photos;</code>
+   - <code>proxy_pass http://127.0.0.1:3002;</code> with standard <code>X-Forwarded-*</code>, <code>X-Real-IP</code>, <code>Host</code>.
+   - <code>client_max_body_size</code> modest (1m); upload-page.mjs is a Node script, not browser-driven.</li>
+<li>Symlink to <code>sites-enabled/</code>, <code>nginx -t</code>, <code>systemctl reload nginx</code>.</li>
+<li>Cloudflare zone: confirm SSL/TLS mode is <strong>Full (Strict)</strong> for <code>gaylon.photos</code>. If siblings are on something looser, this is the moment to upgrade — coordinate.</li>
+</ol>
+<p><strong>Verify pre-DNS</strong>: <code>curl -k --resolve madonnahist.gaylon.photos:443:134.199.211.199 https://madonnahist.gaylon.photos/api/health</code> returns 200.</p>
+<h3 id="g-deploy-script-dns">G. Deploy script + DNS</h3>
+<ol>
+<li>Write <code>scripts/deploy-to-DO.sh</code> (modeled on <code>giftlist</code>&rsquo;s — borrow patterns rather than reinvent):
+   - Push current branch.
+   - SSH by IP (<code>root@134.199.211.199</code>), never domain.
+   - Remote: <code>cd /opt/madonnahist &amp;&amp; git pull --ff-only &amp;&amp; npm ci &amp;&amp; npm run build &amp;&amp; backend/db/migrate_pg.sh</code>. <code>migrate_pg.sh</code> sources <code>/opt/madonnahist/.env</code> and uses <code>MIGRATION_PGUSER</code> / <code>MIGRATION_PGPASSWORD</code> (owner role) — not the runtime <code>PGUSER</code>.
+   - If <code>deploy/nginx.conf</code> checksum changed, copy to <code>/etc/nginx/sites-available/</code>, <code>nginx -t</code>, reload nginx.
+   - <code>pm2 restart ecosystem.config.cjs --update-env</code>.
+   - Health-check loop: poll <code>https://madonnahist.gaylon.photos/api/health</code> (once DNS is up) <strong>or</strong> <code>--resolve</code>-pinned to droplet IP pre-DNS; up to 30s. <strong>Gate: <code>db == "ok"</code>.</strong> Tolerate <code>spaces == "not_configured"</code> (bootstrap). Fail on <code>db == "error"</code> or <code>spaces == "error"</code>.</li>
+<li>Run the deploy script. Confirm green.</li>
+<li><strong>Now</strong> create the Cloudflare DNS record: <code>madonnahist</code> A record → <code>134.199.211.199</code>, proxy on (orange cloud). TTL auto.</li>
+<li>After Cloudflare DNS propagates (≤ 1 min with proxy), re-hit <code>https://madonnahist.gaylon.photos/api/health</code> <em>without</em> <code>--resolve</code> and confirm green.</li>
+</ol>
+<p><strong>Verify (end-to-end smoke for this task)</strong>:
+- Local: <code>psql -U madonnahist_app -p 5434 -d madonnahist</code> works; <code>npm run dev</code> boots on :5176; <code>/api/health</code> returns 200 with <code>db: "ok"</code>, <code>spaces</code> either <code>"ok"</code> or <code>"not_configured"</code>.
+- Prod: <code>curl https://madonnahist.gaylon.photos/api/health</code> returns 200 with <code>{ db: "ok", spaces: "ok", version: "&lt;sha&gt;" }</code> after Spaces creds are seeded. Deploy gate is <code>db: "ok"</code> alone — <code>spaces: "not_configured"</code> does not block the deploy during bootstrap.
+- Role separation visible at runtime: <code>SELECT current_user FROM pg_stat_activity WHERE application_name LIKE '%madonnahist%'</code> shows <code>madonnahist_app</code> for the SvelteKit process and <code>madonnahist_owner</code> only briefly when migrations run.
+- Migrations: <code>admin.schema_migrations</code> on prod lists <code>0001_admin_migrations.sql</code> and <code>0002_private_data.sql</code>.
+- Idempotency: re-running <code>backend/db/migrate_pg.sh</code> is a no-op (no migrations re-applied).
+- Re-running <code>./scripts/deploy-to-DO.sh</code> is a no-op (no nginx reload, PM2 restart only) and health stays green.</p>
+<h2 id="existing-patterns-to-reuse-sibling-apps">Existing patterns to reuse (sibling apps)</h2>
+<ul>
+<li><strong>giftlist&rsquo;s <code>scripts/deploy-to-DO.sh</code></strong> — same droplet, same Cloudflare setup, same nginx pattern. Copy structure; change app name, port (3002), PM2 process name (<code>madonnahist</code>), and app dir (<code>/opt/madonnahist</code>).</li>
+<li><strong>giftlist&rsquo;s <code>backend/db/migrate_pg.sh</code></strong> if it exists in the same shape — same tracking-table approach. Worth a one-shot read before writing ours from scratch.</li>
+<li><strong>giftlist&rsquo;s nginx server block</strong> — same TLS pattern (origin cert + Full Strict). Copy as a template.</li>
+<li><strong>giftlist&rsquo;s PM2 ecosystem config</strong> — same shape, different process name + port + env file path.</li>
+</ul>
+<p>These live in a separate repo on the local machine; read them before writing equivalent files here, but don&rsquo;t symlink/share — each app owns its own copy.</p>
+<h2 id="out-of-scope-for-this-task-deferred-to-other-phase-1-tickets">Out of scope for this task (deferred to other Phase 1 tickets)</h2>
+<ul>
+<li>V4 § 6 schema (<code>calendar_pages</code>, <code>calendar_days</code>, <code>ocr_runs</code>, etc.), § 6.1 triggers, § 8 grants/RLS → <strong>td-8a7e64</strong>.</li>
+<li>argon2id auth, sessions, route guards, user seeding → <strong>td-510a34</strong>.</li>
+<li><code>scripts/upload-page.mjs</code> real implementation → <strong>td-ccb503</strong>.</li>
+<li>OCR worker + vendor adapter → <strong>td-9a30ae</strong>.</li>
+<li>Correction UI, viewer routes → <strong>td-3adb8a</strong>, <strong>td-bb8def</strong>.</li>
+<li>Backup automation (V4 § 9.10) → Phase 4.</li>
+<li>Worker PM2 entries → added when workers themselves land.</li>
+</ul>
+<h2 id="files-this-task-creates-modifies">Files this task creates / modifies</h2>
+<p><strong>Local repo (new files):</strong>
+- <code>package.json</code>, <code>svelte.config.js</code>, <code>vite.config.ts</code>, <code>tsconfig.json</code>, <code>.gitignore</code>, <code>.npmrc</code>, <code>.nvmrc</code>, <code>.env.example</code>
+- <code>src/app.html</code>
+- <code>src/routes/+layout.svelte</code>, <code>src/routes/+page.svelte</code>
+- <code>src/routes/api/health/+server.ts</code>
+- <code>src/lib/db.ts</code>, <code>src/lib/credentials.ts</code>
+- <code>backend/db/migrate_pg.sh</code>
+- <code>backend/db/migrations/0001_admin_migrations.sql</code>
+- <code>backend/db/migrations/0002_private_data.sql</code>
+- <code>scripts/upload-page.mjs</code> (stub)
+- <code>scripts/deploy-to-DO.sh</code>
+- <code>ecosystem.config.cjs</code>
+- <code>deploy/nginx.conf</code></p>
+<p><strong>Droplet (one-time provisioning, no repo file):</strong>
+- New PG 17 cluster <code>madonnahist</code> on <code>:5434</code> (<code>/etc/postgresql/17/madonnahist/</code>, owned <code>postgres:postgres</code>)
+- <code>/opt/madonnahist/</code> git checkout + production <code>.env</code> (mode 600, owned <code>root:root</code>)
+- PM2 daemon registration of <code>madonnahist</code> process as <code>root</code>, <code>pm2 save</code>, <code>pm2 startup systemd -u root --hp /root</code>
+- <code>/etc/nginx/sites-available/madonnahist.gaylon.photos</code> symlinked into <code>sites-enabled/</code>
+- <code>/etc/ssl/cloudflare/madonnahist.{crt,key}</code> (origin cert, mode 600, owned <code>root:root</code>)</p>
+<p><strong>External (provisioning, no repo file):</strong>
+- DO Spaces bucket <code>madonnahist</code> in <code>nyc3</code> (or droplet region) — private ACL, CORS allow <code>madonnahist.gaylon.photos</code>
+- DO Spaces access key dedicated to madonnahist
+- Cloudflare DNS A record <code>madonnahist.gaylon.photos</code> → <code>134.199.211.199</code>, proxy on (last step only)</p>
+<h2 id="risks-and-watch-outs">Risks and watch-outs</h2>
+<ul>
+<li><strong><code>pg_createcluster</code> may not exist</strong> on the droplet&rsquo;s exact distro. If so, fall back to manual <code>initdb</code> + systemd unit; allot extra time.</li>
+<li><strong>Cloudflare SSL mode mismatch</strong>: if <code>gaylon.photos</code> is currently on Flexible rather than Full Strict, flipping it affects siblings too. Check first; if siblings aren&rsquo;t ready for Strict, install the origin cert and switch to Strict in one coordinated push.</li>
+<li><strong>Domain-based SSH</strong> is a documented historical failure in <code>cs.md</code> — every SSH call in the deploy script must use the IP literal.</li>
+<li><strong>Re-running migrations across boxes</strong>: per <code>cs.md</code>, migration tracking is per-box. Never run raw <code>psql -f</code> on either box during this setup; only <code>migrate_pg.sh</code>.</li>
+<li><strong>Origin cert expiration</strong>: Cloudflare origin certs default to 15 years, but record the expiration in a calendar entry or <code>app_state</code> row anyway.</li>
+<li><strong>Role-name drift in existing docs</strong>: <code>CLAUDE.md</code> and <code>cs.md</code> currently reference <code>madonnahist_user</code>. Those references are inherited from a pre-V4 draft and are wrong. Decision 6 supersedes them. Updating <code>CLAUDE.md</code> / <code>cs.md</code> to the three-role model is out of scope for this infrastructure task — fold into <code>td-8a7e64</code> (schema/roles) since that ticket already touches the role topic.</li>
+<li><strong>Two PG clusters on one Mac</strong>: <code>brew services</code> does not natively support a second cluster on the same formula. Either hand-roll the LaunchAgent (Decision 5 / step A.1) or accept a manual <code>pg_ctl start</code> per session. Document the chosen approach in <code>docs/devlog/</code> so future maintainers don&rsquo;t fight it.</li>
+</ul>
+</main>
+</body>
+</html>

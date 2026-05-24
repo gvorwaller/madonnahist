@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equipment Shortlist for Calendar Photography</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --fg: #1a1a1a;
+  --bg: #fdfdfc;
+  --muted: #555;
+  --border: #d8d8d4;
+  --accent: #2b5e8c;
+  --code-bg: #f4f2ee;
+  --code-fg: #2d2d2d;
+  --table-stripe: #f7f5f1;
+  --blockquote-border: #c8c4bc;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e4df;
+    --bg: #1a1a1a;
+    --muted: #9a978f;
+    --border: #333;
+    --accent: #6fa9d6;
+    --code-bg: #242424;
+    --code-fg: #e6e4df;
+    --table-stripe: #1f1f1f;
+    --blockquote-border: #444;
+  }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--fg);
+  background: var(--bg);
+  margin: 0;
+  padding: 2.5rem 1.25rem 6rem;
+}
+main {
+  max-width: 46rem;
+  margin: 0 auto;
+}
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.25;
+  margin: 2em 0 0.6em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 2.1rem; margin-top: 0.2em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+h2 { font-size: 1.55rem; border-bottom: 1px solid var(--border); padding-bottom: 0.25em; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.08rem; }
+h5, h6 { font-size: 1rem; color: var(--muted); }
+p { margin: 0.9em 0; }
+a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.15s; }
+a:hover { border-bottom-color: var(--accent); }
+strong { font-weight: 650; }
+hr { border: none; border-top: 1px solid var(--border); margin: 2.5em 0; }
+ul, ol { padding-left: 1.6em; margin: 0.8em 0; }
+li { margin: 0.25em 0; }
+li > p { margin: 0.3em 0; }
+blockquote {
+  margin: 1em 0;
+  padding: 0.4em 1.1em;
+  border-left: 3px solid var(--blockquote-border);
+  color: var(--muted);
+  background: var(--code-bg);
+  border-radius: 0 4px 4px 0;
+}
+blockquote p:first-child { margin-top: 0; }
+blockquote p:last-child { margin-bottom: 0; }
+code, pre, kbd, samp {
+  font-family: "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+}
+:not(pre) > code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1em 1.1em;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  line-height: 1.5;
+  margin: 1em 0;
+}
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  white-space: pre;
+  font-size: 0.92em;
+}
+table {
+  border-collapse: collapse;
+  margin: 1.2em 0;
+  width: 100%;
+  font-size: 0.95em;
+  display: block;
+  overflow-x: auto;
+}
+th, td {
+  padding: 0.55em 0.85em;
+  border: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--code-bg);
+  font-weight: 650;
+}
+tbody tr:nth-child(even) { background: var(--table-stripe); }
+img { max-width: 100%; height: auto; border-radius: 4px; }
+.doc-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.doc-meta a { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<div class="doc-meta">equipment-shortlist.md</div>
+<h1 id="equipment-shortlist-for-calendar-photography">Equipment Shortlist for Calendar Photography</h1>
+<p><strong>Project context:</strong> ~60 years of handwritten monthly calendar pages (~720 pages, fragile aged paper). Goal is forensic-grade archival masters that will outlive the 2026 OCR pipeline, plus images that feed the Transkribus / Google Vision / Azure handwriting-recognition workers.</p>
+<p><strong>Capture system:</strong> Panasonic Lumix DC-G9 II (G9M2) + Olympus M.Zuiko 60mm f/2.8 macro, mounted horizontally on a tripod with the page on a vertical/tilted cradle. <strong>Workflow B</strong> — single workflow, no separate scanner. The arrangement borrows cross-polarization, neutral 5000K continuous lighting, ColorChecker-anchored color management, and per-session repeatability practices from cultural-heritage digitization standards (FADGI, NEDCC, Library of Congress), but this is a <strong>home-practical setup</strong>, not an institutional best-practice copy stand. See &ldquo;Scope and Honesty Disclaimer&rdquo; at the end of this doc for what&rsquo;s pragmatic vs. what&rsquo;s institutional.</p>
+<p><strong>Pricing as of May 2026.</strong> Verify every price and SKU at checkout — photo gear pricing drifts ±15% on sales, and individual SKUs can be discontinued or replaced quickly. Treat the line items below as <strong>specifications first, specific products second</strong>.</p>
+<blockquote>
+<p><strong>Design principle</strong>: This system is optimized for repeatability and low-friction deployment in a shared living space. Setup speed and consistency are prioritized over maximum theoretical image quality. Two equipment tiers are documented below — a <strong>Pro tier</strong> (~$1,300–1,500 without display calibrator, ~$1,650–1,850 with) and a <strong>Compact tier</strong> (~$1,000–1,200); dual-light 45° geometry, cross-polarization, ColorChecker, manual white balance, and tripod-based capture are required in both.</p>
+<p><strong>Trust note (post-Codex review, 2026-05-08)</strong>: an earlier draft of this doc contained a fabricated product reference (a &ldquo;Daige Pro-Easel&rdquo; that doesn&rsquo;t exist) and citations to several stale B&amp;H product slots. A second-pass review with Codex caught these and other issues; this revision fixes them and adds explicit caveats where the original was overconfident. Where prices or SKUs are quoted, they were re-verified or removed; where techniques are described, claims have been softened to match what the cited authorities actually say. Always re-verify before ordering.</p>
+</blockquote>
+<hr />
+<h2 id="what-you-already-have-dont-re-buy">What You Already Have (Don&rsquo;t Re-Buy)</h2>
+<ul>
+<li><strong>Panasonic Lumix DC-G9 II</strong> body — 25.2 MP MFT sensor, 100 MP High Res mode, IBIS, electronic shutter</li>
+<li><strong>Olympus M.Zuiko ED 60mm f/2.8 Macro</strong> — flat-field, 1:1, the right lens for this work</li>
+<li>46mm filter thread (confirmed)</li>
+<li>Currently has a UV filter — remove it during scanning sessions; UV + CPL stacks degrade transmission</li>
+<li><strong>Vortex High Country tripod</strong> — extends to ~65&rdquo;, stable enough for the G9 II + 60mm. The height is a feature here: a typical copy stand tops out at ~36–40&rdquo;, which is too short for the 60mm&rsquo;s ~46–51&rdquo; working distance to a full calendar page.</li>
+<li><strong>Promediagear Katana Jr gimbal head</strong> — overkill for this use (it&rsquo;s rated for 600mm super-telephoto wildlife rigs), but it works. <strong>Will be used in horizontal orientation, not down-facing</strong>, so the down-facing-stability question never arises.</li>
+</ul>
+<hr />
+<h2 id="the-kit-to-buy">The Kit to Buy</h2>
+<p>Listed by purchase priority. Total at the recommended quality tier: <strong>~$1,500–1,800</strong>.</p>
+<h3 id="1-lighting-two-cri-95-led-panels-with-softboxes">1. Lighting — two CRI 95+ LED panels with softboxes</h3>
+<p>The single biggest determinant of image quality and cross-session consistency. <strong>Two panels</strong> for cross-lighting at 45° from each side eliminates shadow gradients and self-glare from a single light source. CRI 95+ AND TLCI 95+ matters specifically because faded pencil and red ink are the failure modes of cheap LEDs.</p>
+<p><strong>Specifications first</strong> (the Aputure line has rebranded twice in 2025-2026; pin specs, pick the current SKU at checkout):</p>
+<ul>
+<li><strong>2× LED COB monolights</strong>, 100W class, <strong>bi-color 2700-6500K</strong> (settable 5000K), <strong>CRI 95+ AND TLCI 95+</strong>, Bowens mount, AC power, fan-cooled, app control desirable</li>
+<li><strong>2× 33&rdquo;-class circular softbox</strong>, Bowens mount, with diffusion fabric face</li>
+<li><strong>2× compact light stands</strong>, ~7-8&rsquo; max, air-cushioned</li>
+<li><strong>1× light stand bag</strong></li>
+</ul>
+<p><strong>Recommended current products (verify at checkout):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Qty</th>
+<th>Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>amaran Halo 100x</strong> Bi-Color COB Monolight</td>
+<td>2</td>
+<td>~$169 ea</td>
+<td>Aputure&rsquo;s current 100W bi-color Bowens-mount COB. Replaces the discontinued amaran 100x S. CRI 96+ / TLCI 97+, 2700-6500K, Bowens mount, NFC/app control.</td>
+</tr>
+<tr>
+<td><strong>Aputure 33&rdquo;-class Bowens softbox</strong> (Quick Dome 90, Light Dome SE if still stocked, or equivalent)</td>
+<td>2</td>
+<td>~$130-220 ea</td>
+<td>Aputure has been rotating SKUs in this size class. Any 33-35&rdquo; circular Bowens softbox with a diffusion face works equivalently.</td>
+</tr>
+<tr>
+<td><strong>Manfrotto 1052BAC</strong> compact light stands</td>
+<td>2</td>
+<td>~$90 ea</td>
+<td>7.7&rsquo; max, air-cushioned, sturdy enough for the panel + softbox combo</td>
+</tr>
+<tr>
+<td><strong>Manfrotto LBAG90</strong> light stand bag</td>
+<td>1</td>
+<td>~$40</td>
+<td>Holds 4 stands up to 35&rdquo; collapsed</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subtotal: ~$840–1,040</strong> (lighting is the most volatile part of this list — confirm at checkout)</p>
+<p><strong>Why bi-color over daylight-only</strong>: Aputure&rsquo;s &ldquo;100d S&rdquo; or pure-daylight variants are cheaper but lock you to one color temperature. Bi-color lets you set 5000K (graphic-arts standard) precisely, and gives flexibility if your room&rsquo;s wall color is shifting reflected light enough to need a slight nudge.</p>
+<p><strong>Color temperature setting</strong>: <strong>5000K</strong> for both panels. Not 5600K (too cool for warm-toned aged paper), not 4000K (too warm — mistakes red ink for brown). 5000K is the standard for graphic arts and archival reproduction (it matches D50, the ISO 3664 viewing standard for prints).</p>
+<h3 id="2-cross-polarization-setup-eliminates-surface-glare-entirely">2. Cross-Polarization Setup — eliminates surface glare entirely</h3>
+<p>This is the single highest-leverage technique in archival imaging, and a real camera + lens combo is the only way to do it. The CZUR ET MAX cannot do this; the iPhone cannot do this. You can.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Heliopan 46mm Slim SH-PMC Circular Polarizer</strong></td>
+<td>~$90–110</td>
+<td>Schott B270 glass, 16-layer multi-coating, brass mount. The <em>right</em> CPL for a 46mm thread on a flat-field macro. Cheaper alternatives (Hoya HD3, B+W F-Pro Kaesemann) are 90% as good for half the price — defensible if you want to save $50, but the Heliopan is the no-regrets answer.</td>
+</tr>
+<tr>
+<td><strong>Rosco #7300 Linear Polarizing Filter</strong> sheet, 17&rdquo;×20&rdquo;</td>
+<td>~$60</td>
+<td>One sheet, cut in half. Tape one half over each LED panel&rsquo;s softbox face. Lasts the life of the project.</td>
+</tr>
+<tr>
+<td><strong>Gaffer tape</strong>, 2&rdquo; black</td>
+<td>~$20</td>
+<td>For attaching the Rosco sheets cleanly to the softbox fronts. Don&rsquo;t use blue painter&rsquo;s tape — the adhesive fails under continuous-LED heat.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subtotal: ~$170–190</strong></p>
+<p><strong>How cross-polarization works:</strong> The linear polarizers on the lights polarize the source light. The CPL on the lens is rotated 90° relative to the lights. Surface glare (which preserves the source polarization) gets blocked. Diffuse reflection from the ink/paper (which depolarizes) passes through. Result: matte, glare-free pages even on glossy/laminated/varnished surfaces. Cost: ~2 stops of light. Trivial on continuous LED panels.</p>
+<p><strong>Setup procedure (per session in a teardown workflow)</strong>: Mount the CPL on the lens. Aim camera at a glossy surface lit by both panels. Slowly rotate the CPL until reflections collapse to minimum. Mark that rotation with a tiny dab of nail polish on the filter ring (or memorize the orientation marker). <strong>Re-verify each session</strong> by glancing at a glossy reference (a ColorChecker patch, a piece of laminated paper) in live view — if you see surface glare, your CPL has rotated or your panels have moved, and a 30-second tweak fixes it. The &ldquo;set once, done forever&rdquo; claim from earlier drafts of this doc was overstated for a setup that gets fully struck and re-deployed each session.</p>
+<h3 id="3-page-cradle-document-easel-gentle-support-no-contact-damage">3. Page Cradle / Document Easel — gentle support, no contact damage</h3>
+<p><strong>Page preparation:</strong> All calendar pages will be cut from their binding at the top before scanning, producing flat single sheets. This eliminates the bound-calendar workflow entirely — every page is handled identically on the easel, no V-cradle, no binding-clearance issues, no per-calendar setup variation.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Tabletop easel + foamcore backing + bulldog clips</strong> (3-piece kit)</td>
+<td>~$50</td>
+<td>The right setup for flat-artwork capture, sourced as separate components:</td>
+</tr>
+<tr>
+<td>↳ U.S. Art Supply Cancun (or equivalent) tabletop easel, beechwood, ~23&rdquo; canvas capacity</td>
+<td>~$30</td>
+<td>Holds the foamcore at the desired angle. Adjustable vertical to slight back-tilt, fits the small-space deployment.</td>
+</tr>
+<tr>
+<td>↳ 24&rdquo;×30&rdquo; black foamcore backing board</td>
+<td>~$15</td>
+<td>The actual page-mounting surface — gives you a true flat plane for the page (most tabletop easels have only a narrow bottom ledge, which won&rsquo;t keep aged/curled paper flat). Black reads as clean negative space behind the page in the captured frame. Replaceable when dinged.</td>
+</tr>
+<tr>
+<td>↳ Bulldog clips × 4 (medium, 1.25&rdquo; capacity)</td>
+<td>~$5</td>
+<td>Hold the page flat against the foamcore at top corners and bottom corners. Beats glass weights and tape; doesn&rsquo;t touch the writing area.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subtotal: ~$50</strong></p>
+<p><strong>Note on the previous &ldquo;Daige Pro-Easel&rdquo; reference:</strong> earlier drafts of this doc cited a Daige Pro-Easel at ~$200. That product is no longer available (Daige.com is dead, and search returns nothing). The 3-piece kit above is what&rsquo;s actually in stock and a better fit for the project anyway — the foamcore gives a true flat backing plane that a graphic-arts easel&rsquo;s bottom-ledge design doesn&rsquo;t.</p>
+<p><strong>Cutting tools</strong> (only if not already on hand): a <strong>Carl DC-210N rotary trimmer</strong> (15&rdquo; cutting capacity, <a href="https://carl-officeproducts.com/product/dc-210n/">rated 36 sheets of standard paper per Carl&rsquo;s spec</a>, ~$70) plus a heavy-duty utility knife and steel ruler (~$25) for the initial through-stack cut.</p>
+<p><strong>Stop conditions — read first.</strong> The cutting workflow is destructive. <strong>Do NOT cut</strong> if any of the following apply; capture the bound page as-is instead, and decide later:</p>
+<ul>
+<li>The binding structure is unclear (cloth-bound, hand-bound, glued in a way you can&rsquo;t see)</li>
+<li>Pages are visibly brittle (corners crumble when handled, or paper resists folding without cracking)</li>
+<li>Handwritten content extends close to the binding edge — give yourself a generous margin</li>
+<li>The calendar has any historical/sentimental value beyond the dated content (e.g., bound by a family member, contains added physical attachments)</li>
+<li>You&rsquo;re unsure: <strong>default to not cutting</strong>. A bound page on the cradle still photographs fine; you can always cut later, but you can&rsquo;t uncut.</li>
+</ul>
+<p><strong>Two-pass workflow (when the page is OK to cut):</strong></p>
+<ol>
+<li><strong>Pass 1 — gross release</strong> (heavy utility knife + steel ruler, on a sturdy surface): one cut through the full stack, just below the binding holes. This frees the pages from the binding strip without trying to be precise. <em>The DC-210N is rated for 36 sheets and could in principle handle a thin bound calendar in one pass, but a utility knife on a stable surface is safer for irreplaceable originals — you can see exactly where the cut is going and apply uniform pressure.</em></li>
+<li><strong>Pass 2 — clean even-up</strong> (Carl DC-210N, one page at a time): each freed page goes through the trimmer at a fixed offset from the (now ragged) top edge, producing a consistent clean edge. Per-page handling protects against tear-instead-of-cut on aged paper that compresses unevenly when stacked.</li>
+</ol>
+<p>If the binding is twin-loop wire (Wire-O), spiral, or stapled (saddle-stitched), <strong>Pass 1 isn&rsquo;t needed</strong> — the binding can be unfastened mechanically and pages slide off intact. Pass 2 still applies for trimming away the binding-hole row to a clean edge.</p>
+<h3 id="4-color-management">4. Color Management</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Calibrite ColorChecker Passport Photo 2</strong> (CCPP2)</td>
+<td>~$119</td>
+<td>The capture-side color anchor. Shoot one ColorChecker frame at the start of every session under that day&rsquo;s lighting. Lets the RAW-development stage normalize white balance/exposure across sessions years apart and gives the LLM cleanup stage a stable reference. <strong>The single most important color-management item</strong> in this list — buy this even if you skip everything else in this section.</td>
+</tr>
+<tr>
+<td><strong>Calibrite Display Plus HL</strong> monitor calibrator</td>
+<td>~$339</td>
+<td>Useful but optional. Calibrates your Mac display so what you see while reviewing/editing matches what&rsquo;s actually in the RAW. Helpful when correction-UI work spans years and a Mac monitor drifts, but not on the critical path for archival capture. <strong>Defer if budget is tight</strong> — the ColorChecker on every captured frame is what makes the archive recoverable; the display calibrator only affects how accurately you see it on screen.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subtotal: ~$120–460</strong> (capture target only ~$120; full kit with calibrator ~$460)</p>
+<h3 id="5-tethered-capture-software-workflow">5. Tethered Capture Software &amp; Workflow</h3>
+<p><strong>Important:</strong> Neither Lightroom (CC or Classic) nor Capture One officially tethers the Panasonic G9 II. The G9 II&rsquo;s tethering tool is Lumix Tether — and that&rsquo;s actually fine.</p>
+<p><strong>The workflow:</strong></p>
+<ol>
+<li><strong>Lumix Tether</strong> (free, official Panasonic) handles the tethered shoot — live view on the Mac, remote shutter from keyboard or app, full camera settings control, files save direct to a designated watched folder</li>
+<li><strong>Lightroom Classic</strong> auto-imports from that watched folder, applying a develop preset, metadata preset, and session keywords on import</li>
+<li>Classic handles RAW processing, keywording (including hierarchical entity tags for people/places/events), and export of TIFFs/JPEGs to the OCR pipeline&rsquo;s input directory</li>
+<li>Selected smart collections sync from Classic to <strong>Lightroom CC</strong> for cross-device viewing (iPad, iPhone, web) — useful for browsing/tagging away from the Mac, and for eventually sharing a curated view with Marcus or other family</li>
+</ol>
+<p><strong>Recommended software:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Cost</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lumix Tether</strong> (Panasonic official)</td>
+<td>Free</td>
+<td>Capture tool — runs during shoots, saves RAWs to the watched folder</td>
+</tr>
+<tr>
+<td><strong>Lightroom Classic</strong></td>
+<td>$0 marginal (already owned)</td>
+<td>Primary workflow: auto-import, RAW processing, keyword/metadata catalog, export to OCR pipeline. The &ldquo;system of record&rdquo; for the archive.</td>
+</tr>
+<tr>
+<td><strong>Lightroom CC (1 TB Photography Plan)</strong></td>
+<td>$0 marginal (already paying)</td>
+<td>Secondary: receives synced smart collections from Classic for cross-device viewing. Not the source of truth — Classic is.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Why Classic as primary</strong> (rather than CC): hierarchical keywords for entity tagging (<code>People &gt; Family &gt; Marcus</code> rolls up automatically), local-first catalog (the <code>.lrcat</code> file lives on your Mac — not in Adobe&rsquo;s cloud, so the archive&rsquo;s metadata isn&rsquo;t a hostage to subscription state), better watched-folder auto-import with develop/metadata presets, and multi-stage export presets for feeding the OCR pipeline. Classic was built for stock agencies and archives; CC was built for working photographers. This project fits Classic&rsquo;s design center.</p>
+<p><strong>Setting up the dual-tool flow:</strong></p>
+<ol>
+<li>In Classic: <code>File → Auto Import → Auto Import Settings</code> — point at the Lumix Tether output folder, set destination, develop preset (a starting baseline), metadata preset (your name + copyright + session date), and any auto-keywords (e.g., <code>madonnahist, calendar-archive, source:G9II</code>)</li>
+<li>Build a smart collection like &ldquo;Calendar Archive — Highlights&rdquo; (rule: rated 3+ stars, or keyword <code>archive-share</code>)</li>
+<li>Right-click the smart collection → &ldquo;Sync with Lightroom&rdquo; — it now appears in CC across iPad/iPhone/web</li>
+<li>Originals stay local. CC just renders cloud-side previews of the synced collection.</li>
+</ol>
+<p><strong>No subscription change needed</strong> — your existing 1 TB Photography Plan covers both Classic and CC. Net new software cost for this project: <strong>$0</strong>.</p>
+<p><strong>Cable</strong>: a known-good USB-C cable rated for data + 5m active extension if your Mac is far from the tripod. <strong>Tether Tools TetherPro USB-C to USB-C, 15&rsquo;, orange</strong> ~$60, with their distinctive orange color so you don&rsquo;t mistake it for a charger cable. (Generic USB-C cables routinely fail at &gt;3m and may not deliver clean tethered data — the Tether Tools is one of the few cables sold specifically for this use case.)</p>
+<h3 id="6-misc-preservation">6. Misc / Preservation</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Price</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Hot-shoe bubble level</strong> (Manfrotto 337 or Hama HA-5411)</td>
+<td>~$45</td>
+<td>Squaring the camera to the page matters for horizontal capture. Visual estimation isn&rsquo;t tight enough; geared head adjustments without a level cause cumulative drift. (Note: Manfrotto 337 has gone up in price — was ~$20, now ~$46. Hama HA-5411 is the cheaper alternative if available.)</td>
+</tr>
+<tr>
+<td><strong>Lineco archival polyester sleeves</strong> for original pages, sized for 14×16 (or larger)</td>
+<td>~$25 / pack</td>
+<td>Optional but recommended: store the freed/photographed pages in archival polyester (Mylar / Melinex) sleeves before they go back in the closet. Polyester is chemically inert and protects against handling, dust, and humidity. Verify sizing against your largest page.</td>
+</tr>
+<tr>
+<td><strong>Drafting brush</strong> (Alvin or Staedtler, ~12&rdquo; wide, soft horsehair)</td>
+<td>~$15</td>
+<td>Removes loose paper dust before each shot — one or two light sweeps cover the page. <strong>Avoid stiff ESD/electronics brushes</strong> for fragile aged paper. (Note: this is inferential, not a vendor-cited authority — soft-bristle brushes are the conservation-leaflet recommendation for surface cleaning per <a href="https://www.nedcc.org/free-resources/preservation-leaflets/6.-conservation-procedures/6.1-surface-cleaning">NEDCC 6.1</a>, but I have not seen ESD keyboard brushes specifically called out as harmful. The stiffer-bristle concern is judgment-based.)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subtotal: ~$85</strong></p>
+<p><strong>On gloves: don&rsquo;t wear them for paper.</strong> Earlier drafts of this doc recommended cotton archival gloves &ldquo;to prevent skin oils from discoloring paper over decades.&rdquo; That recommendation is <strong>wrong</strong> for paper records. Both <a href="https://www.archives.gov/preservation/holdings-maintenance/handling">NARA Holdings Maintenance — Handling</a> and <a href="https://www.loc.gov/preservation/care/handling.html">Library of Congress — Caring for Books and Paper</a> recommend <strong>clean, dry hands</strong> for handling paper records. Cotton gloves reduce dexterity, snag on torn edges, and increase the risk of mechanical damage to fragile pages — they cause more harm than the trace skin oils they prevent. Wash and thoroughly dry hands before each session; use nitrile gloves only if you&rsquo;re handling photo emulsions, contaminated material, or have hand lotion residue you can&rsquo;t fully wash off. <strong>Do not order the cotton gloves.</strong></p>
+<hr />
+<h2 id="compact-deployment-configuration-10001200">Compact Deployment Configuration (~$1,000–1,200)</h2>
+<p>A second tier optimized for tighter budget and the smaller footprint of the small-space deployment. <strong>Quality cost is bounded</strong>: dual-light 45° geometry, cross-polarization, ColorChecker, manual WB, and tripod-based capture all carry over unchanged. Only panel wattage, softbox size, and CPL brand are downgraded. For 8.5&rdquo;×11&rdquo; calendar pages at ~50&rdquo; working distance, 60W panels are bright enough for f/5.6 / ISO 200 / ~1/60s with margin to spare.</p>
+<h3 id="what-changes-vs-pro-tier">What changes (vs. Pro tier)</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Pro tier</th>
+<th>Compact tier</th>
+<th>Compact savings</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lighting panels</td>
+<td>amaran Halo 100x × 2 (~$338)</td>
+<td><strong>Amaran 60x S</strong> or <strong>Godox SL60II Bi</strong> × 2 (~$300)</td>
+<td>~$40</td>
+</tr>
+<tr>
+<td>Softboxes</td>
+<td>33&rdquo;-class Aputure Bowens softbox × 2 (~$260–440)</td>
+<td>24–28&rdquo; Bowens-mount softbox × 2 (~$140)</td>
+<td>~$120–300</td>
+</tr>
+<tr>
+<td>CPL filter</td>
+<td>Heliopan 46mm Slim SH-PMC (~$100)</td>
+<td><strong>Hoya HD3 46mm CPL</strong> or <strong>B+W F-Pro Kaesemann</strong> (~$50)</td>
+<td>~$50</td>
+</tr>
+<tr>
+<td>Page support</td>
+<td>Tabletop easel + foamcore + bulldog clips (~$50)</td>
+<td>Same — tabletop easel + foamcore + bulldog clips (~$50)</td>
+<td>$0</td>
+</tr>
+<tr>
+<td>Display calibrator</td>
+<td>Calibrite Display Plus HL (~$339)</td>
+<td><strong>Defer</strong> — ColorChecker still required</td>
+<td>~$339</td>
+</tr>
+</tbody>
+</table>
+<h3 id="what-stays-mandatory-no-compact-downgrade">What stays mandatory (no Compact downgrade)</h3>
+<ul>
+<li><strong>Dual-light 45° geometry</strong> — single-light setups produce shadow gradients that no software step can fully correct</li>
+<li><strong>Cross-polarization</strong> — Rosco #7300 sheets on the lights + a CPL on the lens; the CPL brand is negotiable, the technique is not</li>
+<li><strong>Calibrite ColorChecker Passport Photo 2</strong> — every session, every batch; this is what makes the archive normalizable across years</li>
+<li><strong>Manual white balance</strong> — set per session from the ColorChecker, never auto WB</li>
+<li><strong>Tripod-based capture</strong> — the G9 II + 60mm needs a stable platform for High Res Mode</li>
+<li><strong>Lightroom Classic workflow</strong> — auto-import from the Lumix Tether watched folder, hierarchical keywords, local catalog</li>
+</ul>
+<h3 id="compact-tier-cost-breakdown">Compact-tier cost breakdown</h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Compact cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lighting (60W panels × 2, 24–28&rdquo; softboxes, stands, bag)</td>
+<td>~$500</td>
+</tr>
+<tr>
+<td>Cross-polarization (Hoya CPL + Rosco sheets + gaffer tape)</td>
+<td>~$130</td>
+</tr>
+<tr>
+<td>Page support (tabletop easel + foamcore + bulldog clips)</td>
+<td>~$50</td>
+</tr>
+<tr>
+<td>Color management (ColorChecker only; calibrator deferred)</td>
+<td>~$120</td>
+</tr>
+<tr>
+<td>Cable + misc + preservation</td>
+<td>~$110</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~$1,000–1,200 up-front</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Page support is a one-time buy that&rsquo;s the same in both tiers — there&rsquo;s no Pro-tier upgrade path here. The single biggest budget lever is the Display Plus HL calibrator (~$339); deferring it brings Pro tier under $1,500.</p>
+<h3 id="when-to-choose-which-tier">When to choose which tier</h3>
+<ul>
+<li><strong>Choose Pro</strong> if: budget allows; you want maximum optical margin; the lights will be reused for portraits, art reproduction, or video; or you want headroom for years-long workflow drift.</li>
+<li><strong>Choose Compact</strong> if: budget is tight; the small-space deployment (60W is more than enough for a 5&rsquo;×5&rsquo; rig) is the actual setting; or you&rsquo;d rather invest the difference in archival storage / backup drives / OCR vendor credits.</li>
+</ul>
+<p>The 60W panels are demonstrably sufficient for static documents at ~50&rdquo; working distance. The Heliopan CPL is the only line item where the Pro tier offers a measurable optical advantage; on faded handwriting that the OCR will read either way, that advantage is academic.</p>
+<hr />
+<h2 id="total-cost-summary">Total Cost Summary</h2>
+<p>Adobe Photography Plan (1 TB) is already an active subscription, so software is $0 marginal for this project.</p>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Pro tier</th>
+<th>Compact tier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lighting (panels + softboxes + stands + bag)</td>
+<td>~$840–1,040</td>
+<td>~$500</td>
+</tr>
+<tr>
+<td>Cross-polarization (CPL + Rosco sheets + tape)</td>
+<td>~$185</td>
+<td>~$130</td>
+</tr>
+<tr>
+<td>Page support (tabletop easel + foamcore + clips)</td>
+<td>~$50</td>
+<td>~$50</td>
+</tr>
+<tr>
+<td>Color management</td>
+<td>~$120–460 (ColorChecker; calibrator optional)</td>
+<td>~$120 (ColorChecker only)</td>
+</tr>
+<tr>
+<td>Tethered capture (Lumix Tether free; LR Classic + CC already owned)</td>
+<td>$0</td>
+<td>$0</td>
+</tr>
+<tr>
+<td>Cable + misc + preservation</td>
+<td>~$130</td>
+<td>~$110</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~$1,325–1,865 up-front</strong></td>
+<td><strong>~$1,000–1,200 up-front</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The Pro-tier range is wider than earlier drafts because (a) softbox SKUs rotate and prices vary $130–220 ea, and (b) the Display Plus HL calibrator is now correctly framed as optional. Pro tier without the calibrator: ~$1,325–1,525. Pro tier with the calibrator: ~$1,665–1,865.</p>
+<p>Cutting tools (Carl DC-210N rotary trimmer + heavy utility knife + steel ruler, ~$95) add to either tier if not already on hand. Two-pass workflow: utility-knife through-stack cut to free pages from binding, then trimmer per-page for a clean even edge.</p>
+<hr />
+<h2 id="g9-ii-capture-settings">G9 II Capture Settings</h2>
+<p>Lock these into a Custom Mode (C1) on the dial so you can&rsquo;t fat-finger them mid-session.</p>
+<ul>
+<li><strong>Mode</strong>: Manual exposure (M)</li>
+<li><strong>Resolution</strong>: <strong>High Res Mode</strong> (Tripod, <strong>11552 × 8672 ≈ 100 MP RAW</strong>, per <a href="https://shop.panasonic.com/products/lumix-g9ii-mirrorless-camera-body">Panasonic G9 II official specs</a>). The reason you bought a G9 II for archival work. Pixel-shift compositing on a static subject; well above any conceivable OCR or human-reading need.</li>
+<li><strong>File</strong>: <strong>RAW only</strong> (no JPEG copy — Lightroom Classic handles export)</li>
+<li><strong>Aperture</strong>: <strong>f/5.6</strong> — the Olympus 60/2.8 is sharpest in the f/5.6–f/8 zone; past f/8 diffraction softens MFT images</li>
+<li><strong>ISO</strong>: <strong>200</strong> (G9 II base ISO — lowest noise)</li>
+<li><strong>Shutter</strong>: dictated by lighting. Aim for ~1/60 to ~1/125 with continuous LED panels at the recommended setup. Doesn&rsquo;t matter for static subjects on a tripod.</li>
+<li><strong>Shutter mode</strong>: <strong>Electronic shutter</strong> (eliminates shutter shock entirely; also silent)</li>
+<li><strong>Self-timer</strong>: 2 seconds, OR remote release via Lumix Tether</li>
+<li><strong>Focus</strong>: <strong>Manual focus</strong>, set once per session by zooming into the page in 10× live view and adjusting focus ring until the ink is sharp. Autofocus on flat subjects with low-contrast handwriting is unreliable.</li>
+<li><strong>White balance</strong>: <strong>Manual</strong>, custom set from the ColorChecker WB target as the first shot of each session. Don&rsquo;t trust auto WB across years.</li>
+<li><strong>Image stabilization</strong>: <strong>Off</strong> when on a tripod (IBIS on a tripod can introduce motion, not reduce it)</li>
+<li><strong>Color profile</strong>: <strong>Standard</strong> (you&rsquo;ll process from RAW; in-camera profile doesn&rsquo;t matter)</li>
+</ul>
+<hr />
+<h2 id="setup-geometry">Setup Geometry</h2>
+<pre class="codehilite"><code>                       ┌─────────────────────────┐
+                       │                         │
+                       │      LED panel          │
+                       │   (with Rosco sheet     │
+                       │    over softbox face)   │
+                       │                         │
+                       └─────────┬───────────────┘
+                                 │ ~45°
+                                 ▼
+       ┌───────────┐    ┌─────────────────┐    ┌───────────┐
+       │           │    │                 │    │           │
+       │ G9 II +   │───▶│  Calendar page  │◀───│ LED panel │
+       │ 60mm + CPL│    │  on cradle      │    │           │
+       │ (tripod,  │    │                 │    │           │
+       │ horizontal)│   │                 │    │           │
+       └───────────┘    └─────────────────┘    └───────────┘
+       ~50&quot; working                              ~45° from
+       distance                                  page normal
+</code></pre>
+
+<ul>
+<li>Tripod aimed horizontally, camera level (bubble level on hot shoe)</li>
+<li>Page on cradle, vertical or angled 10-15° back, parallel to sensor plane</li>
+<li>Two LED panels at 45° from each side of the page, equal distance, equal output</li>
+<li>CPL on lens locked at the cross-polarization angle (rotated 90° from light polarizers)</li>
+<li>Working distance: <strong>~50&rdquo; lens-front-to-page for a 14&rdquo; page width; ~58&rdquo; for a 16&rdquo;-tall page</strong> on the 4:3 MFT sensor (the 60mm focal length × MFT crop = ~120mm full-frame equivalent, and a 14×16&rdquo; page does not fit the 4:3 frame at the same working distance — the longer dimension drives the distance). <strong>Validate with a framing test against your actual largest page</strong> before locking the tripod position. The Setup Geometry diagram and the Small-Space floor coordinates below assume the larger page dimension is governing; if your calendars are smaller, you can move closer.</li>
+</ul>
+<hr />
+<h2 id="small-space-deployment-800-sq-ft-home">Small-Space Deployment (800 sq ft home)</h2>
+<p>The system lives in a shared dining/living area with zero permanent installation. Every session is a clean setup-and-teardown. The goals: hit the marks fast, get repeatable framing across sessions years apart, and never block the walk-through path to the kitchen.</p>
+<h3 id="constraints">Constraints</h3>
+<ul>
+<li>Full setup and teardown each session — no permanent rig</li>
+<li>Walk-through path to the kitchen preserved at all times</li>
+<li>Total usable footprint <strong>5 ft × 5 ft</strong> (operator zone)</li>
+<li>Equipment lightweight enough for one-person setup in under 10 minutes</li>
+</ul>
+<h3 id="fixed-floor-position-system">Fixed Floor Position System</h3>
+<p>A coordinate grid taped to the floor turns &ldquo;set up the rig&rdquo; into &ldquo;put each foot on its mark.&rdquo; Repeatability across sessions becomes mechanical — no measuring, no guessing, no day-to-day drift in lighting angle or framing.</p>
+<blockquote>
+<p><strong>The coordinates below are starting points, not gospel.</strong> The numbers were sized for a 14&rdquo; page width at a ~50&rdquo; working distance. <strong>Run a framing test with your actual largest calendar page before laying down tape</strong>: place the page on the easel, set the tripod position by eye until the page fills the frame with ~10% padding, mark the actual tripod feet at that position, then derive the rest from there. The light positions and operator zone scale with the tripod position; adjust proportionally. Once tested and locked, the marks become mechanical for every subsequent session.</p>
+</blockquote>
+<p><strong>Reference origin</strong>: front-left corner of the dining table (nearest the piano).
+<strong>Axis convention</strong>: X positive = right of the corner along the table edge. Y positive = into the room, away from the table edge.
+<strong>Marking material</strong>: blue painter&rsquo;s tape with sharpie cross marks. Lifts cleanly, leaves no residue, re-mark once at the start of each year.</p>
+<h4 id="tripod">Tripod</h4>
+<ul>
+<li><strong>Center</strong>: X = -18&rdquo;, Y = 36&rdquo;</li>
+<li><strong>Foot 1</strong>: (-18, 30)</li>
+<li><strong>Foot 2</strong>: (-26, 42)</li>
+<li><strong>Foot 3</strong>: (-10, 42)</li>
+</ul>
+<h4 id="lights">Lights</h4>
+<ul>
+<li><strong>Left light stand base</strong>: (-6, 18)</li>
+<li><strong>Right light stand base</strong>: (46, 18)</li>
+</ul>
+<h4 id="operator-zone">Operator zone</h4>
+<ul>
+<li>X = -20&rdquo; to -10&rdquo;, Y = 48&rdquo; to 60&rdquo;</li>
+</ul>
+<p>(Operator stands behind and slightly left of the tripod, with the Mac on a small rolling cart, side table, or chair within reach.)</p>
+<h3 id="table-alignment-system">Table Alignment System</h3>
+<p>The page itself needs the same precision as the rig.</p>
+<ul>
+<li><strong>Page center</strong>: (26&rdquo;, 16&rdquo;) — measured to the centerpoint of the easel/cradle face</li>
+<li><strong>Edge guides</strong>: two corner brackets (3D-printed, or cut foamcore) taped to the table at fixed offsets from the page-center mark. Place every page into the same corners. No measuring per page; no creeping rotation across a session.</li>
+</ul>
+<h3 id="setup-teardown-workflow">Setup / Teardown Workflow</h3>
+<p><strong>Targets</strong>: setup ≤ 8 minutes, teardown ≤ 5 minutes. If a session blows past these, something is wrong with the marks or the workflow — fix the system, not the session.</p>
+<p><strong>Setup</strong>:
+1. Clear table (move centerpiece, mail, etc. to the piano top)
+2. Place easel/cradle on the table edge guides
+3. Move tripod to floor marks; extend to the marked height (record the leg-section height once and write it on the tripod leg)
+4. Place light stands on floor marks; mount panels + softboxes; aim at the page (~45° each side)
+5. <strong>Close blinds fully</strong> (see lighting control below)
+6. Power on lights, set 5000K, equal output
+7. Power on camera, connect Lumix Tether, confirm live view
+8. Shoot ColorChecker frame + WB target frame
+9. Begin capture</p>
+<p><strong>Teardown</strong>:
+1. Power off lights and camera; cap lens
+2. Disconnect tether cable; coil onto velcro reel
+3. Remove softboxes from panels (they collapse fast); panels back to case
+4. Collapse light stands; into stand bag
+5. Collapse tripod (don&rsquo;t dismount the camera + lens — leave them on, in a padded case if room allows)
+6. Lift easel; pages back into archival sleeves; everything to closet
+7. Pull table edge guides if guests are coming; otherwise leave them — they&rsquo;re inert tape</p>
+<h3 id="lighting-control-requirement">Lighting Control Requirement</h3>
+<p><strong>Strongly recommended</strong>: blinds fully closed during capture. <strong>Avoid mixed daylight + LED lighting.</strong></p>
+<p>Daylight color temperature shifts from ~5500K (mid-morning) to ~4000K (late afternoon, overcast) to neutral-ish (north-facing diffuse). Mixing it with the 5000K LED panels means every session has a different color cast. A single ColorChecker frame at the start of the session can correct <strong>the average mix at that moment</strong> but cannot fully correct <strong>spatial variation</strong> (e.g., a window-side hot spot vs. a shadowed side of the page) or temporal variation (mix ratio changing during a long session as the sun moves). The CPL adds another wrinkle: ambient daylight bouncing off the page from the wrong angle isn&rsquo;t blocked by the cross-polarization (its polarization state is random), so glare control degrades.</p>
+<p>The institutional best practice (<a href="https://www.digitizationguidelines.gov/guidelines/FADGI%20Technical%20Guidelines%20for%20Digitizing%20Cultural%20Heritage%20Materials_3rd%20Edition_05092023.pdf">FADGI 3rd Edition</a> §6) is <strong>controlled, repeatable illumination</strong> — meaning closed blinds, fixed panels, and a known-state color profile. Closed blinds is the easy way to meet that bar in a home setup. If the dining room has any direct-sun window, schedule sessions for after sunset for an extra margin.</p>
+<h3 id="window-blackout-test-supplemental-blocking">Window Blackout Test + Supplemental Blocking</h3>
+<p>Most household blinds <strong>don&rsquo;t block 100% of light</strong> — they reduce ambient by 80-95% but leave enough leakage that, in a multi-year archival project, it can introduce session-to-session inconsistency and partial glare. Before deciding whether to add supplemental blocking, <strong>run a quick test once during initial setup</strong>:</p>
+<h4 id="the-test-5-minutes-do-this-once">The Test (5 minutes, do this once)</h4>
+<ol>
+<li>Deploy the rig per the Setup Geometry section. Close blinds fully.</li>
+<li>Power on the LED panels at session-realistic settings (5000K, equal output).</li>
+<li>Place a glossy reference on the cradle — a ColorChecker patch, a piece of laminated paper, or a glossy magazine cover.</li>
+<li>Shoot one frame as you would during a session. Note the exposure.</li>
+<li><strong>Turn off both LED panels.</strong></li>
+<li>Without changing anything else, look at the page in live view (or shoot another frame at a much longer exposure, e.g. 1-2 seconds).</li>
+<li><strong>Decision criterion</strong>: with the LED panels off, is the page meaningfully illuminated by the residual window light?
+   - <strong>Page is essentially black</strong> → blinds are sufficient. No supplemental blocking needed. Skip the rest of this section.
+   - <strong>Page has visible illumination</strong> (any color cast, any directional shadow from the window side, any reading on a meter) → ambient is leaking through. <strong>Supplemental blocking will improve consistency and glare control.</strong> Continue below.</li>
+</ol>
+<h4 id="why-this-matters-even-for-small-leaks">Why this matters even for &ldquo;small&rdquo; leaks</h4>
+<ul>
+<li><strong>Glare control degrades.</strong> The cross-polarization rig only blocks light in the polarization state matching the Rosco sheets on the panels. Random ambient daylight passes through the CPL partially, so even a 5% leak can show up as low-contrast glare on the page.</li>
+<li><strong>Cross-session color drift.</strong> Daylight shifts ~1500K from morning to afternoon. A 5-10% ambient mix means the <em>effective</em> light source changes color across the day; the ColorChecker frame corrects the <strong>average</strong> color but can&rsquo;t perfectly correct <strong>spatial</strong> variation (window-side warmer than shadow-side) or <strong>temporal</strong> variation within a long session.</li>
+<li><strong>Multi-year reproducibility.</strong> The goal of this archive is making session 47 in 2028 look like session 1 in 2026. Eliminating ambient as a variable removes a drift factor you&rsquo;d otherwise spend hours chasing in post.</li>
+</ul>
+<h4 id="supplemental-blocking-options-if-the-test-shows-leakage">Supplemental blocking options (if the test shows leakage)</h4>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Cost</th>
+<th>Setup speed</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Magnetic blackout panel</strong> sized to your window</td>
+<td>~$30–80</td>
+<td>~30 sec</td>
+<td>Best fit for the teardown workflow. Magnets clip onto the metal window frame (or stick-on metal strips for non-metal frames). Search Amazon for &ldquo;magnetic blackout window cover&rdquo; + your window dimensions.</td>
+</tr>
+<tr>
+<td><strong>Velcro-mounted blackout fabric</strong></td>
+<td>~$25–50</td>
+<td>~1 min</td>
+<td>Velcro pads stay on the frame; the fabric panel attaches and detaches. Slightly slower per session, more permanent fit.</td>
+</tr>
+<tr>
+<td><strong>Foamcore + binder clips against the window frame</strong></td>
+<td>$0 (already buying foamcore for the easel)</td>
+<td>~1 min</td>
+<td>DIY zero-cost option. Use a second piece of foamcore (you can buy a 32×40 sheet and cut to fit) clipped to a tension rod or pressed against the frame during sessions. Ugly but effective. Add an extra ~$15 foamcore sheet to Order 2 if going this route.</td>
+</tr>
+<tr>
+<td><strong>Blackout curtain</strong> (rod-mounted)</td>
+<td>~$30–100</td>
+<td>~15 sec to draw</td>
+<td>Cheapest active solution but introduces a furniture item to the dining room. Defeats the &ldquo;no permanent setup&rdquo; constraint slightly.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recommendation if the test fails</strong>: <strong>magnetic blackout panel</strong> for the small-space deployment workflow. Fast to deploy, fast to remove, no permanent change to the room, sized exactly to your window. Add to Order 4 (Amazon) at checkout. Measure the window opening (height × width) before ordering — most magnetic panels are sold in standard sizes (e.g., 36×48&rdquo;, 48×60&rdquo;) and you want one slightly larger than the opening.</p>
+<p><strong>If you have multiple windows in the room</strong>, you may need one panel per window. Test each window separately by selectively un-covering one at a time during the test above.</p>
+<hr />
+<h2 id="per-session-shooting-workflow">Per-Session Shooting Workflow</h2>
+<ol>
+<li><strong>Set up</strong>: assemble lights, position tripod, mount camera, tether to Mac via Lumix Tether</li>
+<li><strong>Power lights</strong>: 5000K, equal output (use a light meter or histogram to match — drop one panel by one stop and confirm visible falloff, then back to balance)</li>
+<li><strong>Test page</strong>: place a sample page on the cradle. Confirm framing in live view (page edges + ~10% padding), confirm focus, confirm even illumination (no hot side, no shadow side)</li>
+<li><strong>First frame: ColorChecker.</strong> Place the Passport Photo 2 in the same plane as the page, fully lit. Capture one frame. File goes to <code>session-YYYY-MM-DD/colorchecker.dng</code>.</li>
+<li><strong>Second frame: WB target</strong> — capture one frame of just the WB target patch for in-camera custom WB</li>
+<li><strong>Capture pages</strong>: load page → trigger shutter via Lumix Tether → file lands on Mac → glance at preview → next page</li>
+<li><strong>Naming convention</strong>: <code>YYYY-MM_pageN.dng</code> (e.g., <code>1968-03_page1.dng</code>). Maps directly to <code>calendar_pages.year</code>/<code>.month</code>/<code>.page_image_path</code> in the DB.</li>
+<li><strong>Per-session log</strong>: a short notes file in each session folder — <code>session-2026-05-10.md</code> — recording lighting setup, panel power, anything unusual. Helps the LLM cleanup stage if a session&rsquo;s batch needs special handling.</li>
+</ol>
+<hr />
+<h2 id="what-to-skip-overkill-or-wrong-tool">What to Skip (Overkill or Wrong Tool)</h2>
+<ul>
+<li><strong>CZUR ET MAX</strong> ($499) — original plan. Skip. The G9 II + 60mm + good lighting beats it on every dimension that matters for archival masters.</li>
+<li><strong>Copy stand</strong> of any kind — your tripod is taller than any consumer copy stand and the 60mm needs the height</li>
+<li><strong>Tru Vue Optium Museum Acrylic</strong> — irrelevant for horizontal capture; you don&rsquo;t need a glass weight</li>
+<li><strong>Capture One Pro</strong> — doesn&rsquo;t tether the G9 II; its color-rendering edge over Lightroom is immaterial for handwritten documents on aged paper; you already own LR Classic + CC, which together handle every requirement of this project</li>
+<li><strong>Dedicated archival lighting</strong> (Solux, Hive, Nanlux) — the Amaran 100x S is genuinely pro-grade; archival-specialty lighting is for museum display, not photography</li>
+<li><strong>Macro rail / focus stacking gear</strong> — flat documents don&rsquo;t need focus stacking; the 60mm at f/5.6 has more than enough DoF for a flat plane</li>
+<li><strong>Adobe Photoshop subscription</strong> — Capture One does everything you need; PS isn&rsquo;t required</li>
+<li><strong>A 30mm or 45mm macro alternative lens</strong> — your 60mm is the better optic; the working-distance &ldquo;problem&rdquo; was solved by using a tripod instead of a copy stand</li>
+</ul>
+<hr />
+<h2 id="sources">Sources</h2>
+<h3 id="cultural-heritage-digitization-standards-added-post-codex-review">Cultural-heritage digitization standards (added post-Codex review)</h3>
+<ul>
+<li><a href="https://www.digitizationguidelines.gov/guidelines/FADGI%20Technical%20Guidelines%20for%20Digitizing%20Cultural%20Heritage%20Materials_3rd%20Edition_05092023.pdf">FADGI Technical Guidelines for Digitizing Cultural Heritage Materials, 3rd Edition (2023)</a> — the institutional reference for cultural-heritage still-image capture</li>
+<li><a href="https://www.loc.gov/preservation/care/handling.html">Library of Congress — Caring for Books and Paper (Handling)</a> — paper-handling guidance (clean dry hands, not gloves)</li>
+<li><a href="https://www.archives.gov/preservation/holdings-maintenance/handling">NARA — Holdings Maintenance: Handling</a> — same, federal-archives-side guidance</li>
+<li><a href="https://www.nedcc.org/free-resources/preservation-leaflets/6.-conservation-procedures/6.1-surface-cleaning">NEDCC Preservation Leaflet 6.1 — Surface Cleaning of Books and Paper</a> — soft-brush surface cleaning</li>
+<li><a href="https://www.nedcc.org/free-resources/preservation-leaflets/6.-reformatting/6.6-digital-preservation">NEDCC Preservation Leaflet 6.6 — Digital Preservation</a> — file integrity, master/derivative separation</li>
+<li><a href="https://www.loc.gov/preservation/digital/">Library of Congress Digital Preservation — Personal Archiving</a> — personal archive backup strategy</li>
+</ul>
+<h3 id="equipment-capture-system">Equipment / capture system</h3>
+<ul>
+<li><a href="https://shop.panasonic.com/products/lumix-g9ii-mirrorless-camera-body">Panasonic LUMIX G9 II official product page</a> — confirms 100MP High Res Mode (11552×8672), not 80MP as earlier drafts of this doc claimed</li>
+<li><a href="https://heliopan.com/circular-polarizer-sh-pmc-filter-heliopan-46mm-circular-polarizer-sh-pmc-camera-lens-filter/">Heliopan 46mm SH-PMC CPL product page</a></li>
+<li><a href="https://us.rosco.com/en/product/polarizing-filters">Rosco Polarizing Filters product page</a></li>
+<li><a href="https://av.jpn.support.panasonic.com/support/global/cs/soft/download/d_lumixtether.html">Lumix Tether download (Panasonic official)</a></li>
+<li><a href="https://helpx.adobe.com/lightroom-classic/kb/tethered-camera-support.html">Adobe Lightroom Classic tethered camera support (Panasonic not natively supported)</a></li>
+<li><a href="https://helpx.adobe.com/lightroom-classic/help/import-photos-automatically.html">Adobe Lightroom Classic Auto Import help</a> — the watched-folder workflow</li>
+<li><a href="https://carl-officeproducts.com/product/dc-210n/">Carl DC-210N Professional Rotary Trimmer specs</a> — 36-sheet capacity (not 10 as earlier drafts claimed)</li>
+<li><a href="https://petapixel.com/2026/03/06/amarans-new-halo-series-bi-color-cob-lights-start-at-just-119/">PetaPixel: Amaran Halo Series Bi-Color COB Lights</a> — confirms Halo line is the current Aputure 100W bi-color COB family</li>
+<li><a href="https://www.talasonline.com/">Talas conservation supplies (archival materials)</a> — alternate to Gaylord for polyester sleeves</li>
+</ul>
+<h3 id="color-management-standards">Color management standards</h3>
+<ul>
+<li><a href="https://www.just-normlicht.com/detail/article/iso-3664.html">ISO 3664 (overview)</a> — D50 / 5000K is the graphic-arts viewing standard</li>
+<li><a href="https://www.edmundoptics.com/knowledge-center/application-notes/optics/understanding-polarized-light/">Edmund Optics — Understanding Polarized Light</a> — circular vs linear polarizers, technique fundamentals</li>
+</ul>
+<h3 id="sources-removed-in-this-revision">Sources removed in this revision</h3>
+<ul>
+<li>~~Aputure Amaran 100x S — Pro Photo Supply / amarancreators.com~~ — product discontinued, replaced by amaran Halo 100x</li>
+<li>~~Capture One supported cameras~~ — irrelevant (we use Lumix Tether)</li>
+<li>~~Gaylord Archival Sure-Grip Cotton Gloves~~ — recommendation reversed (don&rsquo;t wear gloves for paper)</li>
+<li>~~Heliopan Amazon listing~~ — generic Amazon link superseded by manufacturer + B&amp;H product page</li>
+</ul>
+<hr />
+<h2 id="ordering-list">Ordering List</h2>
+<p>Organized by vendor so each batch can be a single cart/checkout. Prices verified May 2026 — confirm before ordering, photo gear pricing drifts ±15% on sales. Quantities and links provided for one-click navigation.</p>
+<blockquote>
+<p><strong>Tier note</strong>: Listed items are the <strong>Pro tier</strong>. If going <strong>Compact tier</strong> (~$1,000–1,200), substitute line by line: amaran Halo 100x → Amaran 60x S or Godox SL60II Bi (~$150 ea), 33&rdquo; Bowens softbox → 24–28&rdquo; Bowens softbox (~$70 ea), Heliopan 46mm CPL → Hoya HD3 46mm (~$50), Display Plus HL → skip. Page support (tabletop easel + foamcore + bulldog clips), Rosco sheets, ColorChecker, stands, cable, tape, sleeves stay identical in both tiers. <strong>No cotton gloves in either tier</strong> — clean dry hands per NARA/LoC.</p>
+</blockquote>
+<h3 id="order-1-bh-photo-largest-cart-photo-specialist">Order 1 — B&amp;H Photo (largest cart, photo specialist)</h3>
+<p>B&amp;H is the right default for this list: no sales tax for most states (NY only), reliable stock on archival/pro gear, and they package multi-line orders together. Place this order first.</p>
+<blockquote>
+<p><strong>Re-verified 2026-05-08 after Codex review.</strong> Every line below was checked. Two prior items pointed at discontinued/replacement B&amp;H slots and have been corrected; multiple prices were stale or wrong and have been refreshed. <strong>Verify each price and SKU at checkout</strong> — the lighting line is the most volatile (Aputure has been rotating SKUs in 2025-2026), and B&amp;H prices change without notice.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit</th>
+<th>Total</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>amaran Halo 100x Bi-Color LED Monolight (replaces discontinued amaran 100x S)</td>
+<td>2</td>
+<td>~$169</td>
+<td>~$338</td>
+<td><a href="https://www.bhphotovideo.com/c/product/1954192-REG/amaran_mp0000043d_halo_100x_bi_color_led.html">B&amp;H 1954192-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Aputure 33&rdquo;-class Bowens softbox (Quick Dome 90 / Light Dome SE if stocked / equivalent)</td>
+<td>2</td>
+<td>~$130–220</td>
+<td>~$260–440</td>
+<td><a href="https://aputure.com/en-US/collections/softboxes-lanterns">Aputure softbox category</a> — pick current SKU at checkout</td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Manfrotto 1052BAC Alu Air-Cushioned Compact Stand (7.7&rsquo;)</td>
+<td>2</td>
+<td>~$90</td>
+<td>~$180</td>
+<td><a href="https://www.bhphotovideo.com/c/product/609058-REG/Manfrotto_1052BAC_1052BAC_Alu_Air_Cushioned.html">B&amp;H 609058-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Manfrotto LBAG90 Quick Stack Light Stand Bag</td>
+<td>1</td>
+<td>~$40</td>
+<td>~$40</td>
+<td><a href="https://www.bhphotovideo.com/c/product/682757-REG/Manfrotto_LBAG90_LBAG90_4_Quick_Stack.html">B&amp;H 682757-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Heliopan 46mm Slim Circular Polarizer SH-PMC (re-verify SKU at checkout)</td>
+<td>1</td>
+<td>~$100</td>
+<td>~$100</td>
+<td><a href="https://www.bhphotovideo.com/c/product/399985-REG/Heliopan_704640_46mm_SH_PMC_Circular_Polarizer.html">B&amp;H 399985-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Rosco Polarizing #7300 Filter (17&rdquo;×20&rdquo; sheet)</td>
+<td>1</td>
+<td>~$70</td>
+<td>~$70</td>
+<td><a href="https://www.bhphotovideo.com/c/product/45130-REG/Rosco_101073001720_Polarizing_7300_Filter.html">B&amp;H 45130-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Calibrite ColorChecker Passport Photo 2</td>
+<td>1</td>
+<td>~$119</td>
+<td>~$119</td>
+<td><a href="https://www.bhphotovideo.com/c/product/1649345-REG/calibrite_ccpp2_colorchecker_passport_photo_2.html">B&amp;H 1649345-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Calibrite Display Plus HL Colorimeter — <strong>OPTIONAL</strong> (defer if budget tight)</td>
+<td>0–1</td>
+<td>~$339</td>
+<td>$0–339</td>
+<td><a href="https://www.bhphotovideo.com/c/product/1770372-REG/calibrite_ccdis3plhl_display_plus_hl.html">B&amp;H 1770372-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Tether Tools TetherPro USB-C to USB-C 15&rsquo;, orange</td>
+<td>1</td>
+<td>~$60</td>
+<td>~$60</td>
+<td><a href="https://www.bhphotovideo.com/c/product/1619202-REG/tether_tools_cuc15rt_org_tetherpro_usb_c_to_usb_c.html">B&amp;H 1619202-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Manfrotto 337 2-Axis Hot Shoe Double Bubble Level</td>
+<td>1</td>
+<td>~$46</td>
+<td>~$46</td>
+<td><a href="https://www.bhphotovideo.com/c/product/263729-REG/Manfrotto_337_337_2_Axis_Flash_Hot.html">B&amp;H 263729-REG</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>ProTapes Pro Gaffer Tape (2&rdquo; × 30 yd, black)</td>
+<td>1</td>
+<td>~$15</td>
+<td>~$15</td>
+<td><a href="https://www.bhphotovideo.com/c/product/20009-REG/General_Brand_Gaffer_Cloth_Tape.html">B&amp;H 20009-REG</a></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>B&amp;H subtotal (without calibrator)</strong></td>
+<td><strong>~$1,228–1,408</strong></td>
+<td></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>B&amp;H subtotal (with calibrator)</strong></td>
+<td><strong>~$1,567–1,747</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Notes on changes from prior versions of this list (post-Codex review):</strong></p>
+<ul>
+<li><strong>Aputure 100x S → amaran Halo 100x.</strong> The B&amp;H slot I previously cited (1753603-REG) is a discontinued/replacement page, not a live product. The current SKU is the <strong>amaran Halo 100x</strong> at 1954192-REG, ~$169 (per <a href="https://petapixel.com/2026/03/06/amarans-new-halo-series-bi-color-cob-lights-start-at-just-119/">PetaPixel coverage</a> of the Halo line launch). Same form factor, same Bowens mount, same 100W class, equivalent CRI.</li>
+<li><strong>&ldquo;Aputure Quick Dome at $129 each&rdquo; was wrong.</strong> The B&amp;H slot I previously cited (1622464-REG) is also a discontinued/replacement page; the linked replacement product is closer to ~$200 ea. Aputure rotates softbox SKUs frequently — the Light Dome SE, Light Dome III, Quick Dome, and Quick Dome 90 have all been the &ldquo;current 33&rdquo; Bowens&rdquo; at various points in 2025-2026. Pick the current 33-35&rdquo; Bowens-mount softbox at checkout from <a href="https://aputure.com/en-US/collections/softboxes-lanterns">Aputure&rsquo;s softbox collection</a>. Any reputable maker (Aputure, Godox, Glow, Profoto with adapter) works equivalently for cross-polarized document capture.</li>
+<li><strong>Prices refreshed across the table</strong> based on Codex&rsquo;s checks 2026-05-08:</li>
+<li>Manfrotto 1052BAC: ~$90 (was $95)</li>
+<li>Rosco #7300: ~$70 (was $60)</li>
+<li>Display Plus HL: ~$339 (was $379) — and <strong>demoted to optional</strong></li>
+<li>Tether Tools cable: ~$60 (was $40)</li>
+<li>Manfrotto 337: ~$46 (was $20 — almost doubled)</li>
+<li>ProTapes gaffer: ~$15 (was $25)</li>
+<li><strong>Heliopan SKU caveat.</strong> The B&amp;H product page at 399985-REG appears in search but Codex reported the URL dropped to a category page on direct fetch. The product is real (Heliopan US carries the same SKU); B&amp;H may have temporarily delisted it. Verify the page is live before relying on this checkout step.</li>
+<li><strong>Display Plus HL demoted</strong> from &ldquo;critical&rdquo; to optional. The capture-side ColorChecker Passport is what makes the archive recoverable; the display calibrator only affects how accurately you see the result on screen. Skip it without guilt if budget is tight.</li>
+</ul>
+<h3 id="order-2-amazon-page-support-kit">Order 2 — Amazon (page-support kit)</h3>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit</th>
+<th>Total</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>U.S. Art Supply Cancun Solid Wooden Tabletop Easel (beechwood, ~23&rdquo; canvas capacity)</td>
+<td>1</td>
+<td>$30</td>
+<td>$30</td>
+<td><a href="https://www.amazon.com/Art-Supply-Studio-Adjustable-Tabletop/dp/B01M6TLCSC">Amazon</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Black foamcore backing board, 24&rdquo;×30&rdquo; (or larger; 32&rdquo;×40&rdquo; also works)</td>
+<td>1</td>
+<td>$15</td>
+<td>$15</td>
+<td><a href="https://www.amazon.com/s?k=24x30+black+foamcore+board">Amazon</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Bulldog binder clips, medium (1.25&rdquo; capacity), pack of 12</td>
+<td>1</td>
+<td>$5</td>
+<td>$5</td>
+<td><a href="https://www.amazon.com/s?k=bulldog+binder+clips+medium+1.25">Amazon</a></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>Amazon (page support) subtotal</strong></td>
+<td><strong>~$50</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="order-3-gaylord-archival-preservation-specific">Order 3 — Gaylord Archival (preservation-specific)</h3>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit</th>
+<th>Total</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>Polyester (Mylar/Melinex) archival sleeves, sized for your largest page (verify dimensions before ordering)</td>
+<td>1 pack</td>
+<td>~$25</td>
+<td>~$25</td>
+<td><a href="https://www.gaylord.com/Preservation/Storage/Polyester/">Gaylord polyester storage</a> (browse for the right size)</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>Gaylord subtotal</strong></td>
+<td><strong>~$25</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Sleeve sizing note</strong>: the linked Gaylord page is a category, not a specific SKU — measure your largest cut calendar page first, then pick a sleeve at least 1&rdquo; larger in each dimension. <a href="https://www.talasonline.com/">Talas</a> carries the same polyester products and tends to have more size options. <strong>Lineco</strong> is one brand of archival polyester sleeve; &ldquo;Mylar D&rdquo; or &ldquo;Melinex 516&rdquo; are the technical product names that ensure archival quality (uncoated, archival polyester, no plasticizers).</p>
+<p><strong>Cotton gloves removed from this order</strong> (see Misc / Preservation section above) — paper records are handled with clean dry hands per NARA and Library of Congress guidance, not cotton gloves.</p>
+<h3 id="order-4-amazon-small-misc">Order 4 — Amazon (small misc)</h3>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit</th>
+<th>Total</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>Drafting brush (Alvin or Staedtler, ~12&rdquo; wide, soft horsehair)</td>
+<td>1</td>
+<td>$15</td>
+<td>$15</td>
+<td><a href="https://www.amazon.com/s?k=alvin+drafting+brush">Amazon</a></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>Amazon subtotal</strong></td>
+<td><strong>~$15</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Brush selection note:</strong> Skip the wide ESD/anti-static brushes marketed for keyboards and PCBs (uxcell, Haojiaho, etc.). Those are designed for stiff electronics work; their bristles are too rigid for 60-year-old paper and can lift fibers from the page itself. The right tool is a soft-bristle drafting brush — same form factor (wide bench-brush shape, fast to sweep), but with horsehair or soft synthetic bristles meant for paper. Alvin and Staedtler are the established drafting-brush brands; either works.</p>
+<h3 id="order-5-cutting-tools-only-if-not-on-hand-only-if-youve-decided-to-cut">Order 5 — Cutting tools (only if not on hand, only if you&rsquo;ve decided to cut)</h3>
+<p>Skip this whole section if you already own cutting equipment, <strong>or</strong> if you&rsquo;ve decided not to cut pages from binding (see &ldquo;Stop Conditions&rdquo; in the Page Cradle section above). Two-pass workflow when cutting: utility knife for the gross through-stack release cut, rotary trimmer for the per-page clean even-up.</p>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Qty</th>
+<th>Unit</th>
+<th>Total</th>
+<th>Link</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>Carl DC-210N Professional Rotary Trimmer (15&rdquo; cutting length, <a href="https://carl-officeproducts.com/product/dc-210n/">36-sheet capacity</a>)</td>
+<td>1</td>
+<td>~$70</td>
+<td>~$70</td>
+<td><a href="https://www.amazon.com/CARL-Professional-Trimmer-15-inch-capacity/dp/B004I2KKGK">Amazon B004I2KKGK</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Olfa LA-X heavy-duty utility knife (or equivalent — 25mm wide blade)</td>
+<td>1</td>
+<td>~$15</td>
+<td>~$15</td>
+<td><a href="https://www.amazon.com/s?k=olfa+heavy+duty+utility+knife+LA-X">Amazon search</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>18&rdquo; cork-backed stainless steel ruler</td>
+<td>1</td>
+<td>~$15</td>
+<td>~$15</td>
+<td><a href="https://www.amazon.com/s?k=18+inch+cork+backed+steel+ruler">Amazon search</a></td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>Cutting tools subtotal</strong></td>
+<td><strong>~$100</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The cutting mat is no longer needed — the trimmer&rsquo;s built-in cutting strip handles Pass 2, and Pass 1 (utility knife on the binding edge) is done over a piece of cardboard or the cutting strip from an unused desk pad. If you want a mat for general project use, add a 24&rdquo;×36&rdquo; self-healing mat (~$40); not required for this workflow.</p>
+<p><strong>Why the two-pass workflow despite the trimmer&rsquo;s 36-sheet capacity:</strong> Earlier drafts of this doc claimed the DC-210N could only handle ~10 sheets and that&rsquo;s why you need a separate utility knife. <strong>That was wrong</strong> — Carl&rsquo;s spec is 36 sheets. The DC-210N can in principle cut a typical 12-page calendar in one pass. The reason to still use the utility knife for Pass 1 is <strong>not capacity</strong> but <strong>safety on irreplaceable originals</strong>: a hand-controlled utility knife on a stable surface lets you see exactly where the cut goes and apply uniform pressure. Aged paper compresses unevenly when stacked, and a single trimmer pass through 12 mixed-weight pages can produce torn-on-bottom-page failures that aren&rsquo;t recoverable. Per-page Pass 2 protects against that. (Codex flagged the original capacity claim — that fix has been applied here.)</p>
+<hr />
+<h3 id="grand-total">Grand Total</h3>
+<table>
+<thead>
+<tr>
+<th>Order</th>
+<th>Vendor</th>
+<th>Subtotal</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>B&amp;H Photo (without calibrator)</td>
+<td>~$1,228–1,408</td>
+</tr>
+<tr>
+<td>1+</td>
+<td>B&amp;H Photo (with calibrator)</td>
+<td>~$1,567–1,747</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Amazon (page support)</td>
+<td>~$50</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Gaylord Archival (sleeves only)</td>
+<td>~$25</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Amazon (drafting brush)</td>
+<td>~$15</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Cutting tools (optional, only if cutting)</td>
+<td>~$100</td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total (Pro tier without calibrator)</strong></td>
+<td><strong>~$1,318–1,498</strong></td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total (Pro tier with calibrator)</strong></td>
+<td><strong>~$1,657–1,837</strong></td>
+</tr>
+<tr>
+<td></td>
+<td><strong>Total (Compact tier)</strong></td>
+<td><strong>~$1,000–1,200</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The Pro tier dropped meaningfully from prior estimates because (a) Codex caught that the cited Aputure 100x S SKU was a discontinued slot — the current amaran Halo 100x is ~$169 ea, not $299; and (b) the Display Plus HL was correctly framed as optional. Pro tier without calibrator: ~$1,318–1,498 (a wider range than before reflecting honest uncertainty on softbox SKU pricing). <strong>The ColorChecker Passport Photo 2 (~$119) stays the most important color-management item in either tier.</strong> Glove line removed entirely (-$10).</p>
+<h3 id="software-already-owned-verify-only">Software (already owned — verify only)</h3>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Item</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>☐</td>
+<td>Lumix Tether — confirm latest version installed on Mac</td>
+<td><a href="https://av.jpn.support.panasonic.com/support/global/cs/soft/download/d_lumixtether.html">Free download</a></td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Lightroom Classic — confirm installed and licensed under existing 1 TB plan</td>
+<td>Already paying</td>
+</tr>
+<tr>
+<td>☐</td>
+<td>Lightroom CC — confirm installed on Mac + iPad + iPhone for cross-device sync</td>
+<td>Already paying</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ordering-notes">Ordering Notes</h3>
+<ul>
+<li><strong>Place B&amp;H first.</strong> It&rsquo;s the bulk of the spend and they&rsquo;re the most reliable for stock + ship time. Once it ships, the Amazon and Gaylord orders can run in parallel — neither depends on B&amp;H gear arriving first.</li>
+<li><strong>Verify the Heliopan thread size before ordering.</strong> The Olympus 60mm f/2.8 is 46mm — confirmed in this doc, but worth a glance at the lens before checkout. A 49mm or 52mm CPL will not fit.</li>
+<li><strong>The Rosco sheet is one purchase for the project.</strong> A single 17&rdquo;×20&rdquo; sheet cut in half covers both light panel softboxes. Don&rsquo;t order two.</li>
+<li><strong>Skip the Calibrite Display Plus HL</strong> if budget is tight or if you already own any recent display calibrator (i1Display Pro, Spyder X, etc.). The ColorChecker Passport Photo 2 is the more important color-management item; the calibrator can always be added later.</li>
+<li><strong>Aputure Amaran model name drift.</strong> Aputure has rebranded the Amaran line aggressively in 2025-2026 (100x → 100x S → Halo 100x). Pick the <strong>current 100W bi-color COB Bowens-mount monolight</strong> with CRI 95+/TLCI 95+ at checkout. Avoid the non-bi-color &ldquo;100d&rdquo; daylight-only versions — you want the ability to nudge color temperature.</li>
+<li><strong>Lineco vs. generic polyester sleeves.</strong> &ldquo;Lineco&rdquo; is one brand; the technical specifications that matter are <strong>uncoated archival polyester</strong> (Mylar D, Melinex 516, or equivalent), no plasticizers, no UV inhibitors. Any sleeve labeled &ldquo;archival polyester&rdquo; or &ldquo;Mylar D&rdquo; from Gaylord, Talas, or University Products meets that bar.</li>
+<li><strong>Page-support alternates.</strong> If the U.S. Art Supply Cancun is out of stock, any beechwood A-frame tabletop easel rated for 18&rdquo;+ canvas works (Pro Art, Mont Marte, Royal &amp; Langnickel — all $25-40 on Amazon). The foamcore can be substituted with any rigid 24&rdquo;×30&rdquo; or larger flat board (gatorboard, mat board, even thin masonite painted matte black). The bulldog clips are commodity — any 1.25&rdquo; capacity binder clip works.</li>
+</ul>
+<hr />
+<h2 id="paper-handling-guidance">Paper Handling Guidance</h2>
+<p>This section was added after a Codex review caught the original doc recommending cotton gloves — which is <strong>wrong</strong> for paper records. Both NARA and Library of Congress are explicit: paper is handled with clean dry hands.</p>
+<h3 id="hands-not-gloves">Hands, not gloves</h3>
+<ul>
+<li><strong>Wash hands and dry thoroughly</strong> before each session. Soap residue, hand cream, and moisture all transfer to paper.</li>
+<li><strong>No lotions, oils, or cosmetics on the hands</strong> during a session. If you&rsquo;ve applied lotion in the last hour, re-wash and rinse longer than usual.</li>
+<li><strong>Cotton gloves reduce dexterity</strong> — they snag on torn corners, and the resulting tear is far worse than the trace skin oils that gloves prevent. NARA: <a href="https://www.archives.gov/preservation/holdings-maintenance/handling">&ldquo;The Library of Congress and the National Archives do not require staff or researchers to wear gloves when handling paper records&rdquo;</a>.</li>
+<li><strong>Nitrile gloves are fine for special cases</strong>: photo emulsions (silver gelatin, dye transfer), iron-gall ink that&rsquo;s unstable, suspected mold or contamination. Not for clean handwritten paper.</li>
+<li><strong>Avoid finger-pointing on the writing area.</strong> Touch only the margins. If you have to grip more firmly (a stiff page wants to spring back), grip the page corners.</li>
+</ul>
+<h3 id="safe-to-touch-areas">Safe-to-touch areas</h3>
+<pre class="codehilite"><code>┌────────────────────────────────┐
+│ ✓                            ✓ │  ← Top corners and edges
+│                                │
+│                                │
+│                                │
+│      [ writing area —          │
+│         do not touch ]         │
+│                                │
+│                                │
+│                                │
+│ ✓                            ✓ │  ← Bottom corners and edges
+└────────────────────────────────┘
+</code></pre>
+
+<h3 id="when-to-stop-and-call-a-conservator">When to stop and call a conservator</h3>
+<p>If you see any of these on a particular page, stop and consult a paper conservator before proceeding (your local university library, state archives, or a <a href="https://www.culturalheritage.org/about-conservation/find-a-conservator">private member of the AIC Find a Conservator directory</a> can help):</p>
+<ul>
+<li>Active mold (fuzzy growth, musty smell)</li>
+<li>Iron-gall ink that&rsquo;s eaten through the paper (the writing has corroded the page)</li>
+<li>Active flaking, crumbling at touch, or tear that propagates with normal handling</li>
+<li>Adhesive residue from old tape (especially yellow/amber stains)</li>
+<li>Fold lines that crack rather than flex</li>
+</ul>
+<h3 id="sources_1">Sources</h3>
+<ul>
+<li><a href="https://www.archives.gov/preservation/holdings-maintenance/handling">NARA — Holdings Maintenance: Handling</a></li>
+<li><a href="https://www.loc.gov/preservation/care/handling.html">Library of Congress — Caring for Books and Paper</a></li>
+<li><a href="https://www.nedcc.org/free-resources/preservation-leaflets/6.-conservation-procedures/6.1-surface-cleaning">NEDCC Preservation Leaflet 6.1 — Surface Cleaning</a></li>
+</ul>
+<hr />
+<h2 id="pilot-batch-protocol">Pilot Batch Protocol</h2>
+<p>Before buying the full kit and committing to a years-long workflow, <strong>run a pilot batch</strong> on 1-2 representative calendars. This validates framing, glare suppression, exposure, throughput, and the cutting/handling decisions before you&rsquo;ve made any of them irreversible.</p>
+<h3 id="pilot-batch-goals">Pilot batch goals</h3>
+<ol>
+<li><strong>Validate framing geometry</strong> — does your largest page actually fit at the planned working distance? Adjust before laying floor tape.</li>
+<li><strong>Validate cross-polarization extinction</strong> — do the panels + sheets + CPL actually kill glare on a glossy reference? If extinction is weak, your panel alignment or sheet orientation is wrong.</li>
+<li><strong>Validate exposure</strong> — at f/5.6, ISO 200, 5000K, do you land somewhere in 1/30–1/250s? If under 1/30s the panels are too far away or output too low; if over 1/250s, too close or too bright.</li>
+<li><strong>Validate cutting decisions</strong> (if cutting) — does the binding type unfasten cleanly, or does Pass 1 require a destructive cut? Are pages brittle? Does any handwriting come close to the trim line?</li>
+<li><strong>Validate throughput</strong> — how long does a calendar (12-13 pages) actually take, end-to-end? Realistic estimates inform the project schedule.</li>
+<li><strong>Validate the file pipeline</strong> — does Lumix Tether → watched folder → LR Classic auto-import → preset application work as expected? Files named correctly, metadata applied, in the right collection?</li>
+</ol>
+<h3 id="pilot-batch-protocol_1">Pilot batch protocol</h3>
+<ol>
+<li>Set up the rig per the Setup Geometry section (with framing test).</li>
+<li>Pick <strong>one calendar</strong> — pick a year that&rsquo;s not the most sentimentally important (so a mistake costs less if something goes wrong) but that has typical content (handwritten entries, mixed-density pages).</li>
+<li>Capture all pages of that calendar end-to-end. Time the session.</li>
+<li>Process the captured RAWs through your full pipeline (LR develop, export, OCR if applicable).</li>
+<li><strong>Review on a calibrated screen</strong> (or, lacking the calibrator, an iPad or Mac display set to the brightest setting in a dim room).</li>
+<li>Inspect for: framing consistency, glare, sharpness corner-to-corner, color match across frames, color match against the original page side-by-side.</li>
+<li><strong>Decide before scaling</strong>: ship the workflow as-is, tweak specific parameters, or back up and re-evaluate.</li>
+</ol>
+<p>If the pilot batch reveals problems, <strong>stop and fix the workflow before continuing</strong>. Re-shooting later is far harder than getting it right on the first try.</p>
+<hr />
+<h2 id="backup-and-file-integrity-strategy">Backup and File Integrity Strategy</h2>
+<p>A single-pass archive of irreplaceable family material <strong>must</strong> have a documented backup strategy. The cheapest mistake is to capture everything once, store it on a single drive, and lose it. The most expensive mistake is to discover years later that bit-rot silently corrupted half the files.</p>
+<h3 id="3-2-1-storage-rule">3-2-1 storage rule</h3>
+<p>The standard recommendation, applicable here:</p>
+<ul>
+<li><strong>3 copies</strong> of every master file (the primary RAW + at least two backups)</li>
+<li><strong>2 different storage media</strong> (e.g., a working SSD + an external HDD; not two SSDs of the same brand bought the same week)</li>
+<li><strong>1 copy off-site</strong> (a different physical location: a relative&rsquo;s house, a safe deposit box, or cloud storage)</li>
+</ul>
+<p>For this project, a workable instantiation:
+- <strong>Primary</strong>: Internal SSD on the Mac, organized by LR Classic catalog
+- <strong>Local backup</strong>: External HDD that auto-mirrors via Time Machine or <code>rsync</code>
+- <strong>Off-site backup</strong>: A cloud archive (Backblaze, AWS S3 Glacier Deep Archive, or DigitalOcean Spaces — the project already uses Spaces) for the masters; sync nightly or after each session</p>
+<h3 id="checksums">Checksums</h3>
+<p>For an archive, <strong>checksum verification</strong> is non-negotiable. Bit-rot is real on any storage medium over multi-year timescales, and you want to detect corruption before all three copies are corrupted.</p>
+<ul>
+<li>Generate <strong>SHA-256</strong> checksums for every master file at capture time.</li>
+<li>Store the checksum file (<code>.sha256</code> or <code>.md5sum</code>) alongside the masters.</li>
+<li>Run a <strong>quarterly verification pass</strong> that recomputes checksums and flags any drift.</li>
+<li>Tools: <code>shasum -a 256 *.dng &gt; checksums.sha256</code> on macOS; or use a dedicated tool like <a href="https://github.com/LibraryOfCongress/bagger">Bagger</a> (Library of Congress&rsquo;s own bag-it tool) for formal archival packaging.</li>
+</ul>
+<h3 id="master-vs-derivative-separation">Master vs. derivative separation</h3>
+<ul>
+<li><strong>Masters</strong>: Original RAW files (<code>.dng</code> from Lumix Tether). <strong>Read-only after capture.</strong> Never edit, never overwrite. Multiple backups.</li>
+<li><strong>Working copies</strong>: Lightroom Classic catalog + sidecar XMPs. These are the editing layer; back up the catalog file separately.</li>
+<li><strong>Derivatives</strong>: Exported TIFFs/JPEGs for OCR pipeline, family viewer, etc. Reproducible from masters; back up but not as critical.</li>
+</ul>
+<h3 id="sources_2">Sources</h3>
+<ul>
+<li><a href="https://www.loc.gov/preservation/digital/">Library of Congress Digital Preservation — Personal Archiving</a></li>
+<li><a href="https://www.nedcc.org/free-resources/preservation-leaflets/6.-reformatting/6.6-digital-preservation">NEDCC Preservation Leaflet 6.6 — Digital Preservation</a></li>
+<li><a href="https://www.cisa.gov/news-events/news/data-backup-options">3-2-1 Backup Rule (US-CERT / CISA)</a></li>
+</ul>
+<hr />
+<h2 id="qa-acceptance-criteria">QA / Acceptance Criteria</h2>
+<p>Use these criteria to decide whether a captured frame is good enough to ship to the OCR pipeline, or whether to reshoot. Adapted from <a href="https://www.digitizationguidelines.gov/guidelines/FADGI%20Technical%20Guidelines%20for%20Digitizing%20Cultural%20Heritage%20Materials_3rd%20Edition_05092023.pdf">FADGI Still Image Technical Guidelines, 3rd Edition</a> — the institutional reference for cultural-heritage digitization. We&rsquo;re not aiming for FADGI 4-star (that requires test-target measurements with specialized tools); we&rsquo;re aiming for <strong>FADGI 3-star equivalence as a self-assessment</strong>.</p>
+<h3 id="resolution-target">Resolution target</h3>
+<ul>
+<li><strong>Minimum sampling at object plane</strong>: ~400 PPI for unbound text, per FADGI guidance for documents up to 12×18&rdquo;. For our 14×16&rdquo; pages on a 100MP G9 II at ~50–58&rdquo; working distance, the resulting PPI is well above 400 — typically 600–800 PPI. You will be over-sampled, which is fine.</li>
+<li><strong>Frame-fill target</strong>: page fills the captured frame with ~5–10% padding on the longest dimension. Margins much larger than that waste resolution; margins much smaller risk cutting off page edges in subsequent processing.</li>
+</ul>
+<h3 id="sharpness">Sharpness</h3>
+<ul>
+<li><strong>Center sharpness</strong>: when zoomed to 100%, individual pencil strokes should be cleanly resolved (no blur, no double-edges).</li>
+<li><strong>Corner sharpness</strong>: corners should match center sharpness within visible inspection — if they don&rsquo;t, the page isn&rsquo;t parallel to the sensor (correct with cradle tilt + bubble level).</li>
+<li><strong>Reshoot threshold</strong>: any motion blur, any focus error visible at 100%, any noticeable falloff at corners.</li>
+</ul>
+<h3 id="illumination-uniformity">Illumination uniformity</h3>
+<ul>
+<li><strong>Side-to-side</strong>: no visible hot side or shadow side. Inspect with a uniform target (a blank piece of the same paper) — exposure variation across the frame should be within ±0.3 stops.</li>
+<li><strong>Top-to-bottom</strong>: same standard. Easel tilt can introduce vertical falloff; correct by re-aiming panels.</li>
+<li><strong>Reshoot threshold</strong>: visible gradient across the page that changes the apparent ink density.</li>
+</ul>
+<h3 id="color">Color</h3>
+<ul>
+<li><strong>ColorChecker frame at session start</strong>: every session, every batch. Without it, the session&rsquo;s RAWs are not normalizable across years.</li>
+<li><strong>Reshoot threshold</strong>: missing ColorChecker frame; mid-session lighting change without a fresh ColorChecker.</li>
+</ul>
+<h3 id="reshoot-vs-accept">Reshoot vs. accept</h3>
+<ul>
+<li><strong>Same session</strong>: cheap to reshoot. Reshoot anything that fails the criteria above.</li>
+<li><strong>Across sessions</strong>: re-shooting a previous session means re-deploying the rig and trying to match conditions. Possible but expensive in time. <strong>Inspect each session&rsquo;s output before tearing down the rig</strong> for that day; reshoot in the same session, not next month.</li>
+</ul>
+<h3 id="what-we-are-not-trying-to-hit">What we are NOT trying to hit</h3>
+<p>This is explicitly <strong>not</strong> an institutional FADGI 4-star capture. Hitting 4-star requires:
+- Calibrated test targets (Image Engineering Universal Test Target, or similar)
+- Quantitative SFR/MTF measurement on each session
+- Documented illumination uniformity measurement at the object plane
+- Documented color delta-E against a reference target</p>
+<p>Those are appropriate for archives that will be reproduced for publication or scholarly use. For a family archive, the criteria above (visual inspection at 100%, ColorChecker on every session, corner-to-corner sharpness, even illumination) are the practical equivalent.</p>
+<hr />
+<h2 id="scope-and-honesty-disclaimer">Scope and Honesty Disclaimer</h2>
+<p>This document describes a <strong>home-practical setup</strong> for a family-archive project, informed by institutional best practices but <strong>not</strong> an institutional best-practice copy stand. Specifically:</p>
+<ul>
+<li><strong>What&rsquo;s borrowed from FADGI/NEDCC/LoC</strong>: 5000K continuous lighting, ColorChecker on every session, manual white balance, tripod-based capture, controlled (closed-blind) illumination, polarizing technique to suppress surface glare, master-vs-derivative file separation, checksums, 3-2-1 backups.</li>
+<li><strong>What&rsquo;s home-practical and not institutional</strong>: tabletop easel + foamcore (institutional capture uses a copy stand or vacuum easel); horizontal capture (institutional often uses overhead with a copy stand); the Carl DC-210N rotary trimmer for irreversible cutting (institutional digitization rarely cuts irreplaceable originals — they capture bound, sometimes accepting some glare); a single-operator workflow without a documented QA pass.</li>
+<li><strong>What we&rsquo;re explicitly not aiming for</strong>: FADGI 4-star compliance, AIC-conservator review of every page, peer-reviewed color profile, ISO-standardized illumination uniformity measurement.</li>
+</ul>
+<p>The goal is a <strong>searchable, recoverable, family-readable archive</strong> of 60 years of handwritten material — captured once, well, with reasonable rigor, and stored with documented integrity. Not a museum-grade reproduction.</p>
+<p>If at any point during the project you encounter material that exceeds this setup&rsquo;s safety envelope (brittle pages, suspect mold, iron-gall ink corrosion, content of historical significance beyond the family record), <strong>stop and consult a paper conservator</strong> before proceeding. The setup described here is not intended to handle special-handling cases.</p>
+<hr />
+<h2 id="acknowledgments-review-lineage">Acknowledgments / Review Lineage</h2>
+<p>This document went through several revision passes before reaching a verified state:</p>
+<ul>
+<li><strong>Initial draft (2026-04-19)</strong>: Claude Code drafted the original equipment list based on user requirements (Panasonic G9 II + Olympus 60mm + small-space deployment).</li>
+<li><strong>2026-05-04 to 2026-05-06</strong>: Iterative revisions through user-driven Q&amp;A — added Compact tier, small-space floor coordinates, page-support kit, cutting-tools workflow, and ordering list.</li>
+<li><strong>2026-05-06 / 2026-05-08</strong>: Successive availability checks at B&amp;H caught a fabricated Daige Pro-Easel reference (no such product exists at the cited URL) and stale SKUs.</li>
+<li><strong>2026-05-08 — Codex review</strong>: A second-pass adversarial review by Codex caught additional issues: discontinued Aputure SKUs, wrong G9 II resolution claim (was 80MP, actually 100MP), backward gloves recommendation (cotton gloves are not recommended for paper handling per NARA/LoC), wrong DC-210N capacity (36 sheets, not 10), and several overstated claims (&ldquo;conservation-lab standard,&rdquo; &ldquo;set once forever,&rdquo; &ldquo;can&rsquo;t be fully corrected&rdquo;). All flagged issues have been addressed in this revision.</li>
+</ul>
+<p>The fact that an LLM-drafted document needed a full second-pass review <strong>before</strong> any equipment was ordered is the takeaway here: <strong>don&rsquo;t trust an LLM-generated buying list without independent verification</strong>. The version you&rsquo;re reading has been through that verification, but treat any specific SKU/price as confirmable-at-checkout, not as gospel.</p>
+</main>
+</body>
+</html>

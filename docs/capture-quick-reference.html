@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capture Quick Reference — Calendar Archive</title>
+<style>
+  @media print {
+    body { margin: 0.4in; font-size: 11pt; }
+    .no-print { display: none; }
+    h1 { font-size: 16pt; }
+    h2 { font-size: 13pt; }
+    table { page-break-inside: avoid; }
+  }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 7.5in;
+    margin: 0 auto;
+    padding: 0.5in;
+    color: #1a1a1a;
+    line-height: 1.45;
+  }
+  h1 {
+    font-size: 1.4em;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.3em;
+    margin-bottom: 0.6em;
+  }
+  h2 {
+    font-size: 1.1em;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    background: #f0f0f0;
+    padding: 0.25em 0.5em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+  }
+  th, td {
+    border: 1px solid #999;
+    padding: 0.3em 0.6em;
+    text-align: left;
+  }
+  th {
+    background: #e8e8e8;
+    font-weight: 600;
+    width: 40%;
+  }
+  td { font-weight: 400; }
+  .bold { font-weight: 700; }
+  ol, ul { margin: 0.3em 0; padding-left: 1.4em; }
+  li { margin-bottom: 0.25em; }
+  .step-num {
+    display: inline-block;
+    background: #333;
+    color: #fff;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1.5em;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-right: 0.3em;
+  }
+  .session-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4em;
+    margin-bottom: 0.4em;
+  }
+  .session-step p { margin: 0; }
+  .warn {
+    background: #fff3cd;
+    border-left: 4px solid #b8860b;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  .footer {
+    margin-top: 1.5em;
+    font-size: 0.8em;
+    color: #666;
+    border-top: 1px solid #ccc;
+    padding-top: 0.4em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Capture Quick Reference &mdash; Calendar Archive</h1>
+
+<h2>1. Lights (Godox SL100Bi)</h2>
+<table>
+  <tr><th>Color temperature</th><td class="bold">5000 K</td></tr>
+  <tr><th>Brightness</th><td>Whatever lands exposure at <strong>1/60 &ndash; 1/125 s</strong> (start ~30%, adjust)</td></tr>
+  <tr><th>Both panels</th><td>Equal output, 45&deg; from each side of the page</td></tr>
+</table>
+<div class="warn">Not 4000 K (too warm &mdash; red ink reads as brown). Not 5600 K (too cool for aged paper). 5000 K is the D50 graphic-arts standard.</div>
+
+<h2>2. Camera Settings (G9 II)</h2>
+<table>
+  <tr><th>Mode</th><td class="bold">M (Manual)</td></tr>
+  <tr><th>High Res Mode</th><td class="bold">On &mdash; Tripod (100 MP)</td></tr>
+  <tr><th>File format</th><td class="bold">RAW only</td></tr>
+  <tr><th>Aperture</th><td class="bold">f/5.6</td></tr>
+  <tr><th>ISO</th><td class="bold">200 (base)</td></tr>
+  <tr><th>Shutter speed</th><td>Dictated by lights (~1/60 &ndash; 1/125)</td></tr>
+  <tr><th>Shutter type</th><td class="bold">Electronic</td></tr>
+  <tr><th>Focus</th><td class="bold">Manual (MF)</td></tr>
+  <tr><th>White balance</th><td class="bold">Custom</td></tr>
+  <tr><th>IBIS</th><td class="bold">Off</td></tr>
+  <tr><th>Color profile</th><td class="bold">Standard</td></tr>
+</table>
+
+<h2>3. Saving Custom Mode C1 (on camera body, not Tether)</h2>
+<ol>
+  <li>Dial in all settings from the table above on the camera</li>
+  <li>Menu &rarr; Setup (wrench) &rarr; <strong>Setting</strong> &rarr; <strong>Save to Custom Mode</strong></li>
+  <li>Select <strong>C1</strong>, confirm</li>
+  <li>From now on, rotate the mode dial to C1 to restore everything instantly</li>
+</ol>
+<div class="warn">Lumix Tether cannot save Custom Modes &mdash; this is camera-body only. Tether controls settings and triggers the shutter during shooting.</div>
+
+<h2>4. ColorChecker Passport Photo 2 &mdash; Three Surfaces</h2>
+
+<table>
+  <tr>
+    <th>White panel<br><span style="font-weight:normal;font-size:0.9em">(inside, brighter side)</span></th>
+    <td>
+      <strong>Sets custom white balance.</strong><br>
+      Place on easel under both lights &rarr; press <strong>WB</strong> on camera &rarr;
+      select <strong>Custom White Balance</strong> &rarr; fill frame with white panel &rarr;
+      press shutter to sample. Camera locks neutral reference.
+    </td>
+  </tr>
+  <tr>
+    <th>Gray panel<br><span style="font-weight:normal;font-size:0.9em">(inside, darker side &mdash; 18% gray)</span></th>
+    <td>
+      <strong>Verifies exposure.</strong><br>
+      Fill frame with gray panel. Meter should read ~0 EV at f/5.6, ISO 200.
+      If not centered, adjust shutter speed until it is.<br>
+      <em>Also useful in Lightroom: eyedropper this patch to neutralize color cast.</em>
+    </td>
+  </tr>
+  <tr>
+    <th>Color patches<br><span style="font-weight:normal;font-size:0.9em">(flip case over &mdash; 24 colored squares)</span></th>
+    <td>
+      <strong>Archival color reference.</strong><br>
+      Shoot one frame per session. Used later in Lightroom with the
+      Calibrite ColorChecker Camera Calibration plugin to build a camera profile
+      that normalizes color across sessions months/years apart.<br>
+      <em>You don't need the plugin on day one &mdash; just shooting the frame preserves the reference.</em>
+    </td>
+  </tr>
+</table>
+
+<h2>5. Per-Session Sequence</h2>
+
+<div class="session-step"><span class="step-num">1</span><p>Set up rig on floor marks. Close blinds. Power lights to <strong>5000 K</strong>, equal output.</p></div>
+<div class="session-step"><span class="step-num">2</span><p>Turn mode dial to <strong>C1</strong>. Connect Lumix Tether. Confirm live view.</p></div>
+<div class="session-step"><span class="step-num">3</span><p><strong>White panel</strong> on easel &rarr; set custom WB on camera.</p></div>
+<div class="session-step"><span class="step-num">4</span><p><strong>Gray panel</strong> &rarr; verify meter reads ~0 EV. Adjust shutter speed if needed.</p></div>
+<div class="session-step"><span class="step-num">5</span><p>Flip case &rarr; <strong>color patches</strong> on easel &rarr; shoot one reference frame.</p></div>
+<div class="session-step"><span class="step-num">6</span><p><strong>Manual focus</strong>: zoom to 10&times; in live view on a page, adjust focus ring until ink is sharp. Set once for session.</p></div>
+<div class="session-step"><span class="step-num">7</span><p>Remove Passport. Load first page. Begin capture via Lumix Tether.</p></div>
+<div class="session-step"><span class="step-num">8</span><p>After last page: <strong>review frames before teardown</strong>. Reshoot anything soft or unevenly lit while the rig is still up.</p></div>
+
+<div class="footer">
+  Generated 2026-05-24 &mdash; companion to <code>docs/equipment-shortlist.md</code>.
+  Full camera settings rationale, setup geometry, and QA criteria are in that doc.
+</div>
+
+</body>
+</html>
