@@ -511,6 +511,8 @@ CREATE POLICY day_entities_worker_insert_ai_only ON day_entities
 
 Phase 1 ships with one default crop template (5×7 grid for standard wall calendars). Phase 2 adds an admin UI to refine templates per year.
 
+Production must not require manual per-day cropping. Manual adjustment is allowed only at the template/page level (or as rare exception repair); the normal path is full-page capture followed by automated template-based day-cell generation.
+
 ### 9.2 OCR / HTR Worker
 
 **What it does:** Pulls `ocr` jobs, sends day-cell images to a vendor, appends an `ocr_runs` row. The trigger then refreshes `calendar_days.latest_ocr_run_id` and `latest_confidence_score`.
@@ -687,14 +689,14 @@ SvelteKit `+server.ts` endpoints + form actions; no separate API service.
 
 | Phase | Scope | Definition of Done |
 |---|---|---|
-| **Phase 1 — Foundation** | DB (with all V4 tables, triggers, role grants), auth, page upload script, naive day-cell cropping (one default template), OCR worker (one vendor), basic correction UI three-pane editor + queue, basic day-detail viewer | Madonna can correct a day and a family member can view it |
-| **Phase 2 — UX & Search** | Crop-template admin UI (drag corners, save per year/month), full-text + tag + entity search, calendar nav, surrounding-day context sidebar, mobile viewer polish | Full archive is navigable and searchable on phone |
+| **Phase 1 — Foundation** | DB (with all V4 tables, triggers, role grants), auth, page upload script, automated day-cell cropping from one default template, OCR worker (one vendor), basic correction UI three-pane editor + queue, basic day-detail viewer | Madonna can correct a day and a family member can view it |
+| **Phase 2 — UX & Search** | Crop-template admin UI (drag corners, save per year/month; no per-day manual cropping workflow), full-text + tag + entity search, calendar nav, surrounding-day context sidebar, mobile viewer polish | Full archive is navigable and searchable on phone |
 | **Phase 3 — AI Enrichment** | LLM cleanup worker, entity extractor, alias resolution, person/place pages, AI tag suggestions in correction UI | Tags auto-suggested; entity pages exist |
 | **Phase 4 — Narrative & Polish** | Summary generator (year/decade/person), book view, Transkribus family-handwriting training, semantic search (pgvector), backup automation, restore drill | A grandchild can sit down and read 1968 as a book |
 
 ## 12. Open Questions
 
-- **Crop-template accuracy** — how many distinct templates will be needed in practice? Phase 1 ships one; Phase 2 builds the UI to add more.
+- **Crop-template accuracy** — how many distinct templates will be needed in practice? Phase 1 ships one; Phase 2 builds the UI to add more. The target is template/page-level correction only; routine hand-cropping of individual day cells is out of scope.
 - **Multiple writers** — are there multiple long-term writers across 60 years? If yes, OCR/LLM prompts may benefit from writer-specific training in Phase 4 (Transkribus has a per-writer model concept).
 - **iPad generation** — affects whether Apple Pencil handwriting input is reliable in the corrected-text field (faster than tap-typing for some corrections).
 - **Family viewer accounts** — individual accounts per family member, or a shared "family" account? Affects audit log granularity and whether "last viewed by" features make sense.
