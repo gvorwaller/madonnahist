@@ -62,6 +62,9 @@ ocr-cache/
 *.pgdump
 *.sql.gz
 
+# OCR eval output (results.json, report.html — regenerated, not committed)
+output/
+
 # CCC preflight outputs (PG dumps, prod env/configs, Spaces inventory)
 data/backup/
 .sidecar/
