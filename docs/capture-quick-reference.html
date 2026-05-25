@@ -102,12 +102,12 @@
 
 <h2>2. Camera Settings (G9 II)</h2>
 <table>
-  <tr><th>Mode</th><td class="bold">M (Manual)</td></tr>
+  <tr><th>Mode</th><td class="bold">A (Aperture Priority)</td></tr>
   <tr><th>High Res Mode</th><td class="bold">On &mdash; Tripod (100 MP)</td></tr>
   <tr><th>File format</th><td class="bold">RAW only</td></tr>
   <tr><th>Aperture</th><td class="bold">f/5.6</td></tr>
   <tr><th>ISO</th><td class="bold">200 (base)</td></tr>
-  <tr><th>Shutter speed</th><td>Dictated by lights (~1/60 &ndash; 1/125)</td></tr>
+  <tr><th>Shutter speed</th><td>Auto (should land ~1/60 &ndash; 1/125 with correct light brightness)</td></tr>
   <tr><th>Shutter type</th><td class="bold">Electronic</td></tr>
   <tr><th>Focus</th><td class="bold">Manual (MF)</td></tr>
   <tr><th>White balance</th><td class="bold">Custom</td></tr>
@@ -131,17 +131,28 @@
     <th>White panel<br><span style="font-weight:normal;font-size:0.9em">(inside, brighter side)</span></th>
     <td>
       <strong>Sets custom white balance.</strong><br>
-      Place on easel under both lights &rarr; press <strong>WB</strong> on camera &rarr;
-      select <strong>Custom White Balance</strong> &rarr; fill frame with white panel &rarr;
-      press shutter to sample. Camera locks neutral reference.
+      Place flat on easel, centered under both lights (same position as a calendar page).
+      <strong>Do not move the camera</strong> &mdash; the panel does not need to fill the frame,
+      only the center sampling rectangle.<br>
+      Menu &rarr; Photo/Video &rarr; White Balance &rarr; select a custom slot (1/2/3/4) &rarr;
+      <strong>Set</strong> &rarr; confirm panel is within the center crosshair &rarr;
+      press shutter to sample. Camera locks neutral reference.<br>
+      <em>Tether: can switch to a saved custom WB slot but cannot perform the initial
+      measurement &mdash; set once on camera body.</em>
     </td>
   </tr>
   <tr>
     <th>Gray panel<br><span style="font-weight:normal;font-size:0.9em">(inside, darker side &mdash; 18% gray)</span></th>
     <td>
       <strong>Verifies exposure.</strong><br>
-      Fill frame with gray panel. Meter should read ~0 EV at f/5.6, ISO 200.
-      If not centered, adjust shutter speed until it is.<br>
+      Place flat on easel, centered (replacing white panel).
+      <strong>Do not move the camera</strong> &mdash; the center-weighted meter reads off the
+      gray panel as long as it is in the metering area.
+      In aperture priority (f/5.6, ISO 200), check that the auto-selected
+      shutter speed falls in the <strong>1/60 &ndash; 1/125 s</strong> range.
+      If too slow or too fast, adjust <strong>light brightness</strong> until it does.<br>
+      <em>Tether: meter readout visible in Tether &mdash;
+      this check can be done entirely from the Mac.</em><br>
       <em>Also useful in Lightroom: eyedropper this patch to neutralize color cast.</em>
     </td>
   </tr>
@@ -161,15 +172,23 @@
 
 <div class="session-step"><span class="step-num">1</span><p>Set up rig on floor marks. Close blinds. Power lights to <strong>5000 K</strong>, equal output.</p></div>
 <div class="session-step"><span class="step-num">2</span><p>Turn mode dial to <strong>C1</strong>. Connect Lumix Tether. Confirm live view.</p></div>
-<div class="session-step"><span class="step-num">3</span><p><strong>White panel</strong> on easel &rarr; set custom WB on camera.</p></div>
-<div class="session-step"><span class="step-num">4</span><p><strong>Gray panel</strong> &rarr; verify meter reads ~0 EV. Adjust shutter speed if needed.</p></div>
+<div class="session-step"><span class="step-num">3</span><p><strong>White panel</strong> flat on easel, centered &rarr; set custom WB on camera body (do not move camera; panel fills center sampling area from tripod position).</p></div>
+<div class="session-step"><span class="step-num">4</span><p><strong>Gray panel</strong> flat on easel, centered &rarr; check auto shutter speed in live view (or Tether) is 1/60&ndash;1/125 s. Adjust light brightness if outside range.</p></div>
 <div class="session-step"><span class="step-num">5</span><p>Flip case &rarr; <strong>color patches</strong> on easel &rarr; shoot one reference frame.</p></div>
 <div class="session-step"><span class="step-num">6</span><p><strong>Manual focus</strong>: zoom to 10&times; in live view on a page, adjust focus ring until ink is sharp. Set once for session.</p></div>
 <div class="session-step"><span class="step-num">7</span><p>Remove Passport. Load first page. Begin capture via Lumix Tether.</p></div>
 <div class="session-step"><span class="step-num">8</span><p>After last page: <strong>review frames before teardown</strong>. Reshoot anything soft or unevenly lit while the rig is still up.</p></div>
 
+<h2>6. Setup Notes</h2>
+<ul>
+  <li>Easel is <strong>10&Prime;</strong> in from the front edge of the table.</li>
+  <li>Camera tripod right rear leg: <strong>44&Prime;</strong> floor to hinge.</li>
+  <li>Light stands: <strong>52&Prime;</strong> vertical, floor to light attachment point.</li>
+  <li>Lights brightness at <strong>14%</strong> yields <strong>1/60 s</strong> exposure (at f/5.6, ISO 200).</li>
+</ul>
+
 <div class="footer">
-  Generated 2026-05-24 &mdash; companion to <code>docs/equipment-shortlist.md</code>.
+  Generated 2026-05-24, updated 2026-05-25 &mdash; companion to <code>docs/equipment-shortlist.md</code>.
   Full camera settings rationale, setup geometry, and QA criteria are in that doc.
 </div>
 
