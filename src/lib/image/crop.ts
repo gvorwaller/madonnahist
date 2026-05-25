@@ -15,8 +15,8 @@ export interface CropResult {
 }
 
 async function toBuffer(image: Buffer | string): Promise<Buffer> {
-	if (Buffer.isBuffer(image)) return image;
-	return readFile(image);
+	const raw = Buffer.isBuffer(image) ? image : await readFile(image);
+	return sharp(raw).rotate().toBuffer();
 }
 
 export async function cropGrid(
