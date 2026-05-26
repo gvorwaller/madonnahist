@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lightroom Classic Quick Reference — Calendar Archive</title>
+<style>
+  @media print {
+    body { margin: 0.4in; font-size: 11pt; }
+    .no-print { display: none; }
+    h1 { font-size: 16pt; }
+    h2 { font-size: 13pt; }
+    table { page-break-inside: avoid; }
+  }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 7.5in;
+    margin: 0 auto;
+    padding: 0.5in;
+    color: #1a1a1a;
+    line-height: 1.45;
+  }
+  h1 {
+    font-size: 1.4em;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.3em;
+    margin-bottom: 0.6em;
+  }
+  h2 {
+    font-size: 1.1em;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    background: #f0f0f0;
+    padding: 0.25em 0.5em;
+  }
+  .step-num {
+    display: inline-block;
+    background: #333;
+    color: #fff;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1.5em;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-right: 0.3em;
+  }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4em;
+    margin-bottom: 0.5em;
+  }
+  .step p { margin: 0; }
+  kbd {
+    display: inline-block;
+    background: #e8e8e8;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-family: inherit;
+    font-size: 0.9em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+  }
+  th, td {
+    border: 1px solid #999;
+    padding: 0.3em 0.6em;
+    text-align: left;
+  }
+  th {
+    background: #e8e8e8;
+    font-weight: 600;
+    width: 35%;
+  }
+  .warn {
+    background: #fff3cd;
+    border-left: 4px solid #b8860b;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  .dont {
+    background: #fde8e8;
+    border-left: 4px solid #c00;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  ul { margin: 0.3em 0; padding-left: 1.4em; }
+  li { margin-bottom: 0.25em; }
+  .footer {
+    margin-top: 1.5em;
+    font-size: 0.8em;
+    color: #666;
+    border-top: 1px solid #ccc;
+    padding-top: 0.4em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Lightroom Classic Quick Reference &mdash; Calendar Archive</h1>
+
+<h2>Why Classic (not CC)</h2>
+<ul>
+  <li><strong>Local-first</strong> &mdash; files stay on disk, no Adobe Cloud upload. Hundreds of calendar pages don&rsquo;t need to sync.</li>
+  <li><strong>Watched folder / tethered import</strong> &mdash; Classic auto-imports from <code>~/Lumix Tether/</code> as captures land.</li>
+  <li><strong>ColorChecker plugin</strong> &mdash; Calibrite Camera Calibration only works in Classic.</li>
+  <li><strong>Export control</strong> &mdash; file naming templates, output folder targeting, presets.</li>
+</ul>
+
+<h2>1. Import</h2>
+
+<div class="step"><span class="step-num">1</span><p><strong>File &rarr; Import</strong> (or <kbd>Cmd+Shift+I</kbd>).</p></div>
+<div class="step"><span class="step-num">2</span><p>Left panel: navigate to <code>~/Lumix Tether/</code> &rarr; select the session date folder.</p></div>
+<div class="step"><span class="step-num">3</span><p>Top center: select <strong>Add</strong> (not Copy or Move). This catalogs the RAW files in place.</p></div>
+<div class="step"><span class="step-num">4</span><p>Verify photos are checked, then click <strong>Import</strong> (bottom right).</p></div>
+
+<div class="warn">Always use <strong>Add</strong>. The RAW files stay in <code>~/Lumix Tether/</code>. LR Classic just references them.</div>
+
+<h2>2. Develop &mdash; Minimal Edits</h2>
+
+<div class="step"><span class="step-num">1</span><p>Switch to the <strong>Develop</strong> module (top right, or press <kbd>D</kbd>). Select first photo.</p></div>
+<div class="step"><span class="step-num">2</span><p><strong>White balance check</strong> &mdash; Basic panel, top right. Should be close from in-camera custom WB. If you have a gray panel shot: click the <strong>WB Eyedropper</strong> (dropper icon), then click on the 18% gray patch. LR neutralizes any remaining cast.</p></div>
+<div class="step"><span class="step-num">3</span><p><strong>Lens Corrections</strong> &mdash; scroll down right panels, check <strong>Enable Profile Corrections</strong>. LR should auto-detect the Olympus 60mm.</p></div>
+<div class="step"><span class="step-num">4</span><p><strong>That&rsquo;s it.</strong> Leave everything else at defaults.</p></div>
+
+<div class="dont"><strong>Do NOT adjust:</strong> Contrast, Clarity, Sharpening, Noise Reduction, Crop, Black &amp; White. Clean, neutral images produce the best OCR results.</div>
+
+<h2>3. Sync Settings Across Photos</h2>
+
+<div class="step"><span class="step-num">1</span><p>In Develop module, select all photos in the filmstrip (bottom). <kbd>Cmd+A</kbd> to select all.</p></div>
+<div class="step"><span class="step-num">2</span><p>Click <strong>Sync...</strong> (bottom left of Develop module).</p></div>
+<div class="step"><span class="step-num">3</span><p>Check the settings you changed (White Balance, Lens Corrections). Click <strong>Synchronize</strong>.</p></div>
+
+<div class="warn">Sync applies the <em>first selected photo&rsquo;s</em> settings to all others. Make sure the photo with your edits is the &ldquo;most selected&rdquo; (brighter highlight in filmstrip).</div>
+
+<h2>4. Export</h2>
+
+<div class="step"><span class="step-num">1</span><p>Switch to <strong>Library</strong> module (<kbd>G</kbd>). Select the photos to export.</p></div>
+<div class="step"><span class="step-num">2</span><p><strong>File &rarr; Export</strong> (or <kbd>Cmd+Shift+E</kbd>).</p></div>
+<div class="step"><span class="step-num">3</span><p>Set the export options per the table below. Click <strong>Export</strong>.</p></div>
+
+<table>
+  <tr><th>Export Location</th><td>Choose Folder &rarr; <code>madonnahist/test-data/samples/</code></td></tr>
+  <tr><th>File Naming</th><td>Rename To &rarr; Custom Name &rarr; type year-month (e.g. <code>1968-01</code>)</td></tr>
+  <tr><th>File Settings</th><td><strong>JPEG</strong>, Quality <strong>95</strong></td></tr>
+  <tr><th>Image Sizing</th><td><strong>Do not resize</strong> (leave &ldquo;Resize to Fit&rdquo; unchecked)</td></tr>
+  <tr><th>Output Sharpening</th><td><strong>Off</strong> (uncheck)</td></tr>
+  <tr><th>Metadata</th><td>Include &rarr; Copyright &amp; Contact Info Only (minimal)</td></tr>
+</table>
+
+<div class="warn">Export one photo at a time if they are different calendar months, so each gets the correct <code>YYYY-MM</code> filename.</div>
+
+<h2>5. Keyboard Shortcuts</h2>
+
+<table>
+  <tr><th><kbd>G</kbd></th><td>Library &mdash; Grid view</td></tr>
+  <tr><th><kbd>D</kbd></th><td>Develop module</td></tr>
+  <tr><th><kbd>E</kbd></th><td>Library &mdash; Loupe (single photo) view</td></tr>
+  <tr><th><kbd>Cmd+A</kbd></th><td>Select all photos</td></tr>
+  <tr><th><kbd>Cmd+Shift+I</kbd></th><td>Import</td></tr>
+  <tr><th><kbd>Cmd+Shift+E</kbd></th><td>Export</td></tr>
+  <tr><th><kbd>W</kbd></th><td>White Balance eyedropper (in Develop)</td></tr>
+  <tr><th><kbd>\</kbd></th><td>Toggle before/after view (in Develop)</td></tr>
+  <tr><th><kbd>Cmd+Z</kbd></th><td>Undo</td></tr>
+</table>
+
+<div class="footer">
+  Generated 2026-05-25 &mdash; companion to <code>docs/capture-quick-reference.html</code>.
+</div>
+
+</body>
+</html>
