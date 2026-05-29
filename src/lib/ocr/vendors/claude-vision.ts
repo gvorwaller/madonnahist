@@ -25,7 +25,7 @@ async function constrainImage(buf: Buffer): Promise<Buffer> {
 }
 
 export function createClaudeVisionAdapter(config: ClaudeVisionConfig): VendorAdapter {
-	const model = config.model ?? 'claude-sonnet-4-20250514';
+	const model = config.model ?? 'claude-sonnet-4-6';
 	const maxTokens = config.maxTokens ?? 4096;
 	const client = new Anthropic({ apiKey: config.apiKey });
 

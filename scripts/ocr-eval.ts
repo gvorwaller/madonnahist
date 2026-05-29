@@ -48,7 +48,8 @@ const { values } = parseArgs({
 		models: { type: 'string', short: 'm' },
 		gold: { type: 'string', short: 'g' },
 		grid: { type: 'string', default: '5x7' },
-		output: { type: 'string', short: 'o', default: 'output' }
+		output: { type: 'string', short: 'o', default: 'output' },
+		timeout: { type: 'string', short: 't', default: '1800' }
 	},
 	strict: true
 });
@@ -60,6 +61,7 @@ if (!values.input || !values.models) {
 	console.error('  --gold    Optional path to gold.json for reference comparison');
 	console.error('  --grid    Grid dimensions (default: 5x7)');
 	console.error('  --output  Output directory (default: output)');
+	console.error('  --timeout Per-call timeout in seconds (default: 1800)');
 	process.exit(1);
 }
 
@@ -67,8 +69,26 @@ const inputDir = resolve(values.input);
 const outputDir = resolve(values.output);
 const modelNames = values.models.split(',').map((s) => s.trim());
 const [gridRows, gridCols] = values.grid!.split('x').map(Number);
+const timeoutSec = Number(values.timeout);
 
 // -- Adapter factory --
+
+async function warmOllamaModel(model: string, baseUrl = 'http://127.0.0.1:11434'): Promise<void> {
+	const url = `${baseUrl.replace(/\/$/, '')}/api/generate`;
+	console.log(`  Warming up ${model} (loading into memory)...`);
+	const start = performance.now();
+	const res = await fetch(url, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ model, prompt: '', keep_alive: '30m' })
+	});
+	if (!res.ok) {
+		console.warn(`  Warmup returned ${res.status} — proceeding anyway`);
+	} else {
+		await res.text();
+	}
+	console.log(`  Model ready (${Math.round(performance.now() - start)}ms)`);
+}
 
 async function buildAdapters(names: string[]): Promise<VendorAdapter[]> {
 	const adapters: VendorAdapter[] = [];
@@ -87,7 +107,8 @@ async function buildAdapters(names: string[]): Promise<VendorAdapter[]> {
 				console.error(`  Model "${name}" not found in Ollama. Run: ollama pull ${name}`);
 				process.exit(1);
 			}
-			adapters.push(createOllamaAdapter({ model: name }));
+			await warmOllamaModel(name);
+			adapters.push(createOllamaAdapter({ model: name, timeoutMs: timeoutSec * 1000 }));
 		}
 	}
 
@@ -352,6 +373,7 @@ async function main() {
 	console.log(`  Models: ${modelNames.join(', ')}`);
 	console.log(`  Grid:   ${gridRows}x${gridCols}`);
 	console.log(`  Output: ${outputDir}`);
+	console.log(`  Timeout: ${timeoutSec}s per call`);
 	if (values.gold) console.log(`  Gold:   ${values.gold}`);
 	console.log();
 
@@ -360,7 +382,7 @@ async function main() {
 		console.error(`No images found in ${inputDir}`);
 		process.exit(1);
 	}
-	console.log(`Found ${images.length} image(s): ${images.map(basename).join(', ')}`);
+	console.log(`Found ${images.length} image(s): ${images.map((f) => basename(f)).join(', ')}`);
 
 	console.log('\nBuilding adapters...');
 	const adapters = await buildAdapters(modelNames);
@@ -401,39 +423,27 @@ async function main() {
 			if (isOllama) {
 				for (const [cap, buf] of [['page@2000', page2000], ['page@4000', page4000]] as const) {
 					console.log(`  [${adapter.vendorName}] ${cap}...`);
-					try {
-						const input: TranscribeInput = { image: buf, mimeType: 'image/jpeg', sourceImagePath: imagePath };
-						const result = await adapter.transcribe(input, { mode: 'cell', prompt: PAGE_PROMPT });
-						allResults.push({ page: imagePath, condition: cap, model: adapter.vendorName, result });
-						console.log(`    ${result.latencyMs}ms, ${result.text.length} chars`);
-					} catch (err) {
-						console.error(`    ERROR: ${err}`);
-					}
+					const input: TranscribeInput = { image: buf, mimeType: 'image/jpeg', sourceImagePath: imagePath };
+					const result = await adapter.transcribe(input, { mode: 'cell', prompt: PAGE_PROMPT });
+					allResults.push({ page: imagePath, condition: cap, model: adapter.vendorName, result });
+					console.log(`    ${result.latencyMs}ms, ${result.text.length} chars`);
 				}
 			} else {
 				console.log(`  [${adapter.vendorName}] page@2000...`);
-				try {
-					const input: TranscribeInput = { image: page2000, mimeType: 'image/jpeg', sourceImagePath: imagePath };
-					const result = await adapter.transcribe(input, { mode: 'cell', prompt: PAGE_PROMPT });
-					allResults.push({ page: imagePath, condition: 'page@2000', model: adapter.vendorName, result });
-					console.log(`    ${result.latencyMs}ms, ${result.text.length} chars`);
-				} catch (err) {
-					console.error(`    ERROR: ${err}`);
-				}
+				const input: TranscribeInput = { image: page2000, mimeType: 'image/jpeg', sourceImagePath: imagePath };
+				const result = await adapter.transcribe(input, { mode: 'cell', prompt: PAGE_PROMPT });
+				allResults.push({ page: imagePath, condition: 'page@2000', model: adapter.vendorName, result });
+				console.log(`    ${result.latencyMs}ms, ${result.text.length} chars`);
 			}
 
 			// Cell-mode: each grid cell
 			for (const cell of cells) {
 				const cellLabel = `r${cell.row}c${cell.col}`;
 				process.stdout.write(`  [${adapter.vendorName}] ${cellLabel}...`);
-				try {
-					const input: TranscribeInput = { image: cell.buffer, mimeType: 'image/jpeg', sourceImagePath: `${imagePath}#${cellLabel}` };
-					const result = await adapter.transcribe(input);
-					allResults.push({ page: imagePath, condition: 'grid-cell', cellLabel, model: adapter.vendorName, result });
-					console.log(` ${result.latencyMs}ms`);
-				} catch (err) {
-					console.log(` ERROR: ${err}`);
-				}
+				const input: TranscribeInput = { image: cell.buffer, mimeType: 'image/jpeg', sourceImagePath: `${imagePath}#${cellLabel}` };
+				const result = await adapter.transcribe(input);
+				allResults.push({ page: imagePath, condition: 'grid-cell', cellLabel, model: adapter.vendorName, result });
+				console.log(` ${result.latencyMs}ms`);
 			}
 		}
 	}
