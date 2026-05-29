@@ -6,6 +6,8 @@
 
 > **UI**: see `docs/ui-mockups-V2.md` for the iPad correction surface and the family viewer mockups (information architecture, accessibility floor, palette/typography baseline).
 
+> **OCR pipeline**: see `docs/V4-addendum-A-ocr-pipeline.md` for the three-stage OCR pipeline (Google Vision → LLM cleanup → human correction), the correction lexicon feedback loop, the five-field editor spec, and notation key. Supersedes the OCR vendor strategy in §§ 5, 9.2.
+
 ## 1. Purpose & Scope
 
 A private, family-access web app that digitizes ~60 years of handwritten family calendar entries into a structured, searchable, and explorable archive of daily life.
@@ -94,7 +96,7 @@ Sessions are cookie-based, `httpOnly`, `secure`, `SameSite=Strict`. No public re
 | Auth | Cookie sessions + argon2id | Existing pattern (matches giftlist) |
 | Image storage | **DigitalOcean Spaces** | Settled |
 | Image processing | Sharp (Node) | Thumbnails, day-cell crops |
-| OCR vendors | **Local VLM via Ollama** default (olmOCR-2-7B, Qwen3-VL); Transkribus fallback for low-confidence pages; Google Vision/Azure as additional fallbacks | Pluggable via vendor adapter interface; local VLM runs on Apple Silicon (~8GB unified memory), $0 cost, full data privacy |
+| OCR vendors | **Google Cloud Vision** primary (`DOCUMENT_TEXT_DETECTION`); see Addendum A for eval results and three-stage pipeline | ~200ms/cell, free tier 1,000/month, pluggable via vendor adapter interface. Supersedes local-VLM strategy per Addendum A § A.1 |
 | LLM | Anthropic Claude (or OpenAI) | Cleanup, entity extraction, summaries — pluggable |
 | Reverse proxy | nginx | Settled |
 | Edge | Cloudflare | TLS, cache, DDoS |
@@ -515,21 +517,15 @@ Production must not require manual per-day cropping. Manual adjustment is allowe
 
 ### 9.2 OCR / HTR Worker
 
-**What it does:** Pulls `ocr` jobs, sends day-cell images to a vendor, appends an `ocr_runs` row. The trigger then refreshes `calendar_days.latest_ocr_run_id` and `latest_confidence_score`.
+> **See `docs/V4-addendum-A-ocr-pipeline.md`** for the full three-stage pipeline spec, vendor eval results, and correction lexicon design. This section summarizes; the addendum is authoritative.
+
+**What it does:** Pulls `ocr` jobs, sends day-cell images to Google Vision, appends an `ocr_runs` row. The trigger then refreshes `calendar_days.latest_ocr_run_id` and `latest_confidence_score`.
 
 **Where it lives:** `workers/ocr-worker.mjs` — long-running PM2 process, idempotent.
 
-**Vendor selection:** `src/lib/ocr/vendors/{local-ollama,transkribus,google,azure}.ts` implements `transcribe(imageUrl) -> { text, confidence, vendorMeta }`. Default vendor in `app_state.default_ocr_vendor`; per-job override via `payload.vendor`.
+**Vendor selection:** `src/lib/ocr/vendors/{google-vision,claude-vision}.ts` implements the `VendorAdapter` interface. Default vendor: Google Cloud Vision (`DOCUMENT_TEXT_DETECTION`). Per-job override via `payload.vendor`.
 
-**Local VLM option (recommended default):** The `local-ollama` adapter runs vision-language models locally via Ollama on Apple Silicon. Primary models are **olmOCR-2-7B** (fine-tuned from Qwen2.5-VL, 82.4 on olmOCR-bench, trained on 270K pages including 20K handwritten/historical documents) and **Qwen3-VL**. VLMs combine visual understanding with contextual reasoning — when a character is ambiguous (e.g., 'a' vs 'o'), they consider surrounding words and document type rather than classifying glyphs in isolation. Benchmarks show 80–85% accuracy on legible handwriting vs ~64% for traditional OCR engines (cursive is 10–15% lower than print). Cost is $0 per page and all data stays on-premises — no family content leaves the local network.
-
-**Recommended strategy:** Use the local VLM as the default OCR vendor. When a local VLM run produces a `confidence_score` below the `app_state.flag_confidence_threshold` (default 0.4), automatically enqueue a Transkribus re-run for that page. This gives the best of both worlds: free, private processing for the majority of pages, with Transkribus's trainable handwriting models as a safety net for difficult ones.
-
-**Cost comparison (for ~720 calendar pages):**
-- Local VLM via Ollama: **$0** (runs on existing hardware)
-- Transkribus: **~€108** (at €0.15/page, or less with credit packs)
-- Google Vision: **free** at this volume (1,000 pages/month free tier)
-- Azure Document Intelligence: **free** at this volume (500 pages/month free tier)
+**Primary vendor — Google Cloud Vision:** ~200ms per cell, free tier 1,000 requests/month, word-level confidence scores. Eval showed 61–69% word confidence on family handwriting — comparable to other vendors tested but faster and free. See Addendum A § A.1 for full eval results.
 
 **Re-run safety:** OCR reruns create new `ocr_runs` rows. The trigger updates `latest_ocr_run_id` to the new row. Older runs are preserved for audit; `corrected_text` is untouchable.
 
@@ -540,11 +536,13 @@ Production must not require manual per-day cropping. Manual adjustment is allowe
 
 ### 9.3 LLM Cleanup Worker
 
-**What it does:** Takes the latest OCR run plus context (surrounding-day already-corrected entries from the same year, project-level prompt) and appends a cleaned draft to `llm_draft_runs`.
+**What it does:** Takes the latest OCR run plus the **correction lexicon**, **notation key**, and surrounding-day context, then appends a cleaned draft to `llm_draft_runs`. See Addendum A §§ A.2–A.3 for full prompt design and lexicon population mechanics.
 
 **Where it lives:** `workers/llm-cleanup-worker.mjs`.
 
 **Why this structure:** The UI shows the newest draft by default (via `latest_llm_draft_run_id`), but older drafts remain in `llm_draft_runs` for audit, prompt-version A/B comparison, and reprocessing if the prompt improves.
+
+**Correction lexicon feedback:** The `correction_lexicon` table accumulates word-level substitution pairs from Madonna's accepted corrections (e.g., "Googlen" → "Gaylon"). The cleanup prompt includes the top-frequency entries so the LLM can deterministically fix known garbles. See Addendum A § A.3.
 
 **Cannot write `corrected_text`.** The DB role enforces this.
 
@@ -568,7 +566,7 @@ Production must not require manual per-day cropping. Manual adjustment is allowe
 
 ### 9.6 Correction UI (Madonna's iPad)
 
-**What it does:** Three-pane editor for human correction of OCR drafts. iPad-first, large touch targets, queue-based session workflow. See `docs/ui-mockups-V2.md` § A.
+**What it does:** Five-field editor for human correction of OCR drafts. iPad-first, large touch targets, queue-based session workflow. See `docs/ui-mockups-V2.md` § A for layout mockups; see Addendum A § A.2 (Stage 3) for the five-field spec (image, machine draft, corrected text, expanded text, day narrative).
 
 **Where it lives:** SvelteKit routes under `/correct/*`:
 - `/correct` — session home (queue + resume)
@@ -689,7 +687,7 @@ SvelteKit `+server.ts` endpoints + form actions; no separate API service.
 
 | Phase | Scope | Definition of Done |
 |---|---|---|
-| **Phase 1 — Foundation** | DB (with all V4 tables, triggers, role grants), auth, page upload script, automated day-cell cropping from one default template, OCR worker (one vendor), basic correction UI three-pane editor + queue, basic day-detail viewer | Madonna can correct a day and a family member can view it |
+| **Phase 1 — Foundation** | DB (with all V4 tables + Addendum A tables: `correction_lexicon`, `expanded_text`/`day_narrative` columns), auth, page upload script, automated day-cell cropping from one default template, OCR worker (Google Vision), five-field correction UI + queue, basic day-detail viewer | Madonna can correct a day and a family member can view it |
 | **Phase 2 — UX & Search** | Crop-template admin UI (drag corners, save per year/month; no per-day manual cropping workflow), full-text + tag + entity search, calendar nav, surrounding-day context sidebar, mobile viewer polish | Full archive is navigable and searchable on phone |
 | **Phase 3 — AI Enrichment** | LLM cleanup worker, entity extractor, alias resolution, person/place pages, AI tag suggestions in correction UI | Tags auto-suggested; entity pages exist |
 | **Phase 4 — Narrative & Polish** | Summary generator (year/decade/person), book view, Transkribus family-handwriting training, semantic search (pgvector), backup automation, restore drill | A grandchild can sit down and read 1968 as a book |
