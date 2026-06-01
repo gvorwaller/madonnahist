@@ -112,7 +112,17 @@
 	}
 
 	let replacing = $state<Record<number, boolean>>({});
+	let lightboxSrc = $state<string | null>(null);
+
+	function openLightbox(session: string, filename: string) {
+		lightboxSrc = previewUrl(session, filename, 2400);
+	}
+	function closeLightbox() {
+		lightboxSrc = null;
+	}
 </script>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && lightboxSrc) closeLightbox(); }} />
 
 <div class="capture-page">
 	<header>
@@ -192,7 +202,9 @@
 					<input type="checkbox" bind:checked={checked[r.id]} disabled={r.status === 'reshoot' || (dup !== null && dup.hasCorrections)} />
 				</label>
 
-				<img src={previewUrl(r.tether_session, r.camera_filename)} alt={r.camera_filename} loading="lazy" />
+				<button type="button" class="thumb-btn" onclick={() => openLightbox(r.tether_session, r.camera_filename)}>
+					<img src={previewUrl(r.tether_session, r.camera_filename)} alt={r.camera_filename} loading="lazy" />
+				</button>
 
 				<div class="card-body">
 					<div class="filename">{r.camera_filename}</div>
@@ -314,6 +326,14 @@
 	{/if}
 </div>
 
+{#if lightboxSrc}
+	<button type="button" class="lightbox" onclick={closeLightbox} aria-label="Close lightbox">
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
+		<img src={lightboxSrc} alt="Full-size preview" onclick={(e) => e.stopPropagation()} />
+		<span class="lightbox-close" aria-hidden="true">X</span>
+	</button>
+{/if}
+
 <style>
 	.capture-page {
 		max-width: 1280px;
@@ -357,6 +377,9 @@
 	.card.reshoot { border-color: #b8860b; background: #fff8e6; }
 	.card.errored { border-color: #c00; }
 	.card.duplicate { border-color: #b8860b; }
+	.thumb-btn {
+		display: block; width: 100%; padding: 0; border: none; background: none; cursor: zoom-in;
+	}
 	.card img {
 		width: 100%; height: 180px; object-fit: cover; background: #eee; display: block;
 	}
@@ -403,4 +426,21 @@
 	.completed-list li { padding: 0.15rem 0; }
 	.mono { font-family: ui-monospace, monospace; }
 	.muted { color: #888; }
+
+	.lightbox {
+		position: fixed; inset: 0; z-index: 1000;
+		background: rgba(0, 0, 0, 0.85);
+		display: flex; align-items: center; justify-content: center;
+		cursor: zoom-out; border: none; padding: 0;
+	}
+	.lightbox img {
+		max-width: 95vw; max-height: 95vh; height: auto; object-fit: contain; cursor: default;
+		border-radius: 4px; box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+	}
+	.lightbox-close {
+		position: absolute; top: 12px; right: 16px;
+		background: rgba(255, 255, 255, 0.15); color: #fff;
+		font-size: 1.2rem; font-weight: 700; padding: 0.3rem 0.7rem;
+		border-radius: 4px;
+	}
 </style>
