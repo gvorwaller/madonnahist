@@ -28,6 +28,28 @@ export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
 	return getPool().query<T>(text, params as never);
 }
 
+/**
+ * Run `fn` inside a single transaction on a dedicated pooled client.
+ * Commits on success, rolls back and rethrows on any error, always releasing
+ * the client. Use for multi-statement atomic writes (e.g. ingest).
+ */
+export async function withTransaction<T>(
+	fn: (client: pg.PoolClient) => Promise<T>
+): Promise<T> {
+	const client = await getPool().connect();
+	try {
+		await client.query('BEGIN');
+		const result = await fn(client);
+		await client.query('COMMIT');
+		return result;
+	} catch (err) {
+		try { await client.query('ROLLBACK'); } catch { /* ROLLBACK failure is secondary */ }
+		throw err;
+	} finally {
+		client.release();
+	}
+}
+
 export async function dbHealthCheck(): Promise<boolean> {
 	try {
 		const r = await query<{ one: number }>('SELECT 1 AS one');
