@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capture Intake Workflow — Calendar Archive</title>
+<style>
+  @media print {
+    body { margin: 0.4in; font-size: 11pt; }
+    .no-print { display: none; }
+    h1 { font-size: 16pt; }
+    h2 { font-size: 13pt; }
+    table { page-break-inside: avoid; }
+  }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 7.5in;
+    margin: 0 auto;
+    padding: 0.5in;
+    color: #1a1a1a;
+    line-height: 1.45;
+  }
+  h1 {
+    font-size: 1.4em;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.3em;
+    margin-bottom: 0.6em;
+  }
+  h2 {
+    font-size: 1.1em;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    background: #f0f0f0;
+    padding: 0.25em 0.5em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+  }
+  th, td {
+    border: 1px solid #999;
+    padding: 0.3em 0.6em;
+    text-align: left;
+  }
+  th {
+    background: #e8e8e8;
+    font-weight: 600;
+    width: 40%;
+  }
+  td { font-weight: 400; }
+  .bold { font-weight: 700; }
+  ol, ul { margin: 0.3em 0; padding-left: 1.4em; }
+  li { margin-bottom: 0.25em; }
+  .step-num {
+    display: inline-block;
+    background: #333;
+    color: #fff;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1.5em;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-right: 0.3em;
+  }
+  .session-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4em;
+    margin-bottom: 0.5em;
+  }
+  .session-step div { margin: 0; }
+  .warn {
+    background: #fff3cd;
+    border-left: 4px solid #b8860b;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  .info {
+    background: #e8f0fe;
+    border-left: 4px solid #1a73e8;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  code {
+    background: #f0f0f0;
+    padding: 0.1em 0.3em;
+    border-radius: 3px;
+    font-size: 0.92em;
+  }
+  .url {
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 1.05em;
+    color: #1a73e8;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: 700;
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    border: 1px solid;
+    vertical-align: middle;
+  }
+  .badge-high { background: #e8f5e9; color: #14431a; border-color: #2e7d32; }
+  .badge-med { background: #fff4e0; color: #6b3b00; border-color: #b8860b; }
+  .badge-low { background: #f0f0f0; color: #444; border-color: #999; }
+  .badge-good { background: #e8f5e9; color: #14431a; border-color: #2e7d32; }
+  .badge-reshoot { background: #fde8e8; color: #7a0000; border-color: #c00; }
+  .footer {
+    margin-top: 1.5em;
+    font-size: 0.8em;
+    color: #666;
+    border-top: 1px solid #ccc;
+    padding-top: 0.4em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Capture Intake Workflow &mdash; Calendar Archive</h1>
+
+<div class="info">
+  <strong>This runs on your local Mac, not the droplet.</strong>
+  The server needs to read <code>~/Lumix Tether</code>, which only exists on the Mac connected to the camera.
+  The droplet has no access to your tether folder.
+</div>
+
+<h2>Prerequisites</h2>
+<table>
+  <tr><th>Camera connected</th><td>G9 II via USB, Lumix Tether running</td></tr>
+  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> &mdash; Lumix Tether writes JPG+RAW into dated subfolders here</td></tr>
+  <tr><th>DB access</th><td>Postgres on the droplet must be reachable from the Mac (check <code>.env</code> has correct <code>PGHOST</code>/<code>PGPORT</code>)</td></tr>
+  <tr><th>Migration applied</th><td>Run <code>./backend/db/migrate_pg.sh</code> if you haven't since adding 0007</td></tr>
+  <tr><th>Google Vision key</th><td><code>GOOGLE_VISION_API_KEY</code> set in <code>.env</code></td></tr>
+</table>
+
+<h2>1. Start the Local Dev Server</h2>
+
+<div class="session-step">
+  <span class="step-num">1</span>
+  <div>Open a terminal in the <code>madonnahist</code> project directory and run:
+    <br><code>npm run dev</code>
+    <br>Wait for the "ready" message. The server starts on port 5176.
+  </div>
+</div>
+
+<h2>2. Open the Capture Intake Page</h2>
+
+<div class="session-step">
+  <span class="step-num">2</span>
+  <div>
+    Open in your browser:<br>
+    <span class="url">http://localhost:5176/admin/capture</span>
+  </div>
+</div>
+
+<p>On load, the server scans <code>~/Lumix Tether/</code> subfolders for new JPGs. Any images not already in the database appear in the <strong>active list</strong>. Already-ingested images are hidden in a collapsed "Completed" section at the bottom.</p>
+
+<div class="warn">If you see "tether folder not found" in the header, <code>~/Lumix Tether</code> doesn't exist. Make sure Lumix Tether has saved at least one image.</div>
+
+<h2>3. Shoot Your Pages</h2>
+
+<div class="session-step">
+  <span class="step-num">3</span>
+  <div>
+    Photograph calendar pages using Lumix Tether. JPG + RAW pairs land in <code>~/Lumix Tether/{session-date}/</code>.
+    <br><strong>Reload the page</strong> (or navigate back to it) to pick up newly shot images.
+  </div>
+</div>
+
+<h2>4. Classify All</h2>
+
+<div class="session-step">
+  <span class="step-num">4</span>
+  <div>
+    Click the <strong>"Classify All (N)"</strong> button in the toolbar. This processes every unclassified image:
+    <ul>
+      <li>Sends each image to Google Vision for full-page OCR</li>
+      <li>Locates the month/year from the header text using token geometry</li>
+      <li>Assesses image quality (sharpness, exposure, contrast)</li>
+      <li>Takes a few seconds per image &mdash; the button shows "Classifying..." while working</li>
+    </ul>
+  </div>
+</div>
+
+<p>After classification, each card shows:</p>
+<table>
+  <tr><th>Confidence badge</th><td>
+    <span class="badge badge-high">HIGH</span> &mdash; month + year detected with good OCR confidence<br>
+    <span class="badge badge-med">MED</span> &mdash; partial match (year only, or low OCR confidence) &mdash; confirm manually<br>
+    <span class="badge badge-low">LOW</span> &mdash; nothing found &mdash; set year/month manually
+  </td></tr>
+  <tr><th>Quality badge</th><td>
+    <span class="badge badge-good">GOOD</span> &mdash; sharp, well-exposed, good contrast<br>
+    <span class="badge badge-reshoot">RESHOOT</span> &mdash; blurry, over/underexposed, or low contrast &mdash; reason shown in notes
+  </td></tr>
+  <tr><th>Year / Month / Layout</th><td>Pre-filled dropdowns from the OCR proposal. Edit any that are wrong.</td></tr>
+</table>
+
+<h2>5. Review and Correct</h2>
+
+<div class="session-step">
+  <span class="step-num">5</span>
+  <div>
+    Go through each card:
+    <ul>
+      <li><strong>HIGH confidence + GOOD quality</strong> &mdash; glance at the thumbnail to confirm, check the box</li>
+      <li><strong>MED or LOW confidence</strong> &mdash; set the correct year and month from the dropdowns, then check the box</li>
+      <li><strong>RESHOOT badge</strong> &mdash; read the quality notes (e.g., "Blurry, sharpness 10, threshold 12"). Click <strong>Reshoot</strong> to flag it. Re-photograph the page, reload, and the new image will appear</li>
+      <li><strong>Accidental shot</strong> (wall, floor, test frame) &mdash; click <strong>Reject</strong></li>
+    </ul>
+  </div>
+</div>
+
+<div class="info">
+  <strong>Layout selector:</strong> Most calendars are <code>5-row-wrapped</code> (the default). If a layout can't hold the selected month (e.g., 31-day month starting Saturday in a non-wrapped 5-row grid), the option is grayed out with "won't fit." Pick <code>6-row-standard</code> if nothing else works. For 4-row calendars with wrapped last days, pick <code>4-row-wrapped</code>.
+</div>
+
+<h2>5b. Duplicate Pages</h2>
+
+<p>If the proposed (or manually selected) year/month already has an ingested page, the card shows a <strong>duplicate warning</strong> with the old filename and page ID. Two cases:</p>
+
+<table>
+  <tr><th>No corrections on old page</th><td>
+    Warning reads: <em>"January 1991 already ingested (P1034502.jpg, page #12) &mdash; no corrections yet"</em><br>
+    A <strong>"Replace Existing"</strong> button appears. Click it to swap: the old page, its day rows, and its Spaces image are deleted, and the new image is ingested in their place. This is atomic &mdash; if anything fails, the old page is untouched.
+  </td></tr>
+  <tr><th>Old page has corrections</th><td>
+    Warning reads: <em>"January 1991 already ingested (P1034502.jpg, page #12) &mdash; has corrections, cannot replace from here"</em><br>
+    No replace button. The checkbox is disabled &mdash; you cannot batch-ingest over a corrected page. Handle via admin.
+  </td></tr>
+</table>
+
+<div class="warn">
+  <strong>Changing the year or month</strong> in the dropdowns will update the duplicate warning in real time. If you change to a month that isn't already ingested, the warning disappears and you can ingest normally.
+</div>
+
+<h2>6. Ingest Selected</h2>
+
+<div class="session-step">
+  <span class="step-num">6</span>
+  <div>
+    Click <strong>"Ingest Selected (N)"</strong>. This processes every checked image in one pass:
+    <ol>
+      <li>Uploads the EXIF-normalized page image to DigitalOcean Spaces</li>
+      <li>Creates <code>calendar_pages</code> + <code>calendar_days</code> rows in the database (one transaction)</li>
+      <li>Enqueues OCR jobs for each day cell</li>
+      <li>Moves the card to the collapsed "Completed" section</li>
+    </ol>
+    The button shows "Ingesting..." while working.
+  </div>
+</div>
+
+<div class="warn">
+  <strong>If ingestion fails</strong> for an image, it stays in the active list with a red error message. You can retry &mdash; the upload is idempotent (same image won't be duplicated in Spaces). Fix the underlying issue (e.g., that month already ingested, DB unreachable) and click Ingest again.
+</div>
+
+<h2>7. Verify</h2>
+
+<div class="session-step">
+  <span class="step-num">7</span>
+  <div>
+    After ingestion:
+    <ul>
+      <li>Ingested images appear under the <strong>"Completed (N)"</strong> toggle at the bottom, showing filename, year-month, and page ID</li>
+      <li>Reload the page &mdash; completed images stay completed, new tether images appear in the active list</li>
+      <li>Repeat steps 3&ndash;6 for the next batch of pages</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Quick Reference</h2>
+<table>
+  <tr><th>URL</th><td class="url">http://localhost:5176/admin/capture</td></tr>
+  <tr><th>Runs on</th><td class="bold">Local Mac only (not the droplet)</td></tr>
+  <tr><th>Start server</th><td><code>npm run dev</code> in the madonnahist directory</td></tr>
+  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code></td></tr>
+  <tr><th>DB connection</th><td>Postgres on droplet via <code>.env</code> settings (PGHOST/PGPORT/PGDATABASE)</td></tr>
+  <tr><th>Vision API</th><td>1,000 free calls/month &mdash; ~2 calls per page (full-page OCR)</td></tr>
+  <tr><th>Typical session</th><td>Shoot 12 pages, reload, Classify All, review, Ingest &mdash; ~2 minutes</td></tr>
+</table>
+
+<h2>Troubleshooting</h2>
+<table>
+  <tr><th>"Tether folder not found"</th><td><code>~/Lumix Tether</code> doesn't exist. Open Lumix Tether and shoot one image to create it. Or set <code>TETHER_DIR</code> in <code>.env</code> if your folder is elsewhere.</td></tr>
+  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Add <code>GOOGLE_VISION_API_KEY=...</code> to <code>.env</code> and restart the dev server.</td></tr>
+  <tr><th>Images don't appear after shooting</th><td>Reload the page. Discovery runs on page load, not live.</td></tr>
+  <tr><th>Duplicate month detected</th><td>The card shows a warning with the old filename and page ID. If the old page has no corrections, click <strong>"Replace Existing"</strong> to swap it. If the old page has corrections from Madonna, replacement is blocked &mdash; handle via admin.</td></tr>
+  <tr><th>Classification says LOW / no month found</th><td>Normal for handwritten or unusual headers. Set year and month manually from the dropdowns.</td></tr>
+  <tr><th>"Layout can't hold this month"</th><td>The selected grid template doesn't have enough slots. Switch to <code>5-row-wrapped</code> or <code>6-row-standard</code>.</td></tr>
+  <tr><th>DB connection refused</th><td>Check that the droplet is reachable. If using an SSH tunnel, make sure it's running. Verify <code>PGHOST</code>/<code>PGPORT</code> in <code>.env</code>.</td></tr>
+</table>
+
+<div class="footer">
+  Capture Intake Workflow &mdash; madonnahist &mdash; 2026-06-01
+  <br>See also: <code>docs/capture-quick-reference.html</code> (camera settings), <code>docs/2026-05-29-capture-intake-pipeline.md</code> (full technical plan)
+</div>
+
+</body>
+</html>

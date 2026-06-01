@@ -60,6 +60,13 @@
 	const ingestItems = $derived(
 		data.active
 			.filter((r) => checked[r.id])
+			.filter((r) => {
+				// Exclude duplicates — they must use the Replace button, not batch ingest.
+				const y = rowYear(r);
+				const m = rowMonth(r);
+				if (y !== '' && m !== '' && existingByYM.has(`${y}-${m}`)) return false;
+				return true;
+			})
 			.map((r) => ({
 				id: r.id,
 				year: rowYear(r),
@@ -87,6 +94,24 @@
 		if (v === 'reshoot_required') return '⛔ RESHOOT';
 		return 'PENDING';
 	}
+
+	// Build a lookup of existing pages by "year-month" for client-side duplicate detection.
+	const existingByYM = $derived(
+		new Map(data.existingPages.map((p) => [`${p.year}-${p.month}`, p]))
+	);
+
+	interface DupInfo { page_id: number; camera_filename: string | null; hasCorrections: boolean }
+
+	function dupInfo(r: PageData['active'][number]): DupInfo | null {
+		const y = rowYear(r);
+		const m = rowMonth(r);
+		if (y === '' || m === '') return null;
+		const existing = existingByYM.get(`${y}-${m}`);
+		if (!existing) return null;
+		return { page_id: existing.page_id, camera_filename: existing.camera_filename, hasCorrections: existing.correction_count > 0 };
+	}
+
+	let replacing = $state<Record<number, boolean>>({});
 </script>
 
 <div class="capture-page">
@@ -106,6 +131,9 @@
 	{/if}
 	{#if form && 'ingested' in form}
 		<div class="banner success">Ingested {form.ingested} page{form.ingested === 1 ? '' : 's'}.</div>
+	{/if}
+	{#if form && 'replaced' in form}
+		<div class="banner success">Replaced existing page (now page #{form.pageId}).</div>
 	{/if}
 	{#if form && 'errors' in form && form.errors && form.errors.length > 0}
 		<div class="banner error">
@@ -158,9 +186,10 @@
 
 	<div class="grid">
 		{#each data.active as r (r.id)}
-			<div class="card" class:reshoot={r.status === 'reshoot'} class:errored={!!r.ingest_error}>
+			{@const dup = dupInfo(r)}
+			<div class="card" class:reshoot={r.status === 'reshoot'} class:errored={!!r.ingest_error} class:duplicate={dup !== null}>
 				<label class="select-box">
-					<input type="checkbox" bind:checked={checked[r.id]} disabled={r.status === 'reshoot'} />
+					<input type="checkbox" bind:checked={checked[r.id]} disabled={r.status === 'reshoot' || (dup !== null && dup.hasCorrections)} />
 				</label>
 
 				<img src={previewUrl(r.tether_session, r.camera_filename)} alt={r.camera_filename} loading="lazy" />
@@ -214,6 +243,36 @@
 					</div>
 					{#if !fits(rowTemplate(r), rowYear(r), rowMonth(r))}
 						<div class="notes err-note">Selected layout can’t hold this month — pick another.</div>
+					{/if}
+
+					{#if dup}
+						<div class="notes dup-note">
+							{months[(rowMonth(r) as number) - 1]} {rowYear(r)} already ingested
+							{#if dup.camera_filename}({dup.camera_filename}, page #{dup.page_id}){:else}(page #{dup.page_id}){/if}
+							{#if dup.hasCorrections}
+								— has corrections, cannot replace from here
+							{:else}
+								— no corrections yet
+							{/if}
+						</div>
+						{#if !dup.hasCorrections}
+							<form method="POST" action="?/replace" use:enhance={() => {
+								replacing[r.id] = true;
+								return async ({ update }) => {
+									await update();
+									replacing[r.id] = false;
+								};
+							}}>
+								<input type="hidden" name="intakeId" value={r.id} />
+								<input type="hidden" name="replacePageId" value={dup.page_id} />
+								<input type="hidden" name="year" value={rowYear(r)} />
+								<input type="hidden" name="month" value={rowMonth(r)} />
+								<input type="hidden" name="templateKey" value={rowTemplate(r)} />
+								<button type="submit" class="btn small replace-btn" disabled={replacing[r.id]}>
+									{replacing[r.id] ? 'Replacing…' : 'Replace Existing'}
+								</button>
+							</form>
+						{/if}
 					{/if}
 
 					<div class="card-actions">
@@ -297,6 +356,7 @@
 	}
 	.card.reshoot { border-color: #b8860b; background: #fff8e6; }
 	.card.errored { border-color: #c00; }
+	.card.duplicate { border-color: #b8860b; }
 	.card img {
 		width: 100%; height: 180px; object-fit: cover; background: #eee; display: block;
 	}
@@ -324,6 +384,8 @@
 
 	.notes { font-size: 0.75rem; color: #555; line-height: 1.3; }
 	.err-note { color: #7a0000; }
+	.dup-note { color: #6b3b00; background: #fff8e6; padding: 0.3rem 0.5rem; border-radius: 3px; border: 1px solid #b8860b; }
+	.replace-btn { color: #6b3b00; border-color: #b8860b; background: #fff8e6; }
 
 	.fields { display: flex; gap: 0.35rem; flex-wrap: wrap; }
 	.fields select {

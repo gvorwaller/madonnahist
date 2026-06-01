@@ -16,7 +16,7 @@ import { env } from '$env/dynamic/private';
 import { query } from '$lib/db';
 import { classifyImage } from '$lib/ingest/classify';
 import { assessQuality } from '$lib/ingest/quality';
-import { ingestPage } from '$lib/ingest/ingest';
+import { ingestPage, replacePage } from '$lib/ingest/ingest';
 import { GRID_TEMPLATES } from '$lib/ingest/day-grid';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -125,6 +125,14 @@ interface IntakeRow {
 	ingest_error: string | null;
 }
 
+interface ExistingPage {
+	page_id: number;
+	year: number;
+	month: number;
+	camera_filename: string | null;
+	correction_count: number;
+}
+
 export const load: PageServerLoad = async () => {
 	await discover();
 
@@ -141,10 +149,23 @@ export const load: PageServerLoad = async () => {
 	const completed = rows.rows.filter((r) => r.status === 'ingested');
 	const rejected = rows.rows.filter((r) => r.status === 'rejected');
 
+	// Existing pages with correction counts for client-side duplicate detection.
+	const existingPages = await query<ExistingPage>(
+		`SELECT cp.id AS page_id, cp.year, cp.month,
+		        ci.camera_filename,
+		        COUNT(dc.id)::int AS correction_count
+		   FROM calendar_pages cp
+		   LEFT JOIN capture_intake ci ON ci.page_id = cp.id AND ci.status = 'ingested'
+		   LEFT JOIN calendar_days cd ON cd.page_id = cp.id
+		   LEFT JOIN day_corrections dc ON dc.day_id = cd.id AND dc.status_after = 'accepted'
+		  GROUP BY cp.id, ci.camera_filename`
+	);
+
 	return {
 		active,
 		completed,
 		rejected,
+		existingPages: existingPages.rows,
 		tetherExists: existsSync(TETHER_DIR),
 		gridTemplates: Object.keys(GRID_TEMPLATES)
 	};
@@ -297,5 +318,62 @@ export const actions: Actions = {
 		}
 		await query(`UPDATE capture_intake SET status = $2 WHERE id = $1 AND status <> 'ingested'`, [id, status]);
 		return { success: true };
+	},
+
+	/** Replace an existing page with a new capture (only when no corrections exist). */
+	replace: async ({ request }) => {
+		const data = await request.formData();
+		const intakeId = Number(data.get('intakeId'));
+		const replacePageId = Number(data.get('replacePageId'));
+		const year = Number(data.get('year'));
+		const month = Number(data.get('month'));
+		const templateKey = String(data.get('templateKey'));
+
+		if (!Number.isInteger(intakeId)) return fail(400, { error: 'Invalid intake id' });
+		if (!Number.isInteger(replacePageId)) return fail(400, { error: 'Invalid page id' });
+		if (!Number.isInteger(year) || year < 1960 || year > 2030) return fail(400, { error: 'Invalid year' });
+		if (!Number.isInteger(month) || month < 1 || month > 12) return fail(400, { error: 'Invalid month' });
+		if (!GRID_TEMPLATES[templateKey]) return fail(400, { error: `Unknown layout "${templateKey}"` });
+
+		const intake = await loadIntake(intakeId);
+		if (!intake) return fail(404, { error: 'Intake row not found' });
+		if (intake.status !== 'classified') return fail(400, { error: `Cannot replace from status "${intake.status}"` });
+
+		// Verify no accepted corrections exist on the target page.
+		const corrections = await query<{ cnt: number }>(
+			`SELECT COUNT(*)::int AS cnt
+			   FROM day_corrections dc
+			   JOIN calendar_days cd ON cd.id = dc.day_id
+			  WHERE cd.page_id = $1 AND dc.status_after = 'accepted'`,
+			[replacePageId]
+		);
+		if ((corrections.rows[0]?.cnt ?? 0) > 0) {
+			return fail(400, { error: 'Cannot replace — page has accepted corrections. Handle via admin.' });
+		}
+
+		const path = await validatedPath(intake.source_path);
+		if (!path) return fail(400, { error: 'Source file missing or outside tether dir' });
+
+		await query(
+			`UPDATE capture_intake SET approved_year = $2, approved_month = $3, grid_template_key = $4, approved_at = NOW() WHERE id = $1`,
+			[intakeId, year, month, templateKey]
+		);
+
+		const buf = await readFile(path);
+		const outcome = await replacePage({
+			intakeId,
+			replacePageId,
+			year,
+			month,
+			templateKey,
+			contentHash: intake.content_hash,
+			captureSession: intake.tether_session,
+			imageBuffer: buf
+		});
+
+		if (outcome.ok) {
+			return { replaced: true, pageId: outcome.pageId };
+		}
+		return fail(500, { error: outcome.error });
 	}
 };

@@ -8,7 +8,7 @@
  * Credentials live in private_data.api_credentials (service 'do_spaces'),
  * never in .env — see cs.md § API Keys & Secrets.
  */
-import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { credentialService } from '$lib/credentials';
 
 interface SpacesConfig {
@@ -100,6 +100,17 @@ export async function uploadIfAbsent(
 		})
 	);
 	return { key, uploaded: true };
+}
+
+/** Best-effort delete of a Spaces object. Returns true if deleted or already absent. */
+export async function deleteObject(key: string): Promise<boolean> {
+	try {
+		const { client, bucket } = await getSpaces();
+		await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /** Test hook: drop the memoized client (e.g. after credential rotation). */

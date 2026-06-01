@@ -17,7 +17,7 @@
  */
 import sharp from 'sharp';
 import { query, withTransaction } from '$lib/db';
-import { pageObjectKey, uploadIfAbsent } from './spaces-upload';
+import { pageObjectKey, uploadIfAbsent, deleteObject } from './spaces-upload';
 import { GRID_TEMPLATES, buildDayGrid, cellBounds, type GridLayout } from './day-grid';
 
 export interface IngestInput {
@@ -161,6 +161,121 @@ export async function ingestPage(input: IngestInput): Promise<IngestOutcome> {
 			input.intakeId,
 			message
 		]);
+		return { ok: false, error: message };
+	}
+}
+
+export interface ReplaceInput extends IngestInput {
+	replacePageId: number;
+}
+
+/**
+ * Replace an existing page: upload the new image first (fallible, no DB
+ * side-effects), then in ONE transaction: clear old intake FK, delete old
+ * rows, insert new rows, update new intake. Old Spaces object is cleaned up
+ * best-effort after the transaction commits.
+ *
+ * Only safe when the old page has zero accepted corrections — the caller
+ * must verify this before calling.
+ */
+export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
+	const layout: GridLayout | undefined = GRID_TEMPLATES[input.templateKey];
+	if (!layout) return { ok: false, error: `Unknown grid template "${input.templateKey}"` };
+
+	const grid = buildDayGrid(input.year, input.month, layout);
+	if (!grid.fits) {
+		return { ok: false, error: `${input.year}-${String(input.month).padStart(2, '0')} does not fit the "${input.templateKey}" layout` };
+	}
+
+	const hash8 = input.contentHash.slice(0, 8);
+	const spacesKey = pageObjectKey(input.year, input.month, hash8);
+
+	try {
+		// Phase 1: fallible work BEFORE any DB deletes. If this fails, nothing is lost.
+		await setPhase(input.intakeId, 'uploading', { spacesKey, bumpAttempts: true });
+
+		const oldPage = await query<{ page_image_path: string }>(
+			`SELECT page_image_path FROM calendar_pages WHERE id = $1`,
+			[input.replacePageId]
+		);
+		const oldSpacesKey = oldPage.rows[0]?.page_image_path;
+
+		const normalized = await sharp(input.imageBuffer).rotate().jpeg({ quality: 92 }).toBuffer();
+		const meta = await sharp(normalized).metadata();
+		const pageWidth = meta.width ?? 0;
+		const pageHeight = meta.height ?? 0;
+		if (pageWidth === 0 || pageHeight === 0) throw new Error('Could not read normalized page dimensions');
+
+		await uploadIfAbsent(spacesKey, normalized);
+
+		// Phase 2: ONE transaction — delete old, insert new. If anything fails,
+		// the old page is untouched (ROLLBACK) and the new Spaces object is an
+		// orphan (harmless, same key will be reused on retry).
+		await setPhase(input.intakeId, 'db_insert');
+
+		const result = await withTransaction(async (client) => {
+			// Clear FK on old intake row BEFORE deleting the page it references.
+			await client.query(
+				`UPDATE capture_intake SET page_id = NULL, status = 'rejected'
+				  WHERE page_id = $1 AND id <> $2`,
+				[input.replacePageId, input.intakeId]
+			);
+
+			await client.query(`DELETE FROM job_runs WHERE payload->>'page_id' = $1::text`, [String(input.replacePageId)]);
+			await client.query(`DELETE FROM calendar_days WHERE page_id = $1`, [input.replacePageId]);
+			await client.query(`DELETE FROM calendar_pages WHERE id = $1`, [input.replacePageId]);
+
+			const pageRes = await client.query<{ id: number }>(
+				`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
+				 VALUES ($1, $2, $3, $4) RETURNING id`,
+				[input.year, input.month, spacesKey, input.captureSession]
+			);
+			const pageId = pageRes.rows[0].id;
+
+			const tplRes = await client.query<{ id: number }>(
+				`INSERT INTO crop_templates (template_key, grid_definition)
+				 VALUES ($1, $2::jsonb)
+				 ON CONFLICT (template_key) DO UPDATE SET grid_definition = EXCLUDED.grid_definition
+				 RETURNING id`,
+				[input.templateKey, JSON.stringify(layout)]
+			);
+			const cropTemplateId = tplRes.rows[0].id;
+
+			let dayCount = 0;
+			for (const cell of grid.cells) {
+				const bounds = cellBounds(layout, pageWidth, pageHeight, cell.row, cell.col);
+				for (const entryDate of cell.dates) {
+					const dayRes = await client.query<{ id: number }>(
+						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds)
+						 VALUES ($1, $2, $3, $4::jsonb) RETURNING id`,
+						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds)]
+					);
+					await client.query(
+						`INSERT INTO job_runs (job_type, payload) VALUES ('ocr', $1::jsonb)`,
+						[JSON.stringify({ day_id: dayRes.rows[0].id, page_id: pageId, vendor: OCR_VENDOR })]
+					);
+					dayCount++;
+				}
+			}
+
+			await client.query(
+				`UPDATE capture_intake
+				    SET status = 'ingested', page_id = $2, ingested_at = NOW(),
+				        ingest_phase = NULL, ingest_error = NULL
+				  WHERE id = $1`,
+				[input.intakeId, pageId]
+			);
+
+			return { pageId, dayCount };
+		});
+
+		// Phase 3: best-effort cleanup of old Spaces object (after commit).
+		if (oldSpacesKey && oldSpacesKey !== spacesKey) await deleteObject(oldSpacesKey);
+
+		return { ok: true, pageId: result.pageId, dayCount: result.dayCount, spacesKey, uploaded: true };
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		await query(`UPDATE capture_intake SET ingest_error = $2 WHERE id = $1`, [input.intakeId, message]);
 		return { ok: false, error: message };
 	}
 }
