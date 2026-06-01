@@ -106,12 +106,16 @@
 
 <h1>Lightroom Classic Quick Reference &mdash; Calendar Archive</h1>
 
-<h2>Why Classic (not CC)</h2>
+<div class="warn"><strong>LR Classic is not in the default workflow.</strong> The camera shoots RAW+JPEG.
+Copy the JPEGs directly to <code>madonnahist/test-data/samples/</code> and rename to <code>YYYY-MM.jpg</code>.
+LR Classic is only needed if you want to batch-correct white balance from the gray panel
+(e.g. lighting drifted between sessions, a batch looks off).</div>
+
+<h2>When to use Classic</h2>
 <ul>
-  <li><strong>Local-first</strong> &mdash; files stay on disk, no Adobe Cloud upload. Hundreds of calendar pages don&rsquo;t need to sync.</li>
-  <li><strong>Watched folder / tethered import</strong> &mdash; Classic auto-imports from <code>~/Lumix Tether/</code> as captures land.</li>
-  <li><strong>ColorChecker plugin</strong> &mdash; Calibrite Camera Calibration only works in Classic.</li>
-  <li><strong>Export control</strong> &mdash; file naming templates, output folder targeting, presets.</li>
+  <li><strong>WB correction</strong> &mdash; eyedropper the gray panel to fix a color cast, sync across a batch.</li>
+  <li><strong>Catalog / browse</strong> &mdash; review and cull captures before exporting.</li>
+  <li><strong>Local-first</strong> &mdash; files stay on disk, no Adobe Cloud upload (use Classic, not CC).</li>
 </ul>
 
 <h2>1. Import</h2>
@@ -123,24 +127,21 @@
 
 <div class="warn">Always use <strong>Add</strong>. The RAW files stay in <code>~/Lumix Tether/</code>. LR Classic just references them.</div>
 
-<h2>2. Develop &mdash; Minimal Edits</h2>
+<h2>2. Develop &mdash; Usually Skip</h2>
 
-<div class="step"><span class="step-num">1</span><p>Switch to the <strong>Develop</strong> module (top right, or press <kbd>D</kbd>). Select first photo.</p></div>
-<div class="step"><span class="step-num">2</span><p><strong>White balance check</strong> &mdash; Basic panel, top right. Should be close from in-camera custom WB. If you have a gray panel shot: click the <strong>WB Eyedropper</strong> (dropper icon), then click on the 18% gray patch. LR neutralizes any remaining cast.</p></div>
-<div class="step"><span class="step-num">3</span><p><strong>Lens Corrections</strong> &mdash; scroll down right panels, check <strong>Enable Profile Corrections</strong>. LR should auto-detect the Olympus 60mm.</p></div>
-<div class="step"><span class="step-num">4</span><p><strong>That&rsquo;s it.</strong> Leave everything else at defaults.</p></div>
+<p>With controlled studio lighting at fixed 5000 K and custom WB set in-camera, the photos should
+be neutral out of the gate. <strong>The normal workflow is Import &rarr; Export with no Develop edits.</strong></p>
+
+<div class="warn"><strong>Lens Corrections &mdash; automatic.</strong> The G9 II + Olympus 60mm (Micro Four Thirds) embeds lens correction data in the RW2 file. LR Classic applies it via the built-in lens profile. No manual step needed.</div>
+
+<p><strong>If a batch looks off</strong> (color cast, lighting drift between sessions):</p>
+<div class="step"><span class="step-num">1</span><p>Switch to <strong>Develop</strong> (<kbd>D</kbd>). Select the gray panel shot from that session.</p></div>
+<div class="step"><span class="step-num">2</span><p>Click the <strong>WB Eyedropper</strong> (<kbd>W</kbd>), then click the 18% gray patch. LR neutralizes the cast.</p></div>
+<div class="step"><span class="step-num">3</span><p>Select all photos from the session in the filmstrip (<kbd>Cmd+A</kbd>). Click <strong>Sync...</strong> (bottom left), check White Balance, click <strong>Synchronize</strong>.</p></div>
 
 <div class="dont"><strong>Do NOT adjust:</strong> Contrast, Clarity, Sharpening, Noise Reduction, Crop, Black &amp; White. Clean, neutral images produce the best OCR results.</div>
 
-<h2>3. Sync Settings Across Photos</h2>
-
-<div class="step"><span class="step-num">1</span><p>In Develop module, select all photos in the filmstrip (bottom). <kbd>Cmd+A</kbd> to select all.</p></div>
-<div class="step"><span class="step-num">2</span><p>Click <strong>Sync...</strong> (bottom left of Develop module).</p></div>
-<div class="step"><span class="step-num">3</span><p>Check the settings you changed (White Balance, Lens Corrections). Click <strong>Synchronize</strong>.</p></div>
-
-<div class="warn">Sync applies the <em>first selected photo&rsquo;s</em> settings to all others. Make sure the photo with your edits is the &ldquo;most selected&rdquo; (brighter highlight in filmstrip).</div>
-
-<h2>4. Export</h2>
+<h2>3. Export</h2>
 
 <div class="step"><span class="step-num">1</span><p>Switch to <strong>Library</strong> module (<kbd>G</kbd>). Select the photos to export.</p></div>
 <div class="step"><span class="step-num">2</span><p><strong>File &rarr; Export</strong> (or <kbd>Cmd+Shift+E</kbd>).</p></div>
@@ -157,7 +158,7 @@
 
 <div class="warn">Export one photo at a time if they are different calendar months, so each gets the correct <code>YYYY-MM</code> filename.</div>
 
-<h2>5. Keyboard Shortcuts</h2>
+<h2>4. Keyboard Shortcuts</h2>
 
 <table>
   <tr><th><kbd>G</kbd></th><td>Library &mdash; Grid view</td></tr>

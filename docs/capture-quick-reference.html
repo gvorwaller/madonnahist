@@ -104,7 +104,7 @@
 <table>
   <tr><th>Mode</th><td class="bold">A (Aperture Priority)</td></tr>
   <tr><th>High Res Mode</th><td class="bold">On &mdash; Tripod (100 MP)</td></tr>
-  <tr><th>File format</th><td class="bold">RAW only</td></tr>
+  <tr><th>File format</th><td class="bold">RAW + JPEG</td></tr>
   <tr><th>Aperture</th><td class="bold">f/5.6</td></tr>
   <tr><th>ISO</th><td class="bold">200 (base)</td></tr>
   <tr><th>Shutter speed</th><td>Auto (should land ~1/60 &ndash; 1/125 with correct light brightness)</td></tr>
@@ -124,7 +124,7 @@
 </ol>
 <div class="warn">Lumix Tether cannot save Custom Modes &mdash; this is camera-body only. Tether controls settings and triggers the shutter during shooting.</div>
 
-<h2>4. ColorChecker Passport Photo 2 &mdash; Three Surfaces</h2>
+<h2>4. ColorChecker Passport Photo 2 &mdash; White &amp; Gray Panels</h2>
 
 <table>
   <tr>
@@ -152,21 +152,15 @@
       shutter speed falls in the <strong>1/60 &ndash; 1/125 s</strong> range.
       If too slow or too fast, adjust <strong>light brightness</strong> until it does.<br>
       <em>Tether: meter readout visible in Tether &mdash;
-      this check can be done entirely from the Mac.</em><br>
-      <em>Also useful in Lightroom: eyedropper this patch to neutralize color cast.</em>
-    </td>
-  </tr>
-  <tr>
-    <th>Color patches<br><span style="font-weight:normal;font-size:0.9em">(flip case over &mdash; 24 colored squares)</span></th>
-    <td>
-      <strong>Archival color reference.</strong><br>
-      Shoot one frame per session. Used later in Lightroom with the
-      Calibrite ColorChecker Camera Calibration plugin to build a camera profile
-      that normalizes color across sessions months/years apart.<br>
-      <em>You don't need the plugin on day one &mdash; just shooting the frame preserves the reference.</em>
+      this check can be done entirely from the Mac.</em>
     </td>
   </tr>
 </table>
+
+<div class="warn"><strong>Color patches (24 squares on reverse) &mdash; not used.</strong>
+The color patch grid builds a camera profile for color fidelity across sessions.
+This workflow cares about image clarity and detail for handwriting recognition, not color accuracy.
+Skip it.</div>
 
 <h2>5. Per-Session Sequence</h2>
 
@@ -174,10 +168,10 @@
 <div class="session-step"><span class="step-num">2</span><p>Turn mode dial to <strong>C1</strong>. Connect Lumix Tether. Confirm live view.</p></div>
 <div class="session-step"><span class="step-num">3</span><p><strong>White panel</strong> flat on easel, centered &rarr; set custom WB on camera body (do not move camera; panel fills center sampling area from tripod position).</p></div>
 <div class="session-step"><span class="step-num">4</span><p><strong>Gray panel</strong> flat on easel, centered &rarr; check auto shutter speed in live view (or Tether) is 1/60&ndash;1/125 s. Adjust light brightness if outside range.</p></div>
-<div class="session-step"><span class="step-num">5</span><p>Flip case &rarr; <strong>color patches</strong> on easel &rarr; shoot one reference frame.</p></div>
-<div class="session-step"><span class="step-num">6</span><p><strong>Manual focus</strong>: zoom to 10&times; in live view on a page, adjust focus ring until ink is sharp. Set once for session.</p></div>
-<div class="session-step"><span class="step-num">7</span><p>Remove Passport. Load first page. Begin capture via Lumix Tether.</p></div>
-<div class="session-step"><span class="step-num">8</span><p>After last page: <strong>review frames before teardown</strong>. Reshoot anything soft or unevenly lit while the rig is still up.</p></div>
+<div class="session-step"><span class="step-num">5</span><p><strong>Manual focus</strong>: zoom to 10&times; in live view on a page, adjust focus ring until ink is sharp. Set once for session.</p></div>
+<div class="session-step"><span class="step-num">6</span><p>Remove Passport. Load first page. Begin capture via Lumix Tether.</p></div>
+<div class="session-step"><span class="step-num">7</span><p>After last page: <strong>review frames before teardown</strong>. Reshoot anything soft or unevenly lit while the rig is still up.</p></div>
+<div class="session-step"><span class="step-num">8</span><p>Copy JPEGs from <code>~/Lumix Tether/</code> to <code>madonnahist/test-data/samples/</code>. Rename to <code>YYYY-MM.jpg</code>.</p></div>
 
 <h2>6. Setup Notes</h2>
 <ul>
