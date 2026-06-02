@@ -100,10 +100,10 @@ export async function ingestPage(input: IngestInput): Promise<IngestOutcome> {
 			}
 
 			const pageRes = await client.query<{ id: number }>(
-				`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
-				 VALUES ($1, $2, $3, $4)
+				`INSERT INTO calendar_pages (year, month, page_image_path, capture_session, image_width, image_height)
+				 VALUES ($1, $2, $3, $4, $5, $6)
 				 RETURNING id`,
-				[input.year, input.month, spacesKey, input.captureSession]
+				[input.year, input.month, spacesKey, input.captureSession, pageWidth, pageHeight]
 			);
 			const pageId = pageRes.rows[0].id;
 
@@ -122,10 +122,10 @@ export async function ingestPage(input: IngestInput): Promise<IngestOutcome> {
 				const bounds = cellBounds(layout, pageWidth, pageHeight, cell.row, cell.col);
 				for (const entryDate of cell.dates) {
 					const dayRes = await client.query<{ id: number }>(
-						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds)
-						 VALUES ($1, $2, $3, $4::jsonb)
+						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds, grid_row, grid_col)
+						 VALUES ($1, $2, $3, $4::jsonb, $5, $6)
 						 RETURNING id`,
-						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds)]
+						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds), cell.row, cell.col]
 					);
 					const dayId = dayRes.rows[0].id;
 
@@ -226,9 +226,9 @@ export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
 			await client.query(`DELETE FROM calendar_pages WHERE id = $1`, [input.replacePageId]);
 
 			const pageRes = await client.query<{ id: number }>(
-				`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
-				 VALUES ($1, $2, $3, $4) RETURNING id`,
-				[input.year, input.month, spacesKey, input.captureSession]
+				`INSERT INTO calendar_pages (year, month, page_image_path, capture_session, image_width, image_height)
+				 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+				[input.year, input.month, spacesKey, input.captureSession, pageWidth, pageHeight]
 			);
 			const pageId = pageRes.rows[0].id;
 
@@ -246,9 +246,9 @@ export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
 				const bounds = cellBounds(layout, pageWidth, pageHeight, cell.row, cell.col);
 				for (const entryDate of cell.dates) {
 					const dayRes = await client.query<{ id: number }>(
-						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds)
-						 VALUES ($1, $2, $3, $4::jsonb) RETURNING id`,
-						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds)]
+						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds, grid_row, grid_col)
+						 VALUES ($1, $2, $3, $4::jsonb, $5, $6) RETURNING id`,
+						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds), cell.row, cell.col]
 					);
 					await client.query(
 						`INSERT INTO job_runs (job_type, payload) VALUES ('ocr', $1::jsonb)`,

@@ -8,7 +8,7 @@
  * Credentials live in private_data.api_credentials (service 'do_spaces'),
  * never in .env — see cs.md § API Keys & Secrets.
  */
-import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { credentialService } from '$lib/credentials';
 
 interface SpacesConfig {
@@ -100,6 +100,19 @@ export async function uploadIfAbsent(
 		})
 	);
 	return { key, uploaded: true };
+}
+
+/** Download an object from Spaces. */
+export async function getObject(key: string): Promise<Buffer> {
+	const { client, bucket } = await getSpaces();
+	const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+	const stream = res.Body;
+	if (!stream) throw new Error(`Empty response body for ${key}`);
+	const chunks: Buffer[] = [];
+	for await (const chunk of stream as AsyncIterable<Buffer>) {
+		chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+	}
+	return Buffer.concat(chunks);
 }
 
 /** Best-effort delete of a Spaces object. Returns true if deleted or already absent. */

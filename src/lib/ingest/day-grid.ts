@@ -164,3 +164,118 @@ export function cellBounds(
 		height: cellH
 	};
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Grid-lines model (grid alignment UI)
+// ─────────────────────────────────────────────────────────────────
+
+export interface GridCorners {
+	topLeft: [number, number];
+	topRight: [number, number];
+	bottomLeft: [number, number];
+	bottomRight: [number, number];
+}
+
+export interface GridLines {
+	coordinateSpace: 'original' | 'warped';
+	corners: GridCorners;
+	xLines: number[];
+	yLines: number[];
+}
+
+function lerp(a: number, b: number, t: number): number {
+	return a + (b - a) * t;
+}
+
+export function subdivideCornersToLines(
+	corners: GridCorners,
+	rows: number,
+	cols: number
+): { xLines: number[]; yLines: number[] } {
+	const xLines: number[] = [];
+	for (let c = 0; c <= cols; c++) {
+		const t = c / cols;
+		const xTop = lerp(corners.topLeft[0], corners.topRight[0], t);
+		const xBot = lerp(corners.bottomLeft[0], corners.bottomRight[0], t);
+		xLines.push(Math.round((xTop + xBot) / 2));
+	}
+
+	const yLines: number[] = [];
+	for (let r = 0; r <= rows; r++) {
+		const t = r / rows;
+		const yLeft = lerp(corners.topLeft[1], corners.bottomLeft[1], t);
+		const yRight = lerp(corners.topRight[1], corners.bottomRight[1], t);
+		yLines.push(Math.round((yLeft + yRight) / 2));
+	}
+
+	return { xLines, yLines };
+}
+
+export function defaultGridLines(
+	imageWidth: number,
+	imageHeight: number,
+	rows: number,
+	cols: number
+): GridLines {
+	const left = Math.round(imageWidth * 0.06);
+	const right = Math.round(imageWidth * 0.94);
+	const top = Math.round(imageHeight * 0.25);
+	const bottom = Math.round(imageHeight * 0.95);
+
+	const corners: GridCorners = {
+		topLeft: [left, top],
+		topRight: [right, top],
+		bottomLeft: [left, bottom],
+		bottomRight: [right, bottom]
+	};
+
+	const { xLines, yLines } = subdivideCornersToLines(corners, rows, cols);
+	return { coordinateSpace: 'original', corners, xLines, yLines };
+}
+
+export function cellBoundsFromGridLines(
+	gridLines: GridLines,
+	row: number,
+	col: number
+): CellBounds {
+	const x = gridLines.xLines[col];
+	const y = gridLines.yLines[row];
+	const width = gridLines.xLines[col + 1] - x;
+	const height = gridLines.yLines[row + 1] - y;
+	return { x, y, width, height };
+}
+
+export function validateGridLines(
+	gridLines: GridLines,
+	imageWidth: number,
+	imageHeight: number,
+	rows: number,
+	cols: number
+): string | null {
+	if (!gridLines.corners || !gridLines.xLines || !gridLines.yLines) {
+		return 'Missing corners, xLines, or yLines';
+	}
+	if (gridLines.xLines.length !== cols + 1) {
+		return `Expected ${cols + 1} xLines, got ${gridLines.xLines.length}`;
+	}
+	if (gridLines.yLines.length !== rows + 1) {
+		return `Expected ${rows + 1} yLines, got ${gridLines.yLines.length}`;
+	}
+	for (let i = 1; i < gridLines.xLines.length; i++) {
+		if (gridLines.xLines[i] <= gridLines.xLines[i - 1]) {
+			return `xLines not monotonically increasing at index ${i}`;
+		}
+	}
+	for (let i = 1; i < gridLines.yLines.length; i++) {
+		if (gridLines.yLines[i] <= gridLines.yLines[i - 1]) {
+			return `yLines not monotonically increasing at index ${i}`;
+		}
+	}
+	if (gridLines.xLines[0] < 0 || gridLines.xLines[gridLines.xLines.length - 1] > imageWidth) {
+		return 'xLines extend beyond image bounds';
+	}
+	if (gridLines.yLines[0] < 0 || gridLines.yLines[gridLines.yLines.length - 1] > imageHeight) {
+		return 'yLines extend beyond image bounds';
+	}
+	return null;
+}

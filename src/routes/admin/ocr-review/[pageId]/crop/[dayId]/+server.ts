@@ -1,0 +1,57 @@
+import { query } from '$lib/db';
+import { getObject } from '$lib/ingest/spaces-upload';
+import { cropRegion } from '$lib/image/crop';
+import { error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+
+const pageCache = new Map<string, { promise: Promise<Buffer>; expires: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
+function getCachedPage(key: string): Promise<Buffer> {
+	const now = Date.now();
+	const entry = pageCache.get(key);
+	if (entry && entry.expires > now) return entry.promise;
+
+	for (const [k, v] of pageCache) {
+		if (v.expires <= now) pageCache.delete(k);
+	}
+
+	const promise = getObject(key);
+	pageCache.set(key, { promise, expires: now + CACHE_TTL });
+
+	promise.catch(() => {
+		pageCache.delete(key);
+	});
+
+	return promise;
+}
+
+export const GET: RequestHandler = async ({ params }) => {
+	const dayId = Number(params.dayId);
+	if (!Number.isFinite(dayId)) error(400, 'Invalid day ID');
+
+	const res = await query<{
+		crop_bounds: { x: number; y: number; width: number; height: number };
+		page_image_path: string;
+		warped_image_path: string | null;
+	}>(`
+		SELECT cd.crop_bounds, cp.page_image_path, cp.warped_image_path
+		  FROM calendar_days cd
+		  JOIN calendar_pages cp ON cp.id = cd.page_id
+		 WHERE cd.id = $1
+	`, [dayId]);
+
+	if (!res.rows[0]) error(404, 'Day not found');
+	const { crop_bounds, page_image_path, warped_image_path } = res.rows[0];
+
+	const imageKey = warped_image_path ?? page_image_path;
+	const pageBuffer = await getCachedPage(imageKey);
+	const cropped = await cropRegion(pageBuffer, crop_bounds);
+
+	return new Response(cropped as unknown as BodyInit, {
+		headers: {
+			'Content-Type': 'image/jpeg',
+			'Cache-Control': 'private, max-age=3600'
+		}
+	});
+};
