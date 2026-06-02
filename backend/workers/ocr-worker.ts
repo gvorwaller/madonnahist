@@ -151,7 +151,13 @@ async function runPageOcr() {
 			log(`  page ${pageId}: downloading ${imagePath}${page.warped_image_path ? ' (warped)' : ''}`);
 
 			const rawImage = await getObject(imagePath);
-			const imageBuffer = await sharp(rawImage).rotate().toBuffer();
+			const imageBuffer = await sharp(rawImage)
+				.rotate()
+				.grayscale()
+				.normalize()
+				.sharpen({ sigma: 1.5 })
+				.jpeg({ quality: 95 })
+				.toBuffer();
 			log(`    ${(imageBuffer.length / 1024 / 1024).toFixed(1)} MB`);
 
 			if (DRY_RUN) {
@@ -311,7 +317,12 @@ async function runLlmCleanup() {
 		let pageBuffer: Buffer;
 		try {
 			const raw = await getObject(imagePath);
-			pageBuffer = await sharp(raw).rotate().toBuffer();
+			pageBuffer = await sharp(raw)
+				.rotate()
+				.grayscale()
+				.normalize()
+				.sharpen({ sigma: 1.5 })
+				.toBuffer();
 		} catch (err) {
 			log(`    download failed: ${err instanceof Error ? err.message : err}`);
 			for (const j of pageJobs) {
@@ -360,8 +371,9 @@ async function runLlmCleanup() {
 				// Crop the cell from the page image
 				const cellBuffer = await cropRegion(pageBuffer, day.crop_bounds!);
 				const cellJpeg = await sharp(cellBuffer)
+					.grayscale()
 					.normalize()
-					.sharpen({ sigma: 1.0 })
+					.sharpen({ sigma: 1.5 })
 					.jpeg({ quality: 95 })
 					.toBuffer();
 

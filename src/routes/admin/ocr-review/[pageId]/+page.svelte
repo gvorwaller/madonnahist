@@ -5,10 +5,28 @@
 		'July', 'August', 'September', 'October', 'November', 'December'];
 	const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-	type Filter = 'all' | 'failed' | 'low' | 'blank';
+	type Filter = 'all' | 'low' | 'blank';
 	let filter: Filter = $state('all');
 
 	const title = $derived(`${monthNames[data.page.month]} ${data.page.year}`);
+
+	let lightboxSrc: string | null = $state(null);
+	let lightboxAlt: string = $state('');
+	let lightboxText: string = $state('');
+
+	function openLightbox(src: string, alt: string, text: string) {
+		lightboxSrc = src;
+		lightboxAlt = alt;
+		lightboxText = text;
+	}
+
+	function closeLightbox() {
+		lightboxSrc = null;
+	}
+
+	function onLightboxKey(e: KeyboardEvent) {
+		if (e.key === 'Escape') closeLightbox();
+	}
 
 	function dayOfMonth(d: { entry_date: string }): number {
 		return new Date(d.entry_date + 'T00:00:00').getDate();
@@ -93,9 +111,12 @@
 					{/if}
 				</div>
 				{#if day.draft_text !== null || day.raw_text !== null}
-					<img src="/admin/ocr-review/{data.page.id}/crop/{day.day_id}?v={data.page.grid_version}"
-						alt="Day cell {dayOfMonth(day)}" class="cell-img" loading="lazy" />
 					{@const displayText = day.draft_text ?? day.raw_text ?? ''}
+					{@const cropSrc = `/admin/ocr-review/${data.page.id}/crop/${day.day_id}?v=${data.page.grid_version}`}
+					<button class="img-btn" onclick={() => openLightbox(cropSrc, `Day ${dayOfMonth(day)}`, displayText.trim())}>
+						<img src={cropSrc}
+							alt="Day cell {dayOfMonth(day)}" class="cell-img" loading="lazy" />
+					</button>
 					<div class="ocr-text" class:is-draft={day.draft_text !== null}>
 						{displayText.trim() || '(blank)'}
 					</div>
@@ -111,6 +132,20 @@
 		{/each}
 	</div>
 </div>
+
+<svelte:window onkeydown={onLightboxKey} />
+
+{#if lightboxSrc}
+	<div class="lightbox-overlay" role="dialog" aria-label="Day cell detail">
+		<button class="lightbox-close" onclick={closeLightbox} aria-label="Close">&times;</button>
+		<button class="lightbox-bg" onclick={closeLightbox} aria-label="Close overlay"></button>
+		<div class="lightbox-content">
+			<div class="lightbox-header">{lightboxAlt}</div>
+			<img src={lightboxSrc} alt={lightboxAlt} class="lightbox-img" />
+			<div class="lightbox-text">{lightboxText || '(blank)'}</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.page {
@@ -234,11 +269,20 @@
 	.conf-high { color: #1a7a1a; background: #e6f4e6; }
 	.conf-med { color: #8a6d00; background: #fef3cd; }
 	.conf-low { color: #c33; background: #fde2e2; }
+	.img-btn {
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: zoom-in;
+		display: block;
+		width: 100%;
+	}
 	.cell-img {
 		width: 100%;
 		height: auto;
 		border-radius: 2px;
 		border: 1px solid #e0e0e0;
+		display: block;
 	}
 	.ocr-text {
 		font-size: 0.72rem;
@@ -265,5 +309,67 @@
 		color: #888;
 		padding: 1rem 0;
 		text-align: center;
+	}
+
+	.lightbox-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1000;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.lightbox-bg {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.85);
+		border: none;
+		cursor: pointer;
+	}
+	.lightbox-close {
+		position: absolute;
+		top: 1rem;
+		right: 1.5rem;
+		z-index: 1002;
+		background: none;
+		border: none;
+		color: #fff;
+		font-size: 2.5rem;
+		cursor: pointer;
+		line-height: 1;
+	}
+	.lightbox-content {
+		position: relative;
+		z-index: 1001;
+		max-width: 90vw;
+		max-height: 90vh;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 1rem;
+	}
+	.lightbox-header {
+		color: #fff;
+		font-size: 1.1rem;
+		font-weight: 600;
+	}
+	.lightbox-img {
+		max-width: 90vw;
+		max-height: 60vh;
+		border-radius: 4px;
+		object-fit: contain;
+	}
+	.lightbox-text {
+		color: #e0e0e0;
+		font-size: 1rem;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		max-width: 700px;
+		max-height: 20vh;
+		overflow-y: auto;
+		text-align: left;
+		padding: 0.75rem 1rem;
+		background: rgba(255, 255, 255, 0.08);
+		border-radius: 4px;
 	}
 </style>
