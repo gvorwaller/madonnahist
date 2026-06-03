@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Capture Intake Workflow — Calendar Archive</title>
+<title>Capture &amp; Processing Workflow — Calendar Archive</title>
 <style>
   @media print {
     body { margin: 0.4in; font-size: 11pt; }
@@ -32,6 +32,11 @@
     margin-bottom: 0.4em;
     background: #f0f0f0;
     padding: 0.25em 0.5em;
+  }
+  h3 {
+    font-size: 1em;
+    margin-top: 1em;
+    margin-bottom: 0.3em;
   }
   table {
     border-collapse: collapse;
@@ -112,6 +117,16 @@
   .badge-low { background: #f0f0f0; color: #444; border-color: #999; }
   .badge-good { background: #e8f5e9; color: #14431a; border-color: #2e7d32; }
   .badge-reshoot { background: #fde8e8; color: #7a0000; border-color: #c00; }
+  .pipeline {
+    background: #f8f8f4;
+    border: 1px solid #ddd;
+    padding: 0.6em 0.8em;
+    margin: 0.5em 0;
+    font-size: 0.92em;
+    line-height: 1.7;
+    font-family: ui-monospace, monospace;
+  }
+  .pipeline .arrow { color: #888; }
   .footer {
     margin-top: 1.5em;
     font-size: 0.8em;
@@ -123,183 +138,203 @@
 </head>
 <body>
 
-<h1>Capture Intake Workflow &mdash; Calendar Archive</h1>
+<h1>Capture &amp; Processing Workflow &mdash; Calendar Archive</h1>
+
+<div class="pipeline">
+  G9 II + Lumix Tether <span class="arrow">&rarr;</span>
+  <code>/admin/capture</code> (classify + ingest) <span class="arrow">&rarr;</span>
+  <code>/admin/grid-align</code> (corners + warp + lines) <span class="arrow">&rarr;</span>
+  OCR Worker (Google Vision full-page + Claude cleanup) <span class="arrow">&rarr;</span>
+  <code>/correct</code> (Madonna corrects on iPad) <span class="arrow">&rarr;</span>
+  structured <code>calendar_days</code>
+</div>
 
 <div class="info">
-  <strong>This runs on your local Mac, not the droplet.</strong>
-  The server needs to read <code>~/Lumix Tether</code>, which only exists on the Mac connected to the camera.
-  The droplet has no access to your tether folder.
+  <strong>Capture intake runs on your local Mac</strong> (reads <code>~/Lumix Tether</code>).
+  Grid alignment, OCR, and corrections run against the droplet DB and work from any machine.
+  Madonna accesses the correction UI at <span class="url">https://madonnahist.gaylon.photos/correct</span>.
 </div>
 
 <h2>Prerequisites</h2>
 <table>
   <tr><th>Camera connected</th><td>G9 II via USB, Lumix Tether running</td></tr>
-  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> &mdash; Lumix Tether writes JPG+RAW into dated subfolders here</td></tr>
-  <tr><th>DB access</th><td>Postgres on the droplet must be reachable from the Mac (check <code>.env</code> has correct <code>PGHOST</code>/<code>PGPORT</code>)</td></tr>
-  <tr><th>Migration applied</th><td>Run <code>./backend/db/migrate_pg.sh</code> if you haven't since adding 0007</td></tr>
-  <tr><th>Google Vision key</th><td><code>GOOGLE_VISION_API_KEY</code> set in <code>.env</code></td></tr>
+  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> &mdash; Lumix Tether writes JPG+RAW into dated subfolders</td></tr>
+  <tr><th>DB access</th><td>Postgres on the droplet reachable via SSH tunnel (<code>localhost:5435 &rarr; droplet:5434</code>)</td></tr>
+  <tr><th>Migrations applied</th><td>Run <code>./backend/db/migrate_pg.sh</code> &mdash; currently through 0013</td></tr>
+  <tr><th>Google Vision key</th><td><code>GOOGLE_VISION_API_KEY</code> in <code>.env</code>, also stored in <code>private_data.api_credentials</code></td></tr>
+  <tr><th>Anthropic API key</th><td><code>ANTHROPIC_API_KEY</code> in <code>.env</code> (for Claude cleanup stage)</td></tr>
 </table>
 
-<h2>1. Start the Local Dev Server</h2>
+<h2>Phase 1: Capture &amp; Ingest</h2>
 
 <div class="session-step">
   <span class="step-num">1</span>
-  <div>Open a terminal in the <code>madonnahist</code> project directory and run:
-    <br><code>npm run dev</code>
-    <br>Wait for the "ready" message. The server starts on port 5176.
-  </div>
+  <div>Start the dev server: <code>npm run dev</code> &mdash; port 5176.
+    Open <span class="url">http://localhost:5176/admin/capture</span></div>
 </div>
-
-<h2>2. Open the Capture Intake Page</h2>
 
 <div class="session-step">
   <span class="step-num">2</span>
-  <div>
-    Open in your browser:<br>
-    <span class="url">http://localhost:5176/admin/capture</span>
-  </div>
+  <div>Photograph calendar pages with Lumix Tether. Reload the page to pick up new images.</div>
 </div>
-
-<p>On load, the server scans <code>~/Lumix Tether/</code> subfolders for new JPGs. Any images not already in the database appear in the <strong>active list</strong>. Already-ingested images are hidden in a collapsed "Completed" section at the bottom.</p>
-
-<div class="warn">If you see "tether folder not found" in the header, <code>~/Lumix Tether</code> doesn't exist. Make sure Lumix Tether has saved at least one image.</div>
-
-<h2>3. Shoot Your Pages</h2>
 
 <div class="session-step">
   <span class="step-num">3</span>
-  <div>
-    Photograph calendar pages using Lumix Tether. JPG + RAW pairs land in <code>~/Lumix Tether/{session-date}/</code>.
-    <br><strong>Reload the page</strong> (or navigate back to it) to pick up newly shot images.
-  </div>
+  <div>Click <strong>"Classify All"</strong>. Each image gets Google Vision OCR for month/year detection + quality assessment. Takes a few seconds per image.</div>
 </div>
-
-<h2>4. Classify All</h2>
 
 <div class="session-step">
   <span class="step-num">4</span>
-  <div>
-    Click the <strong>"Classify All (N)"</strong> button in the toolbar. This processes every unclassified image:
+  <div>Review each card:
     <ul>
-      <li>Sends each image to Google Vision for full-page OCR</li>
-      <li>Locates the month/year from the header text using token geometry</li>
-      <li>Assesses image quality (sharpness, exposure, contrast)</li>
-      <li>Takes a few seconds per image &mdash; the button shows "Classifying..." while working</li>
+      <li><span class="badge badge-high">HIGH</span> + <span class="badge badge-good">GOOD</span> &mdash; confirm year/month, check the box</li>
+      <li><span class="badge badge-med">MED</span> / <span class="badge badge-low">LOW</span> &mdash; set year/month manually, check the box</li>
+      <li><span class="badge badge-reshoot">RESHOOT</span> &mdash; re-photograph, reload</li>
     </ul>
   </div>
 </div>
-
-<p>After classification, each card shows:</p>
-<table>
-  <tr><th>Confidence badge</th><td>
-    <span class="badge badge-high">HIGH</span> &mdash; month + year detected with good OCR confidence<br>
-    <span class="badge badge-med">MED</span> &mdash; partial match (year only, or low OCR confidence) &mdash; confirm manually<br>
-    <span class="badge badge-low">LOW</span> &mdash; nothing found &mdash; set year/month manually
-  </td></tr>
-  <tr><th>Quality badge</th><td>
-    <span class="badge badge-good">GOOD</span> &mdash; sharp, well-exposed, good contrast<br>
-    <span class="badge badge-reshoot">RESHOOT</span> &mdash; blurry, over/underexposed, or low contrast &mdash; reason shown in notes
-  </td></tr>
-  <tr><th>Year / Month / Layout</th><td>Pre-filled dropdowns from the OCR proposal. Edit any that are wrong.</td></tr>
-</table>
-
-<h2>5. Review and Correct</h2>
 
 <div class="session-step">
   <span class="step-num">5</span>
-  <div>
-    Go through each card:
+  <div>Click <strong>"Ingest Selected"</strong>. Uploads to Spaces, creates <code>calendar_pages</code> + <code>calendar_days</code> rows, enqueues <code>page_ocr</code> job.</div>
+</div>
+
+<h3>Duplicate Pages</h3>
+<p>If a year/month already has an ingested page:</p>
+<table>
+  <tr><th>No corrections</th><td><strong>"Replace Existing"</strong> button &mdash; atomically swaps old page for new</td></tr>
+  <tr><th>Has corrections</th><td>Replacement blocked &mdash; handle via admin to avoid losing Madonna's work</td></tr>
+</table>
+
+<h2>Phase 2: Grid Alignment</h2>
+
+<div class="session-step">
+  <span class="step-num">6</span>
+  <div>Navigate to <span class="url">http://localhost:5176/admin/grid-align/{pageId}</span>
+    (linked from OCR review). Two-stage process:</div>
+</div>
+
+<h3>Stage A: Place Corners (on original image)</h3>
+<ul>
+  <li>Drag 4 corner handles to match the outer boundary of the calendar grid</li>
+  <li>Interior lines auto-subdivide as preview (dashed)</li>
+  <li>Click <strong>"Apply Warp"</strong> &mdash; perspective-warps the image to a rectangle (15&ndash;30 seconds for full-res G9 II images)</li>
+  <li>Button shows "Processing warp..." while working</li>
+</ul>
+
+<h3>Stage B: Refine Lines (on warped image)</h3>
+<ul>
+  <li>After warp, the page reloads showing the de-skewed rectangular image</li>
+  <li>Drag individual grid lines to match actual cell boundaries (solid lines, row/col resize cursors)</li>
+  <li>Live crop preview strip shows sample cells below the image</li>
+  <li>Click <strong>"Apply Grid"</strong> (shows "Saving grid..." while working) &mdash; saves lines, recomputes crop bounds, re-queues OCR</li>
+  <li><strong>"Re-place Corners"</strong> resets the warp and returns to Stage A</li>
+</ul>
+
+<div class="info">
+  <strong>Copy from Previous Page:</strong> If a prior page has been calibrated, a "Copy from..." button appears. Calendar pages from the same brand typically have the same grid layout.
+</div>
+
+<h2>Phase 3: OCR Pipeline</h2>
+
+<p>The OCR worker runs as a one-shot script (not PM2). Two stages, run independently:</p>
+
+<div class="session-step">
+  <span class="step-num">7</span>
+  <div>Run Stage 1 (Google Vision full-page):
+    <br><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts --stage=page_ocr</code>
     <ul>
-      <li><strong>HIGH confidence + GOOD quality</strong> &mdash; glance at the thumbnail to confirm, check the box</li>
-      <li><strong>MED or LOW confidence</strong> &mdash; set the correct year and month from the dropdowns, then check the box</li>
-      <li><strong>RESHOOT badge</strong> &mdash; read the quality notes (e.g., "Blurry, sharpness 10, threshold 12"). Click <strong>Reshoot</strong> to flag it. Re-photograph the page, reload, and the new image will appear</li>
-      <li><strong>Accidental shot</strong> (wall, floor, test frame) &mdash; click <strong>Reject</strong></li>
+      <li>Downloads full warped page image, converts to grayscale + normalize + sharpen</li>
+      <li>Sends to Google Vision <code>DOCUMENT_TEXT_DETECTION</code> (one API call per page)</li>
+      <li>Maps words to grid cells using bounding-box overlap</li>
+      <li>Writes one <code>ocr_runs</code> row per cell, enqueues <code>llm_cleanup</code> jobs</li>
     </ul>
   </div>
 </div>
 
-<div class="info">
-  <strong>Layout selector:</strong> Most calendars are <code>5-row-wrapped</code> (the default). If a layout can't hold the selected month (e.g., 31-day month starting Saturday in a non-wrapped 5-row grid), the option is grayed out with "won't fit." Pick <code>6-row-standard</code> if nothing else works. For 4-row calendars with wrapped last days, pick <code>4-row-wrapped</code>.
-</div>
-
-<h2>5b. Duplicate Pages</h2>
-
-<p>If the proposed (or manually selected) year/month already has an ingested page, the card shows a <strong>duplicate warning</strong> with the old filename and page ID. Two cases:</p>
-
-<table>
-  <tr><th>No corrections on old page</th><td>
-    Warning reads: <em>"January 1991 already ingested (P1034502.jpg, page #12) &mdash; no corrections yet"</em><br>
-    A <strong>"Replace Existing"</strong> button appears. Click it to swap: the old page, its day rows, and its Spaces image are deleted, and the new image is ingested in their place. This is atomic &mdash; if anything fails, the old page is untouched.
-  </td></tr>
-  <tr><th>Old page has corrections</th><td>
-    Warning reads: <em>"January 1991 already ingested (P1034502.jpg, page #12) &mdash; has corrections, cannot replace from here"</em><br>
-    No replace button. The checkbox is disabled &mdash; you cannot batch-ingest over a corrected page. Handle via admin.
-  </td></tr>
-</table>
-
-<div class="warn">
-  <strong>Changing the year or month</strong> in the dropdowns will update the duplicate warning in real time. If you change to a month that isn't already ingested, the warning disappears and you can ingest normally.
-</div>
-
-<h2>6. Ingest Selected</h2>
-
 <div class="session-step">
-  <span class="step-num">6</span>
-  <div>
-    Click <strong>"Ingest Selected (N)"</strong>. This processes every checked image in one pass:
-    <ol>
-      <li>Uploads the EXIF-normalized page image to DigitalOcean Spaces</li>
-      <li>Creates <code>calendar_pages</code> + <code>calendar_days</code> rows in the database (one transaction)</li>
-      <li>Enqueues OCR jobs for each day cell</li>
-      <li>Moves the card to the collapsed "Completed" section</li>
-    </ol>
-    The button shows "Ingesting..." while working.
+  <span class="step-num">8</span>
+  <div>Run Stage 2 (Claude cleanup):
+    <br><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts --stage=llm_cleanup</code>
+    <ul>
+      <li>For each cell: crops from the warped page (grayscale + normalize + sharpen)</li>
+      <li>Sends Claude Sonnet the cell image + Google Vision raw text + family context prompt</li>
+      <li>Writes one <code>llm_draft_runs</code> row per cell (linked to <code>ocr_runs</code>)</li>
+      <li>~3 seconds per cell, ~$0.50 per page</li>
+    </ul>
   </div>
 </div>
 
-<div class="warn">
-  <strong>If ingestion fails</strong> for an image, it stays in the active list with a red error message. You can retry &mdash; the upload is idempotent (same image won't be duplicated in Spaces). Fix the underlying issue (e.g., that month already ingested, DB unreachable) and click Ingest again.
+<p>Or run both stages together: <code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></p>
+
+<div class="info">
+  <strong>Useful flags:</strong>
+  <code>--dry-run</code> (claim jobs but skip API calls),
+  <code>--page-id=N</code> (one page only),
+  <code>--limit=N</code> (max N jobs)
 </div>
 
-<h2>7. Verify</h2>
+<h2>Phase 4: Review &amp; Correction</h2>
 
 <div class="session-step">
-  <span class="step-num">7</span>
-  <div>
-    After ingestion:
+  <span class="step-num">9</span>
+  <div>Review OCR results at <span class="url">http://localhost:5176/admin/ocr-review/{pageId}</span>
     <ul>
-      <li>Ingested images appear under the <strong>"Completed (N)"</strong> toggle at the bottom, showing filename, year-month, and page ID</li>
-      <li>Reload the page &mdash; completed images stay completed, new tether images appear in the active list</li>
-      <li>Repeat steps 3&ndash;6 for the next batch of pages</li>
+      <li>Calendar grid of cell images with Claude draft text</li>
+      <li>Click any cell image for lightbox zoom</li>
+      <li>Confidence percentages from Google Vision (yellow = 40&ndash;69%, green = 70%+)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="session-step">
+  <span class="step-num">10</span>
+  <div>Madonna corrects at <span class="url">https://madonnahist.gaylon.photos/correct</span>
+    <ul>
+      <li>Month list with progress bars &mdash; "Resume Correcting" goes to first uncorrected day</li>
+      <li>Two-column editor: cell image (click to zoom, "View full page" for context) + corrected text textarea</li>
+      <li><strong>Save &amp; Next</strong> &mdash; saves accepted correction, advances to next day</li>
+      <li><strong>Skip</strong> &mdash; marks as in-progress, moves forward (won't reappear in queue)</li>
+      <li><strong>Flag Illegible</strong> &mdash; modal with optional note, marks as illegible</li>
+      <li>Accepted corrections auto-populate the <code>correction_lexicon</code> (word-level diffs improve future OCR)</li>
     </ul>
   </div>
 </div>
 
 <h2>Quick Reference</h2>
 <table>
-  <tr><th>URL</th><td class="url">http://localhost:5176/admin/capture</td></tr>
-  <tr><th>Runs on</th><td class="bold">Local Mac only (not the droplet)</td></tr>
-  <tr><th>Start server</th><td><code>npm run dev</code> in the madonnahist directory</td></tr>
-  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code></td></tr>
-  <tr><th>DB connection</th><td>Postgres on droplet via <code>.env</code> settings (PGHOST/PGPORT/PGDATABASE)</td></tr>
-  <tr><th>Vision API</th><td>1,000 free calls/month &mdash; ~2 calls per page (full-page OCR)</td></tr>
-  <tr><th>Typical session</th><td>Shoot 12 pages, reload, Classify All, review, Ingest &mdash; ~2 minutes</td></tr>
+  <tr><th>Capture intake</th><td class="url">http://localhost:5176/admin/capture</td></tr>
+  <tr><th>Grid alignment</th><td class="url">http://localhost:5176/admin/grid-align/{pageId}</td></tr>
+  <tr><th>OCR review</th><td class="url">http://localhost:5176/admin/ocr-review/{pageId}</td></tr>
+  <tr><th>Correction UI</th><td class="url">https://madonnahist.gaylon.photos/correct</td></tr>
+  <tr><th>Capture runs on</th><td class="bold">Local Mac only (reads ~/Lumix Tether)</td></tr>
+  <tr><th>Grid/OCR/Correct runs on</th><td class="bold">Any machine (droplet DB + Spaces)</td></tr>
+  <tr><th>Start dev server</th><td><code>npm run dev</code></td></tr>
+  <tr><th>Run OCR</th><td><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></td></tr>
+  <tr><th>Deploy</th><td><code>./scripts/deploy-to-DO.sh</code></td></tr>
+  <tr><th>Vision API</th><td>1,000 free calls/month (1 call per page for full-page OCR)</td></tr>
+  <tr><th>Claude API</th><td>~$0.50 per page (31 cell cleanups via Sonnet)</td></tr>
+  <tr><th>Typical per-page time</th><td>Shoot &rarr; Classify &rarr; Ingest: 1 min. Grid align: 2 min. OCR: 2 min.</td></tr>
 </table>
 
 <h2>Troubleshooting</h2>
 <table>
-  <tr><th>"Tether folder not found"</th><td><code>~/Lumix Tether</code> doesn't exist. Open Lumix Tether and shoot one image to create it. Or set <code>TETHER_DIR</code> in <code>.env</code> if your folder is elsewhere.</td></tr>
-  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Add <code>GOOGLE_VISION_API_KEY=...</code> to <code>.env</code> and restart the dev server.</td></tr>
-  <tr><th>Images don't appear after shooting</th><td>Reload the page. Discovery runs on page load, not live.</td></tr>
-  <tr><th>Duplicate month detected</th><td>The card shows a warning with the old filename and page ID. If the old page has no corrections, click <strong>"Replace Existing"</strong> to swap it. If the old page has corrections from Madonna, replacement is blocked &mdash; handle via admin.</td></tr>
-  <tr><th>Classification says LOW / no month found</th><td>Normal for handwritten or unusual headers. Set year and month manually from the dropdowns.</td></tr>
-  <tr><th>"Layout can't hold this month"</th><td>The selected grid template doesn't have enough slots. Switch to <code>5-row-wrapped</code> or <code>6-row-standard</code>.</td></tr>
-  <tr><th>DB connection refused</th><td>Check that the droplet is reachable. If using an SSH tunnel, make sure it's running. Verify <code>PGHOST</code>/<code>PGPORT</code> in <code>.env</code>.</td></tr>
+  <tr><th>"Tether folder not found"</th><td><code>~/Lumix Tether</code> doesn't exist. Open Lumix Tether and shoot one image. Or set <code>TETHER_DIR</code> in <code>.env</code>.</td></tr>
+  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Add to <code>.env</code> and restart dev server. Also stored in <code>private_data.api_credentials</code> for the OCR worker.</td></tr>
+  <tr><th>Images don't appear after shooting</th><td>Reload the page. Discovery runs on page load.</td></tr>
+  <tr><th>Duplicate month detected</th><td>Card shows warning with old filename. Replace if no corrections; otherwise handle via admin.</td></tr>
+  <tr><th>Warp takes too long / hangs</th><td>Normal for full-res G9 II images (15&ndash;30 sec). Button shows "Processing warp..." The perspective transform is pure JS bilinear interpolation on ~22M pixels.</td></tr>
+  <tr><th>OCR worker: "stale grid version"</th><td>Grid was updated after the OCR job was enqueued. Re-run the worker &mdash; it will pick up fresh jobs.</td></tr>
+  <tr><th>OCR worker: "No pending jobs"</th><td>All jobs processed. Re-queue via grid-align (check "Re-run OCR" + Apply Grid) or manually INSERT a <code>page_ocr</code> job.</td></tr>
+  <tr><th>Correction UI: "Not authenticated"</th><td>The auth stub queries for username 'madonna' in the users table. Verify the user exists: <code>SELECT * FROM users</code>.</td></tr>
+  <tr><th>DB connection refused</th><td>Check SSH tunnel is running (<code>com.gaylon.madonnahist-db-tunnel</code> LaunchAgent, localhost:5435 &rarr; droplet:5434).</td></tr>
+  <tr><th>Layout says "won't fit"</th><td>The grid template can't hold the selected month. Try <code>5-row-wrapped</code> or <code>6-row-standard</code>.</td></tr>
 </table>
 
 <div class="footer">
-  Capture Intake Workflow &mdash; madonnahist &mdash; 2026-06-01
-  <br>See also: <code>docs/capture-quick-reference.html</code> (camera settings), <code>docs/2026-05-29-capture-intake-pipeline.md</code> (full technical plan)
+  Capture &amp; Processing Workflow &mdash; madonnahist &mdash; 2026-06-03
+  <br>See also: <code>docs/capture-quick-reference.html</code> (camera settings),
+  <code>docs/2026-06-02-vocabulary-tables-correction-ui-plan.md</code> (correction UI plan)
 </div>
 
 </body>
