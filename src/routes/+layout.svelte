@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { enhance } from '$app/forms';
 
-	let { children } = $props();
+	let { children, data } = $props();
 
 	const section = $derived.by(() => {
 		const p = page.url.pathname;
@@ -17,6 +18,13 @@
 	{#if section}
 		<span class="sep">/</span>
 		<span class="section">{section}</span>
+	{/if}
+	<span class="spacer"></span>
+	{#if data.user}
+		<span class="username">{data.user.display_name}</span>
+		<form method="POST" action="/login?/logout" use:enhance class="logout-form">
+			<button type="submit" class="logout">Sign out</button>
+		</form>
 	{/if}
 </nav>
 
@@ -53,6 +61,29 @@
 	}
 	.section {
 		color: #bbb;
+	}
+	.spacer {
+		flex: 1;
+	}
+	.username {
+		color: #aaa;
+		font-size: 0.8rem;
+	}
+	.logout-form {
+		display: inline;
+	}
+	.logout {
+		background: none;
+		border: none;
+		color: #888;
+		font-size: 0.75rem;
+		cursor: pointer;
+		padding: 0.15rem 0.4rem;
+		border-radius: 3px;
+	}
+	.logout:hover {
+		color: #fff;
+		background: #555;
 	}
 	main {
 		min-height: calc(100vh - 2.5rem);

@@ -1,4 +1,43 @@
-// Placeholder. Real argon2id hashing, cookie sessions, and route guards land
-// in td-510a34. Until then this module exists only so future imports from
-// $lib/server/auth resolve and the directory pattern matches the V4 spec.
-export {};
+import argon2 from 'argon2';
+import { query } from '$lib/db';
+
+const ARGON2_OPTS: argon2.Options & { raw?: false } = {
+	type: argon2.argon2id,
+	memoryCost: 19456,
+	timeCost: 2,
+	parallelism: 1
+};
+
+export async function hashPassword(password: string): Promise<string> {
+	return argon2.hash(password, ARGON2_OPTS);
+}
+
+export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+	try {
+		return await argon2.verify(hash, password);
+	} catch {
+		return false;
+	}
+}
+
+export interface DbUser {
+	id: number;
+	username: string;
+	display_name: string;
+	role: 'admin' | 'corrector' | 'viewer';
+	password_hash: string;
+	last_login_at: string | null;
+}
+
+export async function findUserByUsername(username: string): Promise<DbUser | null> {
+	const res = await query<DbUser>(
+		`SELECT id, username, display_name, role, password_hash, last_login_at
+		   FROM users WHERE username = $1`,
+		[username]
+	);
+	return res.rows[0] ?? null;
+}
+
+export async function recordLogin(userId: number): Promise<void> {
+	await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [userId]);
+}
