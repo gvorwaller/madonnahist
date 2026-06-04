@@ -43,7 +43,11 @@ async function buildCleanupPrompt(): Promise<{ prompt: string; version: string }
 	);
 
 	const lexRes = await query<{ ocr_token: string; corrected_token: string; frequency: number }>(
-		`SELECT ocr_token, corrected_token, frequency FROM correction_lexicon WHERE is_active = true ORDER BY frequency DESC LIMIT 50`
+		`SELECT ocr_token, corrected_token, frequency FROM correction_lexicon WHERE frequency >= 2 ORDER BY frequency DESC LIMIT 50`
+	);
+
+	const notationRes = await query<{ input_shorthand: string; canonical_form: string; meaning: string }>(
+		`SELECT input_shorthand, canonical_form, meaning FROM notation_key ORDER BY id`
 	);
 
 	const byCategory = new Map<string, string[]>();
@@ -66,6 +70,12 @@ async function buildCleanupPrompt(): Promise<{ prompt: string; version: string }
 	}
 	contextBlock += 'Weight entries appear as numbers like "114", "125 lb"';
 
+	let notationBlock = '';
+	if (notationRes.rows.length > 0) {
+		notationBlock = '\n\nNOTATION SYMBOLS (shorthand used in the calendar):\n' +
+			notationRes.rows.map(r => `"${r.input_shorthand}" (or "${r.canonical_form}") means "${r.meaning}" — always expand to the full word`).join('\n');
+	}
+
 	let lexiconBlock = '';
 	if (lexRes.rows.length > 0) {
 		lexiconBlock = '\n\nKNOWN OCR ERRORS (the handwriting OCR often misreads these):\n' +
@@ -78,6 +88,7 @@ async function buildCleanupPrompt(): Promise<{ prompt: string; version: string }
 		'1. The raw OCR text (from Google Vision) — noisy but character-level accurate\n' +
 		'2. An image of the handwritten entry for visual verification\n\n' +
 		contextBlock +
+		notationBlock +
 		lexiconBlock +
 		'\n\nINSTRUCTIONS:\n' +
 		'- Fix obvious OCR errors using the image and family context\n' +

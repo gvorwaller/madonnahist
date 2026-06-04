@@ -21,6 +21,11 @@
 			<h2>Grid Alignment</h2>
 			<p>Adjust grid lines on calendar pages. Select a page to align.</p>
 		</a>
+
+		<a href="/admin/substitutions" class="tool">
+			<h2>Substitutions</h2>
+			<p>Apply notation and lexicon replacements to uncorrected LLM drafts in bulk.</p>
+		</a>
 	</div>
 </div>
 
