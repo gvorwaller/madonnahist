@@ -11,7 +11,7 @@ export const SESSION_COOKIE_OPTS = {
 	maxAge: 60 * 60 * 24 * 30
 };
 
-const PUBLIC_PATHS = ['/', '/login', '/api/health'];
+const PUBLIC_PATHS = ['/login', '/api/health'];
 
 function isPublic(path: string): boolean {
 	return PUBLIC_PATHS.some(p => path === p);

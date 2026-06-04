@@ -6,6 +6,7 @@
 </script>
 
 <div class="page">
+	<a href="/" class="back">&larr; Home</a>
 	<header>
 		<h1>Correction Queue</h1>
 		{#if data.resumeDate}
@@ -72,6 +73,14 @@
 		margin: 0 auto;
 		padding: 2rem;
 	}
+	.back {
+		display: inline-block;
+		margin-bottom: 0.75rem;
+		color: #555;
+		font-size: 0.8rem;
+		text-decoration: none;
+	}
+	.back:hover { text-decoration: underline; }
 	header {
 		margin-bottom: 2rem;
 	}

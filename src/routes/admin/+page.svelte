@@ -1,6 +1,8 @@
 <div class="dashboard">
 	<h1>Admin</h1>
 
+	<a href="/" class="back">&larr; Home</a>
+
 	<div class="tools">
 		<a href="/admin/capture" class="tool">
 			<h2>Capture Intake</h2>
@@ -30,6 +32,14 @@
 		margin: 0 auto;
 		padding: 1.5rem 1rem;
 	}
+	.back {
+		display: inline-block;
+		margin-bottom: 1rem;
+		color: #555;
+		font-size: 0.8rem;
+		text-decoration: none;
+	}
+	.back:hover { text-decoration: underline; }
 	h1 {
 		font-size: 1.4rem;
 		margin: 0 0 1.25rem;

@@ -14,7 +14,7 @@
 		<li>Person profiles</li>
 		<li>Immersive book view</li>
 	</ul>
-	<a href="/" class="back">Back to home</a>
+	<a href="/" class="back">&larr; Home</a>
 </div>
 
 <style>
