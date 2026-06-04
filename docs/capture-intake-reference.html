@@ -141,7 +141,8 @@
 <h1>Capture &amp; Processing Workflow &mdash; Calendar Archive</h1>
 
 <div class="pipeline">
-  G9 II + Lumix Tether <span class="arrow">&rarr;</span>
+  G9 II + Lumix Tether (Mac) <span class="arrow">&rarr;</span>
+  rsync to DO droplet <span class="arrow">&rarr;</span>
   <code>/admin/capture</code> (classify + ingest) <span class="arrow">&rarr;</span>
   <code>/admin/grid-align</code> (corners + warp + lines) <span class="arrow">&rarr;</span>
   OCR Worker (Google Vision full-page + Claude cleanup) <span class="arrow">&rarr;</span>
@@ -150,32 +151,34 @@
 </div>
 
 <div class="info">
-  <strong>Capture intake runs on your local Mac</strong> (reads <code>~/Lumix Tether</code>).
-  Grid alignment, OCR, and corrections run against the droplet DB and work from any machine.
-  Madonna accesses the correction UI at <span class="url">https://madonnahist.gaylon.photos/correct</span>.
+  <strong>Everything runs on the DO droplet.</strong> The only local Mac process is Lumix Tether (camera capture).
+  A LaunchAgent rsyncs <code>~/Lumix Tether</code> to the droplet every 2 minutes.
+  All admin, correction, and viewer UIs are at <span class="url">https://madonnahist.gaylon.photos</span>.
 </div>
 
 <h2>Prerequisites</h2>
 <table>
   <tr><th>Camera connected</th><td>G9 II via USB, Lumix Tether running</td></tr>
-  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> &mdash; Lumix Tether writes JPG+RAW into dated subfolders</td></tr>
-  <tr><th>DB access</th><td>Postgres on the droplet reachable via SSH tunnel (<code>localhost:5435 &rarr; droplet:5434</code>)</td></tr>
-  <tr><th>Migrations applied</th><td>Run <code>./backend/db/migrate_pg.sh</code> &mdash; currently through 0013</td></tr>
-  <tr><th>Google Vision key</th><td><code>GOOGLE_VISION_API_KEY</code> in <code>.env</code>, also stored in <code>private_data.api_credentials</code></td></tr>
-  <tr><th>Anthropic API key</th><td><code>ANTHROPIC_API_KEY</code> in <code>.env</code> (for Claude cleanup stage)</td></tr>
+  <tr><th>Camera file format</th><td><strong>JPG Fine only</strong> (no RAW &mdash; not needed for OCR pipeline)</td></tr>
+  <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> on Mac &mdash; Lumix Tether writes JPGs into dated subfolders</td></tr>
+  <tr><th>rsync LaunchAgent</th><td><code>com.gaylon.madonnahist-tether-sync</code> &mdash; syncs JPGs (excludes .RW2, .DS_Store) to <code>/opt/madonnahist/tether/</code> on the droplet every 2 min</td></tr>
+  <tr><th>Auth</th><td>Login at <span class="url">https://madonnahist.gaylon.photos/login</span> &mdash; gaylon (admin), madonna (corrector)</td></tr>
+  <tr><th>Migrations applied</th><td>Run via <code>./scripts/deploy-to-DO.sh</code> &mdash; currently through 0015</td></tr>
+  <tr><th>Google Vision key</th><td>Stored in <code>private_data.api_credentials</code> on the droplet DB</td></tr>
+  <tr><th>Anthropic API key</th><td><code>ANTHROPIC_API_KEY</code> in <code>.env</code> on the droplet (for Claude cleanup stage)</td></tr>
 </table>
 
 <h2>Phase 1: Capture &amp; Ingest</h2>
 
 <div class="session-step">
   <span class="step-num">1</span>
-  <div>Start the dev server: <code>npm run dev</code> &mdash; port 5176.
-    Open <span class="url">http://localhost:5176/admin/capture</span></div>
+  <div>Photograph calendar pages with Lumix Tether. Wait ~2 min for rsync to sync to the droplet.</div>
 </div>
 
 <div class="session-step">
   <span class="step-num">2</span>
-  <div>Photograph calendar pages with Lumix Tether. Reload the page to pick up new images.</div>
+  <div>Open <span class="url">https://madonnahist.gaylon.photos/admin/capture</span> &mdash; sign in as gaylon.
+    New images appear automatically (discovery runs on page load).</div>
 </div>
 
 <div class="session-step">
@@ -189,7 +192,7 @@
     <ul>
       <li><span class="badge badge-high">HIGH</span> + <span class="badge badge-good">GOOD</span> &mdash; confirm year/month, check the box</li>
       <li><span class="badge badge-med">MED</span> / <span class="badge badge-low">LOW</span> &mdash; set year/month manually, check the box</li>
-      <li><span class="badge badge-reshoot">RESHOOT</span> &mdash; re-photograph, reload</li>
+      <li><span class="badge badge-reshoot">RESHOOT</span> &mdash; re-photograph, wait for rsync, reload</li>
     </ul>
   </div>
 </div>
@@ -210,8 +213,8 @@
 
 <div class="session-step">
   <span class="step-num">6</span>
-  <div>Navigate to <span class="url">http://localhost:5176/admin/grid-align/{pageId}</span>
-    (linked from OCR review). Two-stage process:</div>
+  <div>Navigate to <span class="url">https://madonnahist.gaylon.photos/admin/grid-align</span>
+    and select a page. Two-stage process:</div>
 </div>
 
 <h3>Stage A: Place Corners (on original image)</h3>
@@ -228,6 +231,7 @@
   <li>Drag individual grid lines to match actual cell boundaries (solid lines, row/col resize cursors)</li>
   <li>Live crop preview strip shows sample cells below the image</li>
   <li>Click <strong>"Apply Grid"</strong> (shows "Saving grid..." while working) &mdash; saves lines, recomputes crop bounds, re-queues OCR</li>
+  <li>Green banner confirms save; red banner shows errors</li>
   <li><strong>"Re-place Corners"</strong> resets the warp and returns to Stage A</li>
 </ul>
 
@@ -237,7 +241,7 @@
 
 <h2>Phase 3: OCR Pipeline</h2>
 
-<p>The OCR worker runs as a one-shot script (not PM2). Two stages, run independently:</p>
+<p>The OCR worker runs as a one-shot script on the droplet. Two stages, run independently:</p>
 
 <div class="session-step">
   <span class="step-num">7</span>
@@ -258,7 +262,8 @@
     <br><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts --stage=llm_cleanup</code>
     <ul>
       <li>For each cell: crops from the warped page (grayscale + normalize + sharpen)</li>
-      <li>Sends Claude Sonnet the cell image + Google Vision raw text + family context prompt</li>
+      <li>Sends Claude Sonnet the cell image + Google Vision raw text + dynamic family context prompt</li>
+      <li>Prompt assembled from <code>ocr_vocabulary</code> + <code>correction_lexicon</code> tables (manage at <code>/admin/vocabulary</code>)</li>
       <li>Writes one <code>llm_draft_runs</code> row per cell (linked to <code>ocr_runs</code>)</li>
       <li>~3 seconds per cell, ~$0.50 per page</li>
     </ul>
@@ -271,18 +276,20 @@
   <strong>Useful flags:</strong>
   <code>--dry-run</code> (claim jobs but skip API calls),
   <code>--page-id=N</code> (one page only),
-  <code>--limit=N</code> (max N jobs)
+  <code>--limit=N</code> (max N jobs),
+  <code>--show-prompt</code> (print the assembled cleanup prompt and exit)
 </div>
 
 <h2>Phase 4: Review &amp; Correction</h2>
 
 <div class="session-step">
   <span class="step-num">9</span>
-  <div>Review OCR results at <span class="url">http://localhost:5176/admin/ocr-review/{pageId}</span>
+  <div>Review OCR results at <span class="url">https://madonnahist.gaylon.photos/admin/ocr-review</span>
     <ul>
-      <li>Calendar grid of cell images with Claude draft text</li>
+      <li>Select a page to see calendar grid of cell images with Claude draft text</li>
       <li>Click any cell image for lightbox zoom</li>
       <li>Confidence percentages from Google Vision (yellow = 40&ndash;69%, green = 70%+)</li>
+      <li>Filter by low confidence or blank cells</li>
     </ul>
   </div>
 </div>
@@ -301,40 +308,53 @@
   </div>
 </div>
 
+<h2>Image Sync: Mac to Droplet</h2>
+<table>
+  <tr><th>LaunchAgent</th><td><code>com.gaylon.madonnahist-tether-sync</code></td></tr>
+  <tr><th>Interval</th><td>Every 2 minutes</td></tr>
+  <tr><th>Source</th><td><code>~/Lumix Tether/</code> (Mac)</td></tr>
+  <tr><th>Destination</th><td><code>/opt/madonnahist/tether/</code> (droplet)</td></tr>
+  <tr><th>Excludes</th><td><code>*.RW2</code>, <code>*.rw2</code>, <code>.DS_Store</code></td></tr>
+  <tr><th>Log</th><td><code>~/Library/Logs/madonnahist-tether-sync.log</code></td></tr>
+  <tr><th>Reload</th><td><code>launchctl unload ~/Library/LaunchAgents/com.gaylon.madonnahist-tether-sync.plist && launchctl load ...</code></td></tr>
+  <tr><th>Manual sync</th><td><code>rsync -avz --exclude='*.RW2' --exclude='.DS_Store' ~/Lumix\ Tether/ root@134.199.211.199:/opt/madonnahist/tether/</code></td></tr>
+</table>
+
 <h2>Quick Reference</h2>
 <table>
-  <tr><th>Capture intake</th><td class="url">http://localhost:5176/admin/capture</td></tr>
-  <tr><th>Grid alignment</th><td class="url">http://localhost:5176/admin/grid-align/{pageId}</td></tr>
-  <tr><th>OCR review</th><td class="url">http://localhost:5176/admin/ocr-review/{pageId}</td></tr>
+  <tr><th>Landing page</th><td class="url">https://madonnahist.gaylon.photos</td></tr>
+  <tr><th>Capture intake</th><td class="url">https://madonnahist.gaylon.photos/admin/capture</td></tr>
+  <tr><th>Grid alignment</th><td class="url">https://madonnahist.gaylon.photos/admin/grid-align</td></tr>
+  <tr><th>OCR review</th><td class="url">https://madonnahist.gaylon.photos/admin/ocr-review</td></tr>
+  <tr><th>Vocabulary</th><td class="url">https://madonnahist.gaylon.photos/admin/vocabulary</td></tr>
   <tr><th>Correction UI</th><td class="url">https://madonnahist.gaylon.photos/correct</td></tr>
-  <tr><th>Capture runs on</th><td class="bold">Local Mac only (reads ~/Lumix Tether)</td></tr>
-  <tr><th>Grid/OCR/Correct runs on</th><td class="bold">Any machine (droplet DB + Spaces)</td></tr>
-  <tr><th>Start dev server</th><td><code>npm run dev</code></td></tr>
-  <tr><th>Run OCR</th><td><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></td></tr>
+  <tr><th>Runs on</th><td class="bold">Everything on DO droplet. Only Lumix Tether runs on the Mac.</td></tr>
+  <tr><th>Run OCR (on droplet)</th><td><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></td></tr>
   <tr><th>Deploy</th><td><code>./scripts/deploy-to-DO.sh</code></td></tr>
   <tr><th>Vision API</th><td>1,000 free calls/month (1 call per page for full-page OCR)</td></tr>
   <tr><th>Claude API</th><td>~$0.50 per page (31 cell cleanups via Sonnet)</td></tr>
-  <tr><th>Typical per-page time</th><td>Shoot &rarr; Classify &rarr; Ingest: 1 min. Grid align: 2 min. OCR: 2 min.</td></tr>
+  <tr><th>Typical per-page time</th><td>Shoot &rarr; rsync &rarr; Classify &rarr; Ingest: 3 min. Grid align: 2 min. OCR: 2 min.</td></tr>
 </table>
 
 <h2>Troubleshooting</h2>
 <table>
-  <tr><th>"Tether folder not found"</th><td><code>~/Lumix Tether</code> doesn't exist. Open Lumix Tether and shoot one image. Or set <code>TETHER_DIR</code> in <code>.env</code>.</td></tr>
-  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Add to <code>.env</code> and restart dev server. Also stored in <code>private_data.api_credentials</code> for the OCR worker.</td></tr>
-  <tr><th>Images don't appear after shooting</th><td>Reload the page. Discovery runs on page load.</td></tr>
+  <tr><th>"Tether folder not found"</th><td><code>TETHER_DIR</code> in <code>.env</code> doesn't exist on the droplet. Verify <code>/opt/madonnahist/tether/</code> exists and rsync has run.</td></tr>
+  <tr><th>Images don't appear after shooting</th><td>Wait 2 min for rsync, then reload. Check <code>~/Library/Logs/madonnahist-tether-sync.log</code> on Mac. Manual sync: <code>rsync -avz ...</code></td></tr>
+  <tr><th>Preview images blank</th><td>Check that <code>source_path</code> in <code>capture_intake</code> is relative (e.g., <code>20260525/P1034702.jpg</code>), not absolute. Files must exist under <code>TETHER_DIR</code>.</td></tr>
+  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Set in <code>.env</code> on the droplet and restart PM2.</td></tr>
   <tr><th>Duplicate month detected</th><td>Card shows warning with old filename. Replace if no corrections; otherwise handle via admin.</td></tr>
   <tr><th>Warp takes too long / hangs</th><td>Normal for full-res G9 II images (15&ndash;30 sec). Button shows "Processing warp..." The perspective transform is pure JS bilinear interpolation on ~22M pixels.</td></tr>
   <tr><th>OCR worker: "stale grid version"</th><td>Grid was updated after the OCR job was enqueued. Re-run the worker &mdash; it will pick up fresh jobs.</td></tr>
   <tr><th>OCR worker: "No pending jobs"</th><td>All jobs processed. Re-queue via grid-align (check "Re-run OCR" + Apply Grid) or manually INSERT a <code>page_ocr</code> job.</td></tr>
-  <tr><th>Correction UI: "Not authenticated"</th><td>The auth stub queries for username 'madonna' in the users table. Verify the user exists: <code>SELECT * FROM users</code>.</td></tr>
-  <tr><th>DB connection refused</th><td>Check SSH tunnel is running (<code>com.gaylon.madonnahist-db-tunnel</code> LaunchAgent, localhost:5435 &rarr; droplet:5434).</td></tr>
+  <tr><th>Not authenticated / 403</th><td>Sign in at <code>/login</code>. Admin pages require the <code>admin</code> role (gaylon). Correction pages require <code>corrector</code> or <code>admin</code>.</td></tr>
+  <tr><th>rsync failing</th><td>Check SSH key auth: <code>ssh root@134.199.211.199 echo ok</code>. Check LaunchAgent is loaded: <code>launchctl list | grep tether</code>.</td></tr>
   <tr><th>Layout says "won't fit"</th><td>The grid template can't hold the selected month. Try <code>5-row-wrapped</code> or <code>6-row-standard</code>.</td></tr>
 </table>
 
 <div class="footer">
-  Capture &amp; Processing Workflow &mdash; madonnahist &mdash; 2026-06-03
+  Capture &amp; Processing Workflow &mdash; madonnahist &mdash; 2026-06-04
   <br>See also: <code>docs/capture-quick-reference.html</code> (camera settings),
-  <code>docs/2026-06-02-vocabulary-tables-correction-ui-plan.md</code> (correction UI plan)
+  <code>docs/equipment-shortlist.md</code> (full equipment guide)
 </div>
 
 </body>
