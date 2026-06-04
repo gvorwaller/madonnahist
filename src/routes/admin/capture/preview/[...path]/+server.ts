@@ -17,7 +17,7 @@ import type { RequestHandler } from './$types';
 const execFileAsync = promisify(execFile);
 
 const TETHER_DIR = join(process.env.TETHER_DIR ?? join(process.env.HOME ?? '', 'Lumix Tether'));
-const CACHE_DIR = join(process.env.HOME ?? '', '.cache', 'madonnahist-previews');
+const CACHE_DIR = join(process.env.HOME ?? '/root', '.cache', 'madonnahist-previews');
 
 async function rw2ToJpeg(srcPath: string, destPath: string, maxDim: number): Promise<void> {
 	const tmpDir = join(CACHE_DIR, 'ql-tmp');
@@ -32,12 +32,13 @@ async function rw2ToJpeg(srcPath: string, destPath: string, maxDim: number): Pro
 }
 
 export const GET: RequestHandler = async ({ params, url }) => {
-	const requested = join(TETHER_DIR, params.path);
+	const relativePath = params.path;
+	const requested = join(TETHER_DIR, relativePath);
 
-	// Only serve files registered in capture_intake.
+	// Only serve files registered in capture_intake (source_path is relative to TETHER_DIR).
 	const registered = await query<{ id: number }>(
 		`SELECT id FROM capture_intake WHERE source_path = $1 LIMIT 1`,
-		[requested]
+		[relativePath]
 	);
 	if (registered.rows.length === 0) {
 		error(404, 'Not a registered capture image');

@@ -27,16 +27,22 @@ const RAW_EXTS = new Set(['.rw2']);
 interface DiscoveredFile {
 	session: string;
 	filename: string;
-	sourcePath: string;
+	relativePath: string;
 	sizeBytes: number;
 	mtime: Date;
 	rawFilename: string | null;
 }
 
-/** Resolve a stored source_path and confirm it lives under TETHER_DIR (rejects symlink escapes). */
-async function validatedPath(sourcePath: string): Promise<string | null> {
+/** Convert a relative source_path to an absolute path under TETHER_DIR. */
+function absolutePath(relativePath: string): string {
+	return join(TETHER_DIR, relativePath);
+}
+
+/** Resolve a stored relative source_path and confirm it lives under TETHER_DIR (rejects symlink escapes). */
+async function validatedPath(relativePath: string): Promise<string | null> {
 	try {
-		const real = await realpath(sourcePath);
+		const abs = absolutePath(relativePath);
+		const real = await realpath(abs);
 		const realTether = await realpath(TETHER_DIR);
 		if (real === realTether || real.startsWith(realTether + sep)) return real;
 		return null;
@@ -66,13 +72,13 @@ async function scanTether(): Promise<DiscoveredFile[]> {
 
 		for (const name of names) {
 			if (!JPG_EXTS.has(extname(name).toLowerCase())) continue;
-			const sourcePath = join(dir, name);
-			const st = await stat(sourcePath);
+			const relPath = join(session, name);
+			const st = await stat(join(dir, name));
 			const stem = name.slice(0, name.length - extname(name).length).toLowerCase();
 			out.push({
 				session,
 				filename: name,
-				sourcePath,
+				relativePath: relPath,
 				sizeBytes: st.size,
 				mtime: st.mtime,
 				rawFilename: rawByStem.get(stem) ?? null
@@ -94,7 +100,7 @@ async function discover(): Promise<void> {
 
 	for (const f of files) {
 		if (knownSet.has(`${f.session}/${f.filename}`)) continue;
-		const buf = await readFile(f.sourcePath);
+		const buf = await readFile(absolutePath(f.relativePath));
 		const hash = createHash('sha256').update(buf).digest('hex');
 		await query(
 			`INSERT INTO capture_intake
@@ -102,7 +108,7 @@ async function discover(): Promise<void> {
 			    content_hash, file_size_bytes, file_mtime)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7)
 			 ON CONFLICT (tether_session, camera_filename) DO NOTHING`,
-			[f.session, f.filename, f.rawFilename, f.sourcePath, hash, f.sizeBytes, f.mtime.toISOString()]
+			[f.session, f.filename, f.rawFilename, f.relativePath, hash, f.sizeBytes, f.mtime.toISOString()]
 		);
 	}
 }
@@ -199,7 +205,7 @@ export const actions: Actions = {
 		const errors: Array<{ id: number; error: string }> = [];
 
 		for (const row of pending.rows) {
-			const path = await validatedPath(row.source_path);
+			const path = await validatedPath(row.source_path);  // source_path is relative
 			if (!path) {
 				errors.push({ id: row.id, error: 'Source file missing or outside tether dir' });
 				continue;
