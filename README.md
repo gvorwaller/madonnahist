@@ -2,7 +2,7 @@
 
 Private family-access web app: ~60 years of handwritten family calendars → OCR + LLM cleanup → human-corrected transcripts → searchable archive.
 
-Authoritative docs: [`docs/calendar-history-system-V4.md`](docs/calendar-history-system-V4.md) (system spec), [`docs/ui-mockups-V2.md`](docs/ui-mockups-V2.md) (UI), [`docs/equipment-shortlist.md`](docs/equipment-shortlist.md) (capture rig), [`docs/infrastructure-setup-plan.md`](docs/infrastructure-setup-plan.md) (this infra build).
+Authoritative docs: [`docs/calendar-history-system-V4.md`](docs/calendar-history-system-V4.md) (system spec), [`docs/ui-mockups-V2.md`](docs/ui-mockups-V2.md) (UI), [`docs/equipment-shortlist.md`](docs/equipment-shortlist.md) (capture rig), [`docs/infrastructure-setup-plan.md`](docs/infrastructure-setup-plan.md) (infra build), [`docs/capture-intake-reference.html`](docs/capture-intake-reference.html) (capture-to-correction pipeline walkthrough).
 Agent rules: [`CLAUDE.md`](CLAUDE.md), [`cs.md`](cs.md).
 
 ---
@@ -41,7 +41,7 @@ SvelteKit (TS, adapter-node, Svelte 5 runes) → PM2 → nginx → Cloudflare. P
 **Roles** (V4 § 8 — there is no `madonnahist_user`):
 - `madonnahist_owner` — owns tables/triggers; used only by `migrate_pg.sh` and ad-hoc admin psql.
 - `madonnahist_app` — runtime role for the SvelteKit web app. No UPDATE on canonical correction columns of `calendar_days`, no DELETE on history tables (V4 § 8).
-- `madonnahist_worker` — reserved for OCR/LLM/entity/summary workers. RLS-scoped insert on `day_tags` / `day_entities` (`source='ai'` only).
+- `madonnahist_worker` — OCR/LLM cleanup workers (PM2 processes). RLS-scoped insert on `day_tags` / `day_entities` (`source='ai'` only).
 
 Local: bare `psql -p 5434 -U <role> -d madonnahist` (passwords in `~/.pgpass`).
 Prod: `sudo -u postgres psql -p 5434 -d madonnahist` or `psql -h 127.0.0.1 -p 5434 -U <role> -d madonnahist` (passwords in `/opt/madonnahist/.env`).
@@ -72,7 +72,7 @@ PGPASSWORD=...
 MIGRATION_PGUSER=madonnahist_owner
 MIGRATION_PGPASSWORD=...
 
-# Worker (reserved)
+# Worker (OCR + LLM cleanup PM2 processes)
 WORKER_PGUSER=madonnahist_worker
 WORKER_PGPASSWORD=...
 
@@ -118,10 +118,24 @@ Migrations live in `backend/db/migrations/`. Tracking table: `admin.schema_migra
 
 Always use `./scripts/deploy-to-DO.sh`. Never manual SSH + build. SSH to droplet uses **IP** `134.199.211.199`, never the domain (Cloudflare resolves to its own IPs).
 
+## Current status
+
+**Phase 1 (Foundation) is complete.** The end-to-end pipeline works: capture → ingest → OCR → LLM cleanup → substitution pass → human correction. Madonna can open the correction UI on her iPad and correct days.
+
+What's built and deployed:
+- Capture intake UI (`/admin/capture`) — classify page images, ingest to Spaces + DB, trigger OCR
+- OCR worker (Claude Vision via PM2) — reads page images, writes `ocr_runs`
+- LLM cleanup worker (Claude via PM2) — rewrites OCR output with vocabulary/lexicon/notation context
+- Substitution engine (`/admin/substitutions`) — deterministic find-and-replace from `notation_key` + high-frequency `correction_lexicon` entries
+- Correction UI (`/correct`) — three-pane editor, session queue, iPad-optimized
+- Admin tools — vocabulary/notation/lexicon management (`/admin/vocabulary`), OCR review (`/admin/ocr-review`), grid alignment (`/admin/grid-align`)
+
+Family viewer deferred — Madonna is the only person who can decode the handwriting, so family access will be a query/narrative tool in a later phase.
+
 ## Phases
 
 Per V4 § 11:
-1. **Foundation** (in progress) — DB, auth, page upload, OCR worker, correction UI, basic viewer. Infra (`td-9c6107`) ✅ done.
-2. **UX & Search** — refined cropping, FTS, calendar nav, mobile viewer polish.
-3. **AI enrichment** — LLM cleanup, entity extractor, name aliases, person pages.
-4. **Narrative & Polish** — summary generator, book view, Transkribus training, pgvector, backup automation.
+1. **Phase 1 — Foundation** ✅ complete
+2. **Phase 2 — UX & Search** — refined cropping, FTS, calendar nav, mobile viewer polish
+3. **Phase 3 — AI enrichment** — entity extractor, name aliases, person/place pages
+4. **Phase 4 — Narrative & Polish** — summary generator, book view, Transkribus training, pgvector, backup automation
