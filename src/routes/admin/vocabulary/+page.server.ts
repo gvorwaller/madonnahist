@@ -17,6 +17,14 @@ interface VocabRow {
 	created_at: string;
 }
 
+interface NotationRow {
+	id: number;
+	input_shorthand: string;
+	canonical_form: string;
+	meaning: string;
+	category: string | null;
+}
+
 interface LexiconRow {
 	id: number;
 	ocr_token: string;
@@ -38,9 +46,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		`SELECT id, ocr_token, corrected_token, frequency, first_seen::text, last_seen::text, is_active, suppressed_at::text
 		   FROM correction_lexicon ORDER BY is_active DESC, frequency DESC`
 	);
+	const notationRes = await query<NotationRow>(
+		`SELECT id, input_shorthand, canonical_form, meaning, category
+		   FROM notation_key ORDER BY id`
+	);
 	return {
 		vocabulary: vocabRes.rows,
-		lexicon: lexiconRes.rows
+		lexicon: lexiconRes.rows,
+		notation: notationRes.rows
 	};
 };
 
@@ -200,6 +213,88 @@ export const actions: Actions = {
 				 JSON.stringify({ is_active: false }),
 				 JSON.stringify({ ocr_token: before.rows[0].ocr_token, corrected_token: before.rows[0].corrected_token, is_active: true }),
 				 `Restored lexicon pair: "${before.rows[0].ocr_token}" → "${before.rows[0].corrected_token}"`]
+			);
+		});
+	},
+
+	addNotation: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const data = await request.formData();
+		const shorthand = (data.get('shorthand') as string)?.trim();
+		const canonical = (data.get('canonical') as string)?.trim();
+		const meaning = (data.get('meaning') as string)?.trim();
+		const category = (data.get('category') as string)?.trim() || null;
+
+		if (!shorthand || !meaning) return fail(400, { error: 'Shorthand and meaning are required' });
+
+		await withTransaction(async (client) => {
+			const res = await client.query<{ id: number }>(
+				`INSERT INTO notation_key (input_shorthand, canonical_form, meaning, category, created_by)
+				 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+				[shorthand, canonical || shorthand, meaning, category, Number(locals.user!.id)]
+			);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[Number(locals.user!.id), 'notation_add', 'notation_key', res.rows[0].id,
+				 null, JSON.stringify({ input_shorthand: shorthand, canonical_form: canonical || shorthand, meaning, category }),
+				 `Added notation: "${shorthand}" → "${meaning}"`]
+			);
+		});
+	},
+
+	updateNotation: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		const shorthand = (data.get('shorthand') as string)?.trim();
+		const canonical = (data.get('canonical') as string)?.trim();
+		const meaning = (data.get('meaning') as string)?.trim();
+		const category = (data.get('category') as string)?.trim() || null;
+
+		if (!Number.isFinite(id)) return fail(400, { error: 'Invalid ID' });
+		if (!shorthand || !meaning) return fail(400, { error: 'Shorthand and meaning are required' });
+
+		const before = await query<NotationRow>(
+			`SELECT id, input_shorthand, canonical_form, meaning, category FROM notation_key WHERE id = $1`, [id]
+		);
+		if (!before.rows[0]) return fail(404, { error: 'Not found' });
+
+		await withTransaction(async (client) => {
+			await client.query(
+				`UPDATE notation_key SET input_shorthand = $2, canonical_form = $3, meaning = $4, category = $5 WHERE id = $1`,
+				[id, shorthand, canonical || shorthand, meaning, category]
+			);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[Number(locals.user!.id), 'notation_update', 'notation_key', id,
+				 JSON.stringify(before.rows[0]),
+				 JSON.stringify({ input_shorthand: shorthand, canonical_form: canonical || shorthand, meaning, category }),
+				 `Updated notation: "${before.rows[0].input_shorthand}" → "${shorthand}"`]
+			);
+		});
+	},
+
+	deleteNotation: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const data = await request.formData();
+		const id = Number(data.get('id'));
+		if (!Number.isFinite(id)) return fail(400, { error: 'Invalid ID' });
+
+		const before = await query<NotationRow>(
+			`SELECT id, input_shorthand, canonical_form, meaning, category FROM notation_key WHERE id = $1`, [id]
+		);
+		if (!before.rows[0]) return fail(404, { error: 'Not found' });
+
+		await withTransaction(async (client) => {
+			await client.query(`DELETE FROM notation_key WHERE id = $1`, [id]);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[Number(locals.user!.id), 'notation_delete', 'notation_key', id,
+				 JSON.stringify(before.rows[0]), null,
+				 `Deleted notation: "${before.rows[0].input_shorthand}" → "${before.rows[0].meaning}"`]
 			);
 		});
 	},

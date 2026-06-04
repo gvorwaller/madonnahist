@@ -11,7 +11,7 @@
 		person: 'name', activity: 'activity', place: 'place', term: 'term'
 	};
 
-	let deleteTarget = $state<{ type: 'vocab' | 'lexicon'; id: number; label: string } | null>(null);
+	let deleteTarget = $state<{ type: 'vocab' | 'lexicon' | 'notation'; id: number; label: string } | null>(null);
 	let promoteTarget = $state<{ id: number; token: string } | null>(null);
 	let promoteCategory = $state('person');
 	let editingVocab = $state<number | null>(null);
@@ -21,6 +21,41 @@
 	let addTerm = $state('');
 	let addNote = $state('');
 	let actionError = $state('');
+
+	let editingNotation = $state<number | null>(null);
+	let editShorthand = $state('');
+	let editCanonical = $state('');
+	let editMeaning = $state('');
+	let editNotationCategory = $state('');
+	let addingNotation = $state(false);
+	let addShorthand = $state('');
+	let addCanonical = $state('');
+	let addMeaning = $state('');
+	let addNotationCategory = $state('');
+
+	function startEditNotation(n: { id: number; input_shorthand: string; canonical_form: string; meaning: string; category: string | null }) {
+		editingNotation = n.id;
+		editShorthand = n.input_shorthand;
+		editCanonical = n.canonical_form;
+		editMeaning = n.meaning;
+		editNotationCategory = n.category ?? '';
+	}
+
+	function cancelEditNotation() {
+		editingNotation = null;
+	}
+
+	function startAddNotation() {
+		addingNotation = true;
+		addShorthand = '';
+		addCanonical = '';
+		addMeaning = '';
+		addNotationCategory = '';
+	}
+
+	function cancelAddNotation() {
+		addingNotation = false;
+	}
 
 	function vocabByCategory(cat: string) {
 		return data.vocabulary.filter((v: { category: string }) => v.category === cat);
@@ -60,13 +95,15 @@
 		if (promoteTarget) promoteTarget = null;
 		if (editingVocab !== null) cancelEdit();
 		if (addCategory !== null) cancelAdd();
+		if (editingNotation !== null) cancelEditNotation();
+		if (addingNotation) cancelAddNotation();
 	}
 }} />
 
 <div class="page">
 	<header>
-		<h1>OCR Vocabulary &amp; Correction Lexicon</h1>
-		<p class="subtitle">Manage the vocabulary that feeds the OCR cleanup prompt, and curate auto-learned correction pairs.</p>
+		<h1>OCR Vocabulary, Notation &amp; Lexicon</h1>
+		<p class="subtitle">Manage vocabulary hints, notation symbols, and auto-learned correction pairs that feed the OCR cleanup pipeline.</p>
 	</header>
 
 	{#if actionError}
@@ -175,7 +212,97 @@
 		{/each}
 	</section>
 
-	<!-- Section B: Correction Lexicon -->
+	<!-- Section B: Notation Key -->
+	<section class="section">
+		<h2>Notation Key</h2>
+		<p class="section-desc">Shorthand symbols used in the calendar. These are expanded by the substitution pass and included in the LLM cleanup prompt.</p>
+
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th>Shorthand</th>
+					<th>Canonical</th>
+					<th>Meaning</th>
+					<th>Category</th>
+					<th class="col-actions">Actions</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each data.notation as n (n.id)}
+					{#if editingNotation === n.id}
+						<tr>
+							<td colspan="5">
+								<form method="POST" action="?/updateNotation" use:enhance={() => {
+									return ({ result, update }) => {
+										if (result.type === 'failure') {
+											actionError = (result.data as { error?: string })?.error ?? 'Update failed';
+										} else {
+											cancelEditNotation();
+											update();
+										}
+									};
+								}}>
+									<input type="hidden" name="id" value={n.id} />
+									<div class="edit-row">
+										<input type="text" name="shorthand" bind:value={editShorthand} class="input" placeholder="Shorthand" />
+										<input type="text" name="canonical" bind:value={editCanonical} class="input" placeholder="Canonical form" />
+										<input type="text" name="meaning" bind:value={editMeaning} class="input" placeholder="Meaning" />
+										<input type="text" name="category" bind:value={editNotationCategory} class="input" placeholder="Category" />
+										<button type="submit" class="btn btn-sm btn-primary">Save</button>
+										<button type="button" class="btn btn-sm btn-secondary" onclick={cancelEditNotation}>Cancel</button>
+									</div>
+								</form>
+							</td>
+						</tr>
+					{:else}
+						<tr>
+							<td class="token">{n.input_shorthand}</td>
+							<td class="token">{n.canonical_form}</td>
+							<td>{n.meaning}</td>
+							<td class="note-cell">{n.category ?? ''}</td>
+							<td class="col-actions">
+								<button class="btn btn-sm btn-secondary" onclick={() => startEditNotation(n)}>Edit</button>
+								<button class="btn btn-sm btn-danger" onclick={() => deleteTarget = { type: 'notation', id: n.id, label: `"${n.input_shorthand}" → "${n.meaning}"` }}>Delete</button>
+							</td>
+						</tr>
+					{/if}
+				{/each}
+				{#if addingNotation}
+					<tr>
+						<td colspan="5">
+							<form method="POST" action="?/addNotation" use:enhance={() => {
+								return ({ result, update }) => {
+									if (result.type === 'failure') {
+										actionError = (result.data as { error?: string })?.error ?? 'Add failed';
+									} else {
+										cancelAddNotation();
+										update();
+									}
+								};
+							}}>
+								<div class="edit-row">
+									<input type="text" name="shorthand" bind:value={addShorthand} class="input" placeholder="Shorthand" />
+									<input type="text" name="canonical" bind:value={addCanonical} class="input" placeholder="Canonical (optional)" />
+									<input type="text" name="meaning" bind:value={addMeaning} class="input" placeholder="Meaning" />
+									<input type="text" name="category" bind:value={addNotationCategory} class="input" placeholder="Category" />
+									<button type="submit" class="btn btn-sm btn-primary" disabled={addShorthand.trim() === '' || addMeaning.trim() === ''}>Add</button>
+									<button type="button" class="btn btn-sm btn-secondary" onclick={cancelAddNotation}>Cancel</button>
+								</div>
+							</form>
+						</td>
+					</tr>
+				{:else}
+					<tr>
+						<td colspan="5">
+							<button class="btn btn-sm btn-secondary add-btn" onclick={startAddNotation}>+ Add notation</button>
+						</td>
+					</tr>
+				{/if}
+			</tbody>
+		</table>
+	</section>
+
+	<!-- Section C: Correction Lexicon -->
 	<section class="section">
 		<h2>Correction Lexicon</h2>
 		<p class="section-desc">Auto-learned OCR substitution pairs from Madonna's corrections. Suppress junk, promote good entries to vocabulary.</p>
@@ -238,10 +365,12 @@
 {#if deleteTarget}
 	<div class="modal-overlay" role="dialog" aria-label="Confirm deletion">
 		<div class="modal">
-			<h2>{deleteTarget.type === 'vocab' ? 'Delete Vocabulary Entry' : 'Suppress Lexicon Pair'}</h2>
+			<h2>{deleteTarget.type === 'vocab' ? 'Delete Vocabulary Entry' : deleteTarget.type === 'notation' ? 'Delete Notation Entry' : 'Suppress Lexicon Pair'}</h2>
 			<p>
 				{#if deleteTarget.type === 'vocab'}
 					Permanently delete <strong>{deleteTarget.label}</strong> from the vocabulary?
+				{:else if deleteTarget.type === 'notation'}
+					Permanently delete notation <strong>{deleteTarget.label}</strong>?
 				{:else}
 					Suppress <strong>{deleteTarget.label}</strong>? It will be excluded from the OCR prompt but kept in history.
 				{/if}
@@ -251,6 +380,20 @@
 				{#if deleteTarget.type === 'vocab'}
 					<form method="POST" action="?/deleteVocab" use:enhance={() => {
 						const t = deleteTarget;
+						return ({ result, update }) => {
+							deleteTarget = null;
+							if (result.type === 'failure') {
+								actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
+							} else {
+								update();
+							}
+						};
+					}}>
+						<input type="hidden" name="id" value={deleteTarget.id} />
+						<button type="submit" class="btn btn-danger">Delete</button>
+					</form>
+				{:else if deleteTarget.type === 'notation'}
+					<form method="POST" action="?/deleteNotation" use:enhance={() => {
 						return ({ result, update }) => {
 							deleteTarget = null;
 							if (result.type === 'failure') {
