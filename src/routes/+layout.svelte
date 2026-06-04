@@ -6,9 +6,9 @@
 
 	const section = $derived.by(() => {
 		const p = page.url.pathname;
-		if (p.startsWith('/admin')) return 'Admin';
-		if (p.startsWith('/correct')) return 'Corrections';
-		if (p.startsWith('/app')) return 'Family';
+		if (p.startsWith('/admin')) return { label: 'Admin', href: '/admin' };
+		if (p.startsWith('/correct')) return { label: 'Corrections', href: '/correct' };
+		if (p.startsWith('/app')) return { label: 'Family', href: '/app' };
 		return null;
 	});
 </script>
@@ -17,7 +17,7 @@
 	<a href="/" class="home">madonnahist</a>
 	{#if section}
 		<span class="sep">/</span>
-		<span class="section">{section}</span>
+		<a href={section.href} class="section">{section.label}</a>
 	{/if}
 	<span class="spacer"></span>
 	{#if data.user}
@@ -61,6 +61,10 @@
 	}
 	.section {
 		color: #bbb;
+		text-decoration: none;
+	}
+	.section:hover {
+		text-decoration: underline;
 	}
 	.spacer {
 		flex: 1;
