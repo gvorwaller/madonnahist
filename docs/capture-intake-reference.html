@@ -146,6 +146,7 @@
   <code>/admin/capture</code> (classify + ingest) <span class="arrow">&rarr;</span>
   <code>/admin/grid-align</code> (corners + warp + lines) <span class="arrow">&rarr;</span>
   OCR Worker (Google Vision full-page + Claude cleanup) <span class="arrow">&rarr;</span>
+  <code>/admin/substitutions</code> (notation + lexicon replacements) <span class="arrow">&rarr;</span>
   <code>/correct</code> (Madonna corrects on iPad) <span class="arrow">&rarr;</span>
   structured <code>calendar_days</code>
 </div>
@@ -263,7 +264,7 @@
     <ul>
       <li>For each cell: crops from the warped page (grayscale + normalize + sharpen)</li>
       <li>Sends Claude Sonnet the cell image + Google Vision raw text + dynamic family context prompt</li>
-      <li>Prompt assembled from <code>ocr_vocabulary</code> + <code>correction_lexicon</code> tables (manage at <code>/admin/vocabulary</code>)</li>
+      <li>Prompt assembled from <code>ocr_vocabulary</code> + <code>correction_lexicon</code> + <code>notation_key</code> tables (manage at <code>/admin/vocabulary</code>)</li>
       <li>Writes one <code>llm_draft_runs</code> row per cell (linked to <code>ocr_runs</code>)</li>
       <li>~3 seconds per cell, ~$0.50 per page</li>
     </ul>
@@ -280,10 +281,33 @@
   <code>--show-prompt</code> (print the assembled cleanup prompt and exit)
 </div>
 
-<h2>Phase 4: Review &amp; Correction</h2>
+<h2>Phase 4: Substitution Pass</h2>
 
 <div class="session-step">
   <span class="step-num">9</span>
+  <div>Open <span class="url">https://madonnahist.gaylon.photos/admin/substitutions</span>
+    <ul>
+      <li>Shows active rules from <code>notation_key</code> (e.g., &ldquo;(R)&rdquo; &rarr; &ldquo;Rebekah&rdquo;) and high-frequency <code>correction_lexicon</code> entries (freq &ge; 3)</li>
+      <li>Click <strong>&ldquo;Run Substitutions&rdquo;</strong> to apply deterministic find-and-replace on all uncorrected LLM drafts</li>
+      <li>Writes new <code>llm_draft_runs</code> rows (preserves history &mdash; original draft is never overwritten)</li>
+      <li>Skips days with accepted corrections (Madonna&rsquo;s text is sacred)</li>
+      <li>Shows before/after diffs for every modified day</li>
+      <li>Re-run any time after adding new notation or vocabulary entries</li>
+    </ul>
+  </div>
+</div>
+
+<div class="info">
+  <strong>Manage rules at <code>/admin/vocabulary</code></strong> &mdash; three sections:
+  <strong>OCR Vocabulary</strong> (family names, places, activities fed to the Claude prompt),
+  <strong>Notation Key</strong> (shorthand symbols like &ldquo;(R)&rdquo; &rarr; &ldquo;Rebekah&rdquo; used for hard substitution),
+  <strong>Correction Lexicon</strong> (auto-learned OCR error pairs from Madonna&rsquo;s corrections).
+</div>
+
+<h2>Phase 5: Review &amp; Correction</h2>
+
+<div class="session-step">
+  <span class="step-num">10</span>
   <div>Review OCR results at <span class="url">https://madonnahist.gaylon.photos/admin/ocr-review</span>
     <ul>
       <li>Select a page to see calendar grid of cell images with Claude draft text</li>
@@ -295,7 +319,7 @@
 </div>
 
 <div class="session-step">
-  <span class="step-num">10</span>
+  <span class="step-num">11</span>
   <div>Madonna corrects at <span class="url">https://madonnahist.gaylon.photos/correct</span>
     <ul>
       <li>Month list with progress bars &mdash; "Resume Correcting" goes to first uncorrected day</li>
@@ -326,7 +350,8 @@
   <tr><th>Capture intake</th><td class="url">https://madonnahist.gaylon.photos/admin/capture</td></tr>
   <tr><th>Grid alignment</th><td class="url">https://madonnahist.gaylon.photos/admin/grid-align</td></tr>
   <tr><th>OCR review</th><td class="url">https://madonnahist.gaylon.photos/admin/ocr-review</td></tr>
-  <tr><th>Vocabulary</th><td class="url">https://madonnahist.gaylon.photos/admin/vocabulary</td></tr>
+  <tr><th>Vocabulary &amp; Notation</th><td class="url">https://madonnahist.gaylon.photos/admin/vocabulary</td></tr>
+  <tr><th>Substitutions</th><td class="url">https://madonnahist.gaylon.photos/admin/substitutions</td></tr>
   <tr><th>Correction UI</th><td class="url">https://madonnahist.gaylon.photos/correct</td></tr>
   <tr><th>Runs on</th><td class="bold">Everything on DO droplet. Only Lumix Tether runs on the Mac.</td></tr>
   <tr><th>Run OCR (on droplet)</th><td><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></td></tr>
