@@ -47,7 +47,7 @@
 	});
 
 	const imageSrc = $derived(`/correct/day/${data.day.entry_date}/cell-image`);
-	const pageImageSrc = $derived(`/admin/grid-align/${data.day.page_id}/page-image`);
+	const pageImageSrc = $derived(`/correct/day/${data.day.entry_date}/page-image`);
 </script>
 
 <svelte:window onkeydown={(e) => {

@@ -1,30 +1,8 @@
 import { query } from '$lib/db';
-import { getObject } from '$lib/ingest/spaces-upload';
 import { cropRegion } from '$lib/image/crop';
+import { getPageBuffer } from '$lib/image/page-cache';
 import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-
-const pageCache = new Map<string, { promise: Promise<Buffer>; expires: number }>();
-const CACHE_TTL = 5 * 60 * 1000;
-
-function getCachedPage(key: string): Promise<Buffer> {
-	const now = Date.now();
-	const entry = pageCache.get(key);
-	if (entry && entry.expires > now) return entry.promise;
-
-	for (const [k, v] of pageCache) {
-		if (v.expires <= now) pageCache.delete(k);
-	}
-
-	const promise = getObject(key);
-	pageCache.set(key, { promise, expires: now + CACHE_TTL });
-
-	promise.catch(() => {
-		pageCache.delete(key);
-	});
-
-	return promise;
-}
 
 export const GET: RequestHandler = async ({ params }) => {
 	const dayId = Number(params.dayId);
@@ -45,7 +23,7 @@ export const GET: RequestHandler = async ({ params }) => {
 	const { crop_bounds, page_image_path, warped_image_path } = res.rows[0];
 
 	const imageKey = warped_image_path ?? page_image_path;
-	const pageBuffer = await getCachedPage(imageKey);
+	const pageBuffer = await getPageBuffer(imageKey);
 	const cropped = await cropRegion(pageBuffer, crop_bounds);
 
 	return new Response(cropped as unknown as BodyInit, {

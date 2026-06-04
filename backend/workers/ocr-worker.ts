@@ -10,6 +10,7 @@
  *   --stage=page_ocr      Run only the page OCR stage
  *   --stage=llm_cleanup   Run only the LLM cleanup stage
  *   --retry-stale-minutes=N  Re-claim in_progress jobs older than N minutes (default 10)
+ *   --show-prompt            Print the assembled cleanup prompt and exit
  */
 import sharp from 'sharp';
 import Anthropic from '@anthropic-ai/sdk';
@@ -24,28 +25,85 @@ const STALE_MINUTES = Number(process.argv.find(a => a.startsWith('--retry-stale-
 const LIMIT = Number(process.argv.find(a => a.startsWith('--limit='))?.split('=')[1] ?? 0);
 const PAGE_ID_FILTER = process.argv.find(a => a.startsWith('--page-id='))?.split('=')[1];
 const DRY_RUN = process.argv.includes('--dry-run');
+const SHOW_PROMPT = process.argv.includes('--show-prompt');
 const STAGE_FILTER = process.argv.find(a => a.startsWith('--stage='))?.split('=')[1] as 'page_ocr' | 'llm_cleanup' | undefined;
+const PROMPT_REFRESH_INTERVAL = 50;
 
-const CLEANUP_PROMPT =
-	'You are cleaning up a machine-generated OCR transcript of one handwritten calendar day entry.\n\n' +
-	'You will receive:\n' +
-	'1. The raw OCR text (from Google Vision) — noisy but character-level accurate\n' +
-	'2. An image of the handwritten entry for visual verification\n\n' +
-	'FAMILY CONTEXT (common names and terms in this calendar):\n' +
-	'Names: Rebekah (often abbreviated Ⓡ or (R)), Gaylon (often Ⓖ or (G)), Dagny, Sophia, ' +
-	'Benjamin, Caleb, Sather, Carmen, Rob, Lisa, Bruce, Clark, Brailyn, Millie\n' +
-	'Activities: Nordac Track (NordicTrack exercise), Seminary, CFM (Come Follow Me), ' +
-	'Study, Walk, Weights, Zoom, FHE (Family Home Evening)\n' +
-	'Places: Washoe Canyon, Ikea\n' +
-	'Terms: call mom, visit, drive, laundry, vacuum, change sheets\n' +
-	'Weight entries appear as numbers like "114", "125 lb"\n\n' +
-	'INSTRUCTIONS:\n' +
-	'- Fix obvious OCR errors using the image and family context\n' +
-	'- Preserve the original line breaks and structure\n' +
-	'- If you cannot confidently read a word, keep the OCR version and add [?] after it\n' +
-	'- Do NOT add content that isn\'t in the handwriting\n' +
-	'- Do NOT add headers, labels, markdown, or commentary\n' +
-	'- Output ONLY the cleaned transcription text';
+interface PromptCache {
+	prompt: string;
+	version: string;
+	jobsSinceRefresh: number;
+}
+
+let promptCache: PromptCache | null = null;
+
+async function buildCleanupPrompt(): Promise<{ prompt: string; version: string }> {
+	const vocabRes = await query<{ term: string; category: string; context_note: string | null }>(
+		`SELECT term, category, context_note FROM ocr_vocabulary WHERE is_active = true ORDER BY category, term`
+	);
+
+	const lexRes = await query<{ ocr_token: string; corrected_token: string; frequency: number }>(
+		`SELECT ocr_token, corrected_token, frequency FROM correction_lexicon WHERE is_active = true ORDER BY frequency DESC LIMIT 50`
+	);
+
+	const byCategory = new Map<string, string[]>();
+	for (const row of vocabRes.rows) {
+		const entry = row.context_note ? `${row.term} (${row.context_note})` : row.term;
+		if (!byCategory.has(row.category)) byCategory.set(row.category, []);
+		byCategory.get(row.category)!.push(entry);
+	}
+
+	const categoryLabels: Record<string, string> = {
+		person: 'Names', activity: 'Activities', place: 'Places', term: 'Terms'
+	};
+
+	let contextBlock = 'FAMILY CONTEXT (common names and terms in this calendar):\n';
+	for (const [cat, label] of Object.entries(categoryLabels)) {
+		const items = byCategory.get(cat);
+		if (items && items.length > 0) {
+			contextBlock += `${label}: ${items.join(', ')}\n`;
+		}
+	}
+	contextBlock += 'Weight entries appear as numbers like "114", "125 lb"';
+
+	let lexiconBlock = '';
+	if (lexRes.rows.length > 0) {
+		lexiconBlock = '\n\nKNOWN OCR ERRORS (the handwriting OCR often misreads these):\n' +
+			lexRes.rows.map(r => `"${r.ocr_token}" → "${r.corrected_token}"`).join('\n');
+	}
+
+	const prompt =
+		'You are cleaning up a machine-generated OCR transcript of one handwritten calendar day entry.\n\n' +
+		'You will receive:\n' +
+		'1. The raw OCR text (from Google Vision) — noisy but character-level accurate\n' +
+		'2. An image of the handwritten entry for visual verification\n\n' +
+		contextBlock +
+		lexiconBlock +
+		'\n\nINSTRUCTIONS:\n' +
+		'- Fix obvious OCR errors using the image and family context\n' +
+		'- Preserve the original line breaks and structure\n' +
+		'- If you cannot confidently read a word, keep the OCR version and add [?] after it\n' +
+		'- Do NOT add content that isn\'t in the handwriting\n' +
+		'- Do NOT add headers, labels, markdown, or commentary\n' +
+		'- Output ONLY the cleaned transcription text';
+
+	const hash = crypto.createHash('sha256').update(prompt).digest('hex').slice(0, 8);
+	const version = `dynamic-v1-${hash}`;
+
+	return { prompt, version };
+}
+
+async function getCleanupPrompt(): Promise<{ prompt: string; version: string }> {
+	if (promptCache && promptCache.jobsSinceRefresh < PROMPT_REFRESH_INTERVAL) {
+		promptCache.jobsSinceRefresh++;
+		return { prompt: promptCache.prompt, version: promptCache.version };
+	}
+
+	const result = await buildCleanupPrompt();
+	promptCache = { ...result, jobsSinceRefresh: 0 };
+	log(`Prompt loaded: ${result.version} (${result.prompt.length} chars)`);
+	return result;
+}
 
 function log(msg: string) {
 	console.log(`[OCR] ${msg}`);
@@ -385,11 +443,12 @@ async function runLlmCleanup() {
 
 				// Skip Claude call if OCR returned empty
 				if (ocrText.trim() === '') {
+					const { version: emptyPromptVersion } = await getCleanupPrompt();
 					await withTransaction(async (client) => {
 						await client.query(
 							`INSERT INTO llm_draft_runs (day_id, based_on_ocr_run_id, model_name, prompt_version, draft_text, confidence_note, created_by_job_run_id)
 							 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-							[dayId, ocrRunId, model, 'cleanup-v1', '', 'empty cell — no OCR text to clean', job.id]
+							[dayId, ocrRunId, model, emptyPromptVersion, '', 'empty cell — no OCR text to clean', job.id]
 						);
 						await client.query(`UPDATE job_runs SET status='done', completed_at=NOW() WHERE id=$1`, [job.id]);
 					});
@@ -399,12 +458,13 @@ async function runLlmCleanup() {
 				}
 
 				// Build the prompt with date context
+				const { prompt: cleanupPrompt, version: promptVersion } = await getCleanupPrompt();
 				const dateLabel = new Date(day.entry_date + 'T00:00:00').toLocaleDateString('en-US', {
 					weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'
 				});
 
 				const fullPrompt =
-					`${CLEANUP_PROMPT}\n\n` +
+					`${cleanupPrompt}\n\n` +
 					`DATE: ${dateLabel}\n\n` +
 					`RAW OCR TEXT:\n${ocrText}`;
 
@@ -436,7 +496,7 @@ async function runLlmCleanup() {
 					await client.query(
 						`INSERT INTO llm_draft_runs (day_id, based_on_ocr_run_id, model_name, prompt_version, draft_text, confidence_note, created_by_job_run_id)
 						 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-						[dayId, ocrRunId, model, 'cleanup-v1', draftText, confidenceNote, job.id]
+						[dayId, ocrRunId, model, promptVersion, draftText, confidenceNote, job.id]
 					);
 					await client.query(`UPDATE job_runs SET status='done', completed_at=NOW() WHERE id=$1`, [job.id]);
 				});
@@ -468,6 +528,15 @@ async function runLlmCleanup() {
 
 async function main() {
 	log('OCR Worker — two-stage pipeline');
+
+	if (SHOW_PROMPT) {
+		const { prompt, version } = await buildCleanupPrompt();
+		console.log(`\n=== Cleanup Prompt (${version}) ===\n`);
+		console.log(prompt);
+		console.log(`\n=== ${prompt.length} chars ===`);
+		return;
+	}
+
 	if (DRY_RUN) log('DRY RUN');
 
 	if (!STAGE_FILTER || STAGE_FILTER === 'page_ocr') {
