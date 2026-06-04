@@ -13,6 +13,7 @@
 	let showConfirmWarning = $state(false);
 	let processing = $state(false);
 	let savingGrid = $state(false);
+	let saveError = $state<string | null>(null);
 
 	const isWarped = $derived(data.isWarped);
 	const initialGridLines = $derived(data.gridLines);
@@ -268,6 +269,9 @@
 		{#if saved}
 			<div class="saved-banner">Grid saved and crop bounds updated.</div>
 		{/if}
+		{#if saveError}
+			<div class="error-banner" role="alert">{saveError}</div>
+		{/if}
 	</header>
 
 	<div
@@ -428,7 +432,15 @@
 			<!-- State 1: Apply Warp -->
 			<form method="POST" action="?/applyWarp" use:enhance={() => {
 				processing = true;
-				return ({ update }) => { processing = false; update(); };
+				saveError = null;
+				return ({ result, update }) => {
+					processing = false;
+					if (result.type === 'failure') {
+						saveError = (result.data as { error?: string })?.error ?? 'Warp failed';
+					} else {
+						update();
+					}
+				};
 			}}>
 				<input type="hidden" name="corners" value={cornersJson} />
 				<button type="submit" class="btn-primary" disabled={processing}>
@@ -443,7 +455,15 @@
 					return ({ update }) => { update({ reset: false }); };
 				}
 				savingGrid = true;
-				return ({ update }) => { savingGrid = false; update(); };
+				saveError = null;
+				return ({ result, update }) => {
+					savingGrid = false;
+					if (result.type === 'failure') {
+						saveError = (result.data as { error?: string })?.error ?? 'Save failed';
+					} else {
+						update();
+					}
+				};
 			}}>
 				<input type="hidden" name="gridLines" value={gridLinesJson} />
 				<input type="hidden" name="rows" value={rows} />
@@ -554,6 +574,15 @@
 		padding: 0.5rem 0.75rem;
 		background: #e6f4e6;
 		color: #1a7a1a;
+		border-radius: 4px;
+		font-size: 0.85rem;
+		font-weight: 600;
+	}
+	.error-banner {
+		margin-top: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		background: #fde2e2;
+		color: #c33;
 		border-radius: 4px;
 		font-size: 0.85rem;
 		font-weight: 600;

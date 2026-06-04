@@ -24,6 +24,14 @@ function evictOldest() {
 	if (oldest !== undefined) evict(oldest);
 }
 
+async function validateBuffer(buf: Buffer): Promise<Buffer> {
+	const meta = await sharp(buf).metadata();
+	if (!meta.width || !meta.height || meta.width < 10 || meta.height < 10) {
+		throw new Error(`Invalid image: ${meta.width}x${meta.height}`);
+	}
+	return buf;
+}
+
 export async function getPageBuffer(key: string, rotate = false): Promise<Buffer> {
 	const cacheKey = rotate ? `${key}:rotated` : key;
 
@@ -41,6 +49,8 @@ export async function getPageBuffer(key: string, rotate = false): Promise<Buffer
 		const buffer = rotate
 			? await sharp(raw).rotate().toBuffer()
 			: raw;
+
+		await validateBuffer(buffer);
 
 		if (cache.size >= MAX_ENTRIES) evictOldest();
 
