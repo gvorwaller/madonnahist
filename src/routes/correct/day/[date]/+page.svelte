@@ -156,7 +156,7 @@
 		}}>
 			<input type="hidden" name="correctedText" value={correctedText} />
 			<button type="submit" class="action-btn btn-primary" disabled={saving || correctedText.trim() === ''}>
-				{saving ? 'Saving...' : 'Save & Next'}
+				{saving ? 'Saving...' : data.day.correction_status === 'accepted' ? 'Save' : 'Save & Next'}
 			</button>
 		</form>
 	</div>
