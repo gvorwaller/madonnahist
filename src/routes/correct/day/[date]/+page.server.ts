@@ -31,6 +31,24 @@ async function prevUncorrectedDate(beforeDate: string): Promise<string | null> {
 	return res.rows[0]?.entry_date ?? null;
 }
 
+async function nextAnyDate(afterDate: string, pageId: number): Promise<string | null> {
+	const res = await query<{ entry_date: string }>(
+		`SELECT entry_date::text AS entry_date FROM calendar_days
+		  WHERE page_id = $2 AND entry_date > $1
+		  ORDER BY entry_date LIMIT 1`, [afterDate, pageId]
+	);
+	return res.rows[0]?.entry_date ?? null;
+}
+
+async function prevAnyDate(beforeDate: string, pageId: number): Promise<string | null> {
+	const res = await query<{ entry_date: string }>(
+		`SELECT entry_date::text AS entry_date FROM calendar_days
+		  WHERE page_id = $2 AND entry_date < $1
+		  ORDER BY entry_date DESC LIMIT 1`, [beforeDate, pageId]
+	);
+	return res.rows[0]?.entry_date ?? null;
+}
+
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) error(401, 'Not authenticated');
 	const entryDate = params.date;
@@ -85,6 +103,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const nextDate = await nextUncorrectedDate(entryDate);
 	const prevDate = await prevUncorrectedDate(entryDate);
+	const nextAny = await nextAnyDate(entryDate, day.page_id);
+	const prevAny = await prevAnyDate(entryDate, day.page_id);
+	const monthKey = `${day.year}-${String(day.month).padStart(2, '0')}`;
 
 	return {
 		day,
@@ -92,7 +113,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		position: countRes.rows[0]?.position ?? 0,
 		total: countRes.rows[0]?.total ?? 0,
 		nextDate,
-		prevDate
+		prevDate,
+		nextAny,
+		prevAny,
+		monthKey
 	};
 };
 
@@ -108,12 +132,13 @@ export const actions = {
 
 		const userId = Number(locals.user.id);
 
-		const dayRes = await query<{ day_id: number; llm_draft_run_id: number | null }>(
-			`SELECT cd.id AS day_id, cd.latest_llm_draft_run_id AS llm_draft_run_id
+		const dayRes = await query<{ day_id: number; llm_draft_run_id: number | null; correction_status: string }>(
+			`SELECT cd.id AS day_id, cd.latest_llm_draft_run_id AS llm_draft_run_id, cd.correction_status
 			   FROM calendar_days cd WHERE cd.entry_date = $1`, [entryDate]
 		);
 		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
-		const { day_id, llm_draft_run_id } = dayRes.rows[0];
+		const { day_id, llm_draft_run_id, correction_status } = dayRes.rows[0];
+		const wasAlreadyCorrected = correction_status === 'accepted';
 
 		await query(
 			`INSERT INTO day_corrections (day_id, corrected_text, status_after, editor_user_id, source_llm_draft_run_id)
@@ -122,6 +147,10 @@ export const actions = {
 		);
 
 		await populateLexicon(day_id, correctedText);
+
+		if (wasAlreadyCorrected) {
+			redirect(303, `/correct/day/${entryDate}`);
+		}
 
 		const nextDate = await nextUncorrectedDate(entryDate);
 		redirect(303, `/correct/day/${nextDate ?? entryDate}`);

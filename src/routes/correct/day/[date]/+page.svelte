@@ -60,19 +60,32 @@
 
 <div class="page">
 	<header>
-		<a href="/correct" class="back">Correction Home</a>
+		<div class="breadcrumbs">
+			<a href="/correct" class="back">Queue</a>
+			<span class="crumb-sep">/</span>
+			<a href="/correct/month/{data.monthKey}" class="back">{monthNames[data.day.month]} {data.day.year}</a>
+		</div>
 		<div class="header-row">
 			<h1>{dateLabel}</h1>
 			<span class="status-badge {statusClass}">{statusLabel}</span>
 		</div>
 		<div class="nav-row">
-			<span class="position">Day {data.position} of {data.total} &middot; {monthNames[data.day.month]} {data.day.year}</span>
+			<span class="position">Day {data.position} of {data.total}</span>
 			<div class="nav-links">
+				{#if data.prevAny}
+					<a href="/correct/day/{data.prevAny}" class="nav-link">Prev</a>
+				{/if}
+				{#if data.nextAny}
+					<a href="/correct/day/{data.nextAny}" class="nav-link">Next</a>
+				{/if}
+				{#if data.prevDate || data.nextDate}
+					<span class="nav-sep"></span>
+				{/if}
 				{#if data.prevDate}
-					<a href="/correct/day/{data.prevDate}" class="nav-link">Prev uncorrected</a>
+					<a href="/correct/day/{data.prevDate}" class="nav-link uncorrected">Prev uncorrected</a>
 				{/if}
 				{#if data.nextDate}
-					<a href="/correct/day/{data.nextDate}" class="nav-link">Next uncorrected</a>
+					<a href="/correct/day/{data.nextDate}" class="nav-link uncorrected">Next uncorrected</a>
 				{/if}
 			</div>
 		</div>
@@ -210,6 +223,15 @@
 	header {
 		margin-bottom: 1rem;
 	}
+	.breadcrumbs {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.crumb-sep {
+		color: #aaa;
+		font-size: 0.85rem;
+	}
 	.back {
 		font-size: 0.85rem;
 		color: #555;
@@ -254,6 +276,14 @@
 		text-decoration: none;
 	}
 	.nav-link:hover { text-decoration: underline; }
+	.nav-link.uncorrected {
+		color: #1a7a1a;
+	}
+	.nav-sep {
+		width: 1px;
+		height: 1rem;
+		background: #ccc;
+	}
 
 	.editor-grid {
 		display: grid;

@@ -22,10 +22,10 @@
 			{#each data.months as m}
 				{@const pct = m.total_days > 0 ? Math.round((m.corrected_count / m.total_days) * 100) : 0}
 				{@const ready = m.draft_ready_count > 0 && m.pending_count > 0}
+				{@const monthKey = `${m.year}-${String(m.month).padStart(2, '0')}`}
 				<a
-					href={m.first_pending_date ? `/correct/day/${m.first_pending_date}` : '#'}
+					href="/correct/month/{monthKey}"
 					class="month-card"
-					class:disabled={!m.first_pending_date}
 				>
 					<h2>{monthNames[m.month]} {m.year}</h2>
 					<div class="progress-bar">
@@ -119,12 +119,8 @@
 		color: inherit;
 		transition: border-color 0.15s;
 	}
-	.month-card:hover:not(.disabled) {
+	.month-card:hover {
 		border-color: #1a7a1a;
-	}
-	.month-card.disabled {
-		opacity: 0.5;
-		pointer-events: none;
 	}
 	.month-card h2 {
 		margin: 0 0 0.75rem;
