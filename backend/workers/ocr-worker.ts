@@ -345,8 +345,7 @@ async function runPageOcr() {
 async function runLlmCleanup() {
 	log('Stage 2: Claude LLM cleanup');
 
-	const anthropicKey = process.env.ANTHROPIC_API_KEY;
-	if (!anthropicKey) throw new Error('ANTHROPIC_API_KEY not set');
+	const anthropicKey = await getApiKey('anthropic', 'API_KEY', 'ANTHROPIC_API_KEY');
 	const anthropic = new Anthropic({ apiKey: anthropicKey });
 	const model = 'claude-sonnet-4-6';
 
