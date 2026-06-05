@@ -53,12 +53,19 @@ function escapeRegExp(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function isAlphanumeric(s: string): boolean {
+	return /^\w+$/.test(s);
+}
+
 export function applyRules(text: string, rules: SubstitutionRule[]): { text: string; applied: string[] } {
 	const applied: string[] = [];
 	let result = text;
 
 	for (const rule of rules) {
-		const regex = new RegExp(escapeRegExp(rule.pattern), 'gi');
+		const escaped = escapeRegExp(rule.pattern);
+		const needsBoundary = isAlphanumeric(rule.pattern);
+		const pattern = needsBoundary ? `\\b${escaped}\\b` : escaped;
+		const regex = new RegExp(pattern, 'gi');
 		if (regex.test(result)) {
 			applied.push(`${rule.pattern} → ${rule.replacement} (${rule.source})`);
 			result = result.replace(regex, rule.replacement);
