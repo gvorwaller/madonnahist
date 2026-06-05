@@ -15,6 +15,9 @@
 	let correctedText = $state('');
 	$effect(() => { correctedText = initialText; });
 
+	let dayNarrative = $state('');
+	$effect(() => { dayNarrative = data.day.day_narrative ?? ''; });
+
 	let saving = $state(false);
 	let saveError = $state('');
 	let showFlagModal = $state(false);
@@ -118,6 +121,19 @@
 					placeholder="Type the corrected transcription here..."
 				></textarea>
 			</div>
+
+			<div class="narrative-section">
+				<label class="section-label" for="day-narrative">
+					Day narrative
+					<span class="field-hint">Memories, context, stories this entry brings to mind</span>
+				</label>
+				<textarea
+					id="day-narrative"
+					class="narrative-textarea"
+					bind:value={dayNarrative}
+					placeholder="What do you remember about this day? Any stories or context not written on the page..."
+				></textarea>
+			</div>
 		</div>
 	</div>
 
@@ -155,6 +171,7 @@
 			};
 		}}>
 			<input type="hidden" name="correctedText" value={correctedText} />
+			<input type="hidden" name="dayNarrative" value={dayNarrative} />
 			<button type="submit" class="action-btn btn-primary" disabled={saving || correctedText.trim() === ''}>
 				{saving ? 'Saving...' : data.day.correction_status === 'accepted' ? 'Save' : 'Save & Next'}
 			</button>
@@ -372,6 +389,40 @@
 	.correction-textarea:focus {
 		outline: none;
 		border-color: #1a7a1a;
+	}
+
+	.narrative-section {
+		border-top: 1px solid #e0e0e0;
+		padding-top: 0.75rem;
+	}
+	.narrative-section .section-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.field-hint {
+		font-size: 0.72rem;
+		font-weight: 400;
+		color: #888;
+		text-transform: none;
+		letter-spacing: 0;
+	}
+	.narrative-textarea {
+		width: 100%;
+		min-height: 80px;
+		font-size: 16px;
+		font-family: inherit;
+		line-height: 1.5;
+		padding: 0.6rem 0.85rem;
+		border: 1px solid #c4b5a0;
+		border-radius: 6px;
+		resize: vertical;
+		box-sizing: border-box;
+		background: #fdfcf9;
+	}
+	.narrative-textarea:focus {
+		outline: none;
+		border-color: #8b7355;
 	}
 
 	.error-banner {

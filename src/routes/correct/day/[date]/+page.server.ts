@@ -60,6 +60,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		page_id: number;
 		correction_status: string;
 		corrected_text: string | null;
+		day_narrative: string | null;
 		review_note: string | null;
 		draft_text: string | null;
 		llm_draft_run_id: number | null;
@@ -72,6 +73,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		       cd.page_id,
 		       cd.correction_status,
 		       cd.corrected_text,
+		       cd.day_narrative,
 		       cd.review_note,
 		       ldr.draft_text,
 		       ldr.id AS llm_draft_run_id,
@@ -128,6 +130,7 @@ export const actions = {
 
 		const formData = await request.formData();
 		const correctedText = (formData.get('correctedText') as string ?? '').trim();
+		const dayNarrative = (formData.get('dayNarrative') as string ?? '').trim() || null;
 		if (correctedText === '') return fail(400, { error: 'Corrected text cannot be empty' });
 
 		const userId = Number(locals.user.id);
@@ -147,6 +150,11 @@ export const actions = {
 		);
 
 		await populateLexicon(day_id, correctedText);
+
+		await query(
+			`UPDATE calendar_days SET day_narrative = $1 WHERE id = $2`,
+			[dayNarrative, day_id]
+		);
 
 		if (wasAlreadyCorrected) {
 			redirect(303, `/correct/day/${entryDate}`);

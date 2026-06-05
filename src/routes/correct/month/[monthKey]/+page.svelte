@@ -43,6 +43,9 @@
 				<a href="/correct/day/{day.entry_date}" class="day-row">
 					<span class="day-num">{day.day_number}</span>
 					<span class="day-status {statusClass(day.correction_status)}">{statusLabel(day.correction_status)}</span>
+					{#if day.has_narrative}
+						<span class="narrative-dot" title="Has narrative">N</span>
+					{/if}
 					<span class="day-preview">
 						{#if day.correction_status === 'accepted' && day.corrected_text}
 							{day.corrected_text.length > 80 ? day.corrected_text.slice(0, 80) + '...' : day.corrected_text}
@@ -136,6 +139,15 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+	}
+	.narrative-dot {
+		font-size: 0.65rem;
+		font-weight: 700;
+		color: #8b7355;
+		background: #f5f0e8;
+		border-radius: 3px;
+		padding: 0.1rem 0.35rem;
+		flex-shrink: 0;
 	}
 	.no-draft {
 		color: #aaa;

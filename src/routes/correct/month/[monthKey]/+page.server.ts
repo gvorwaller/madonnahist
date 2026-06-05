@@ -22,12 +22,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		correction_status: string;
 		has_draft: boolean;
 		corrected_text: string | null;
+		has_narrative: boolean;
 	}>(`
 		SELECT cd.entry_date::text AS entry_date,
 		       EXTRACT(DAY FROM cd.entry_date)::int AS day_number,
 		       cd.correction_status,
 		       cd.latest_llm_draft_run_id IS NOT NULL AS has_draft,
-		       cd.corrected_text
+		       cd.corrected_text,
+		       (cd.day_narrative IS NOT NULL AND cd.day_narrative != '') AS has_narrative
 		  FROM calendar_days cd
 		  JOIN calendar_pages cp ON cp.id = cd.page_id
 		 WHERE cp.year = $1 AND cp.month = $2
