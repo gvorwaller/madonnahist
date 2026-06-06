@@ -13,6 +13,7 @@
 	let classifying = $state(false);
 	let ingesting = $state(false);
 	let showCompleted = $state(false);
+	let confirmUningest = $state<{ intakeId: number; pageId: number; label: string } | null>(null);
 
 	const months = [
 		'January', 'February', 'March', 'April', 'May', 'June',
@@ -318,6 +319,9 @@
 							<span class="mono">{r.camera_filename}</span>
 							→ {r.approved_year}-{String(r.approved_month).padStart(2, '0')}
 							<span class="muted">(page #{r.page_id})</span>
+							{#if r.page_id}
+								<button class="btn-uningest" onclick={() => confirmUningest = { intakeId: r.id, pageId: r.page_id!, label: `${r.camera_filename} → ${r.approved_year}-${String(r.approved_month).padStart(2, '0')}` }}>Un-ingest</button>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -325,6 +329,26 @@
 		</section>
 	{/if}
 </div>
+
+{#if confirmUningest}
+	<div class="modal-overlay" role="dialog" aria-label="Confirm un-ingest">
+		<div class="modal-box">
+			<h3>Un-ingest page</h3>
+			<p>Revert <strong>{confirmUningest.label}</strong> back to intake?</p>
+			<p class="modal-detail">This will delete the page, all days, OCR results, and drafts. The image will reappear in the active intake section for re-classification.</p>
+			<div class="modal-actions">
+				<form method="POST" action="?/uningest" use:enhance={() => {
+					return ({ update }) => { confirmUningest = null; update(); };
+				}}>
+					<input type="hidden" name="intakeId" value={confirmUningest.intakeId} />
+					<input type="hidden" name="pageId" value={confirmUningest.pageId} />
+					<button type="submit" class="btn-confirm-danger">Un-ingest</button>
+				</form>
+				<button class="btn-cancel" onclick={() => confirmUningest = null}>Cancel</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 {#if lightboxSrc}
 	<button type="button" class="lightbox" onclick={closeLightbox} aria-label="Close lightbox">
@@ -443,4 +467,71 @@
 		font-size: 1.2rem; font-weight: 700; padding: 0.3rem 0.7rem;
 		border-radius: 4px;
 	}
+
+	.btn-uningest {
+		margin-left: 0.5rem;
+		padding: 0.1rem 0.5rem;
+		border: 1px solid #c33;
+		border-radius: 3px;
+		background: #fff;
+		color: #c33;
+		font-size: 0.75rem;
+		cursor: pointer;
+	}
+	.btn-uningest:hover { background: #fde2e2; }
+
+	.modal-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 2000;
+		background: rgba(0,0,0,0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.modal-box {
+		background: #fff;
+		border-radius: 8px;
+		padding: 1.5rem;
+		max-width: 420px;
+		width: 90vw;
+		box-shadow: 0 4px 24px rgba(0,0,0,0.2);
+	}
+	.modal-box h3 {
+		margin: 0 0 0.5rem;
+		font-size: 1.1rem;
+	}
+	.modal-box p {
+		margin: 0.25rem 0;
+		font-size: 0.9rem;
+		color: #333;
+	}
+	.modal-detail {
+		color: #666 !important;
+		font-size: 0.8rem !important;
+	}
+	.modal-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+	.btn-confirm-danger {
+		padding: 0.4rem 1rem;
+		border: none;
+		border-radius: 4px;
+		background: #c33;
+		color: #fff;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.btn-confirm-danger:hover { background: #a22; }
+	.btn-cancel {
+		padding: 0.4rem 1rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		background: #fff;
+		color: #333;
+		cursor: pointer;
+	}
+	.btn-cancel:hover { background: #f0f0f0; }
 </style>

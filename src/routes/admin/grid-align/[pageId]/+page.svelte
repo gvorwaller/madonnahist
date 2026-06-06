@@ -14,6 +14,7 @@
 	let processing = $state(false);
 	let savingGrid = $state(false);
 	let saveError = $state<string | null>(null);
+	let showClearOcrConfirm = $state(false);
 
 	const isWarped = $derived(data.isWarped);
 	const initialGridLines = $derived(data.gridLines);
@@ -26,6 +27,7 @@
 
 	const title = $derived(`${monthNames[data.page.month]} ${data.page.year} — Grid Align`);
 	const saved = $derived(page.url.searchParams.get('saved') === '1');
+	const ocrCleared = $derived(page.url.searchParams.get('ocrCleared') === '1');
 
 	// The active image dimensions depend on warp state
 	const activeWidth = $derived(isWarped ? (data.page.warpedWidth ?? data.page.imageWidth) : data.page.imageWidth);
@@ -269,6 +271,9 @@
 		{#if saved}
 			<div class="saved-banner">Grid saved and crop bounds updated.</div>
 		{/if}
+		{#if ocrCleared}
+			<div class="saved-banner">OCR and draft data cleared. Ready for re-run.</div>
+		{/if}
 		{#if saveError}
 			<div class="error-banner" role="alert">{saveError}</div>
 		{/if}
@@ -493,6 +498,18 @@
 				<button type="submit" class="btn-secondary btn-danger">Re-place Corners</button>
 			</form>
 		{/if}
+
+		{#if showClearOcrConfirm}
+			<div class="confirm-dialog">
+				<p>Clear all OCR and draft results for this page? Grid lines will be kept.</p>
+				<form method="POST" action="?/resetOcr">
+					<button type="submit" class="btn-danger">Clear OCR</button>
+				</form>
+				<button class="btn-secondary" onclick={() => showClearOcrConfirm = false}>Cancel</button>
+			</div>
+		{:else}
+			<button class="btn-secondary" onclick={() => showClearOcrConfirm = true}>Clear OCR Results</button>
+		{/if}
 	</div>
 </div>
 
@@ -568,6 +585,20 @@
 	.btn-danger {
 		color: #c33;
 		border-color: #c33;
+	}
+	.confirm-dialog {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		background: #fde2e2;
+		border: 1px solid #c33;
+		border-radius: 4px;
+		font-size: 0.85rem;
+	}
+	.confirm-dialog p {
+		margin: 0;
+		color: #800;
 	}
 	.saved-banner {
 		margin-top: 0.5rem;

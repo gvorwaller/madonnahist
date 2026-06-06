@@ -13,7 +13,8 @@ import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { query } from '$lib/db';
+import { query, withTransaction } from '$lib/db';
+import { deleteObject } from '$lib/ingest/spaces-upload';
 import { classifyImage } from '$lib/ingest/classify';
 import { assessQuality } from '$lib/ingest/quality';
 import { ingestPage, replacePage } from '$lib/ingest/ingest';
@@ -381,5 +382,60 @@ export const actions: Actions = {
 			return { replaced: true, pageId: outcome.pageId };
 		}
 		return fail(500, { error: outcome.error });
+	},
+
+	uningest: async ({ request }) => {
+		const data = await request.formData();
+		const intakeId = Number(data.get('intakeId'));
+		const pageId = Number(data.get('pageId'));
+
+		if (!Number.isInteger(intakeId)) return fail(400, { error: 'Invalid intake id' });
+		if (!Number.isInteger(pageId)) return fail(400, { error: 'Invalid page id' });
+
+		// Guard: reject if any accepted corrections exist
+		const corrections = await query<{ cnt: number }>(
+			`SELECT COUNT(*)::int AS cnt
+			   FROM day_corrections dc
+			   JOIN calendar_days cd ON cd.id = dc.day_id
+			  WHERE cd.page_id = $1 AND dc.status_after = 'accepted'`,
+			[pageId]
+		);
+		if ((corrections.rows[0]?.cnt ?? 0) > 0) {
+			return fail(400, { error: 'Cannot un-ingest — page has accepted corrections.' });
+		}
+
+		const pageRes = await query<{ page_image_path: string; warped_image_path: string | null }>(
+			`SELECT page_image_path, warped_image_path FROM calendar_pages WHERE id = $1`, [pageId]
+		);
+		const oldPaths = pageRes.rows[0];
+
+		await withTransaction(async (client) => {
+			// Clear intake FK before deleting the page it references
+			await client.query(
+				`UPDATE capture_intake
+				    SET status = 'classified', page_id = NULL, ingested_at = NULL,
+				        ingest_phase = NULL, ingest_error = NULL
+				  WHERE id = $1`,
+				[intakeId]
+			);
+			await client.query(
+				`UPDATE job_runs SET status = 'canceled', completed_at = NOW()
+				  WHERE status IN ('pending', 'in_progress')
+				    AND payload->>'page_id' = $1::text`,
+				[String(pageId)]
+			);
+			await client.query(`DELETE FROM calendar_days WHERE page_id = $1`, [pageId]);
+			await client.query(`DELETE FROM calendar_pages WHERE id = $1`, [pageId]);
+		});
+
+		// Best-effort delete Spaces objects
+		if (oldPaths) {
+			try { await deleteObject(oldPaths.page_image_path); } catch { /* ignore */ }
+			if (oldPaths.warped_image_path) {
+				try { await deleteObject(oldPaths.warped_image_path); } catch { /* ignore */ }
+			}
+		}
+
+		return { uningestedPage: pageId };
 	}
 };

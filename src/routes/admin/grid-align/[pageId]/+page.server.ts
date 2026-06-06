@@ -246,13 +246,11 @@ export const actions = {
 				);
 			}
 
-			await cancelAndRequeueOcr(client, pageId, newVersion);
-
 			await client.query(
 				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
 				 VALUES ($1, 'warp_apply', 'calendar_page', $2, NULL, $3::jsonb, $4)`,
 				[null, pageId, JSON.stringify({ corners, warpedKey, warpedWidth: warped.width, warpedHeight: warped.height }),
-				 `Perspective warp applied, grid v${newVersion}, OCR re-queued`]
+				 `Perspective warp applied, grid v${newVersion}`]
 			);
 		});
 
@@ -261,8 +259,7 @@ export const actions = {
 			await deleteObject(oldWarpedPath);
 		}
 
-		await spawnOcrWorker(pageId);
-		redirect(303, `/admin/ocr-review/${pageId}`);
+		redirect(303, `/admin/grid-align/${pageId}?saved=1`);
 	},
 
 	saveGrid: async ({ params, request }) => {
@@ -420,5 +417,51 @@ export const actions = {
 		}
 
 		redirect(303, `/admin/grid-align/${pageId}`);
+	},
+
+	resetOcr: async ({ params }) => {
+		const pageId = Number(params.pageId);
+		if (!Number.isFinite(pageId)) return fail(400, { error: 'Invalid page ID' });
+
+		await withTransaction(async (client) => {
+			await client.query(
+				`UPDATE job_runs
+				    SET status = 'canceled', completed_at = NOW()
+				  WHERE status IN ('pending', 'in_progress')
+				    AND payload->>'page_id' = $1::text`,
+				[String(pageId)]
+			);
+
+			const dayIds = await client.query<{ id: number }>(
+				`SELECT id FROM calendar_days WHERE page_id = $1`, [pageId]
+			);
+			const ids = dayIds.rows.map(r => r.id);
+
+			if (ids.length > 0) {
+				// Nullify FK references from day_corrections before deleting drafts
+				await client.query(
+					`UPDATE day_corrections SET source_llm_draft_run_id = NULL
+					  WHERE day_id = ANY($1) AND source_llm_draft_run_id IS NOT NULL`, [ids]
+				);
+				await client.query(`DELETE FROM llm_draft_runs WHERE day_id = ANY($1)`, [ids]);
+				await client.query(`DELETE FROM ocr_runs WHERE day_id = ANY($1)`, [ids]);
+				await client.query(
+					`UPDATE calendar_days
+					    SET latest_ocr_run_id = NULL,
+					        latest_llm_draft_run_id = NULL,
+					        latest_confidence_score = NULL
+					  WHERE page_id = $1`,
+					[pageId]
+				);
+			}
+
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, 'ocr_reset', 'calendar_page', $2, NULL, NULL, $3)`,
+				[null, pageId, 'All OCR and draft data cleared']
+			);
+		});
+
+		redirect(303, `/admin/grid-align/${pageId}?ocrCleared=1`);
 	}
 } satisfies Actions;
