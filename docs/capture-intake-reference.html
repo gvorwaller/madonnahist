@@ -145,7 +145,8 @@
   rsync to DO droplet <span class="arrow">&rarr;</span>
   <code>/admin/capture</code> (classify + ingest) <span class="arrow">&rarr;</span>
   <code>/admin/grid-align</code> (corners + warp + lines) <span class="arrow">&rarr;</span>
-  OCR Worker (Google Vision full-page + Claude cleanup) <span class="arrow">&rarr;</span>
+  OCR auto-runs (Google Vision + Claude cleanup) <span class="arrow">&rarr;</span>
+  <code>/admin/ocr-review</code> (live progress + results) <span class="arrow">&rarr;</span>
   <code>/admin/substitutions</code> (notation + lexicon replacements) <span class="arrow">&rarr;</span>
   <code>/correct</code> (Madonna corrects on iPad) <span class="arrow">&rarr;</span>
   structured <code>calendar_days</code>
@@ -164,9 +165,9 @@
   <tr><th>Tether folder</th><td><code>~/Lumix Tether/</code> on Mac &mdash; Lumix Tether writes JPGs into dated subfolders</td></tr>
   <tr><th>rsync LaunchAgent</th><td><code>com.gaylon.madonnahist-tether-sync</code> &mdash; syncs JPGs (excludes .RW2, .DS_Store) to <code>/opt/madonnahist/tether/</code> on the droplet every 2 min</td></tr>
   <tr><th>Auth</th><td>Login at <span class="url">https://madonnahist.gaylon.photos/login</span> &mdash; gaylon (admin), madonna (corrector)</td></tr>
-  <tr><th>Migrations applied</th><td>Run via <code>./scripts/deploy-to-DO.sh</code> &mdash; currently through 0015</td></tr>
-  <tr><th>Google Vision key</th><td>Stored in <code>private_data.api_credentials</code> on the droplet DB</td></tr>
-  <tr><th>Anthropic API key</th><td><code>ANTHROPIC_API_KEY</code> in <code>.env</code> on the droplet (for Claude cleanup stage)</td></tr>
+  <tr><th>Migrations applied</th><td>Run via <code>./scripts/deploy-to-DO.sh</code> &mdash; currently through 0016</td></tr>
+  <tr><th>Google Vision key</th><td>Stored in <code>private_data.api_credentials</code> (service: <code>google_vision</code>)</td></tr>
+  <tr><th>Anthropic API key</th><td>Stored in <code>private_data.api_credentials</code> (service: <code>anthropic</code>)</td></tr>
 </table>
 
 <h2>Phase 1: Capture &amp; Ingest</h2>
@@ -200,15 +201,20 @@
 
 <div class="session-step">
   <span class="step-num">5</span>
-  <div>Click <strong>"Ingest Selected"</strong>. Uploads to Spaces, creates <code>calendar_pages</code> + <code>calendar_days</code> rows, enqueues <code>page_ocr</code> job.</div>
+  <div>Click <strong>"Ingest Selected"</strong>. Uploads to Spaces, creates <code>calendar_pages</code> + <code>calendar_days</code> rows. OCR does not run yet &mdash; grid alignment is required first.</div>
 </div>
 
 <h3>Duplicate Pages</h3>
-<p>If a year/month already has an ingested page:</p>
 <table>
   <tr><th>No corrections</th><td><strong>"Replace Existing"</strong> button &mdash; atomically swaps old page for new</td></tr>
   <tr><th>Has corrections</th><td>Replacement blocked &mdash; handle via admin to avoid losing Madonna's work</td></tr>
 </table>
+
+<h3>Un-ingest a Page</h3>
+<p>If a page was ingested with the wrong month/year: expand the <strong>"Completed"</strong> section, click <strong>"Un-ingest"</strong> next to the row. Confirm in the modal dialog. The page, days, OCR results, and drafts are deleted; the image reappears in the active intake section for re-classification.</p>
+<div class="warn">
+  <strong>Guard:</strong> Un-ingest is blocked if any accepted corrections exist on the page.
+</div>
 
 <h2>Phase 2: Grid Alignment</h2>
 
@@ -223,7 +229,7 @@
   <li>Drag 4 corner handles to match the outer boundary of the calendar grid</li>
   <li>Interior lines auto-subdivide as preview (dashed)</li>
   <li>Click <strong>"Apply Warp"</strong> &mdash; perspective-warps the image to a rectangle (15&ndash;30 seconds for full-res G9 II images)</li>
-  <li>Button shows "Processing warp..." while working</li>
+  <li>Returns to the grid-align page showing the de-skewed image; OCR does not run yet</li>
 </ul>
 
 <h3>Stage B: Refine Lines (on warped image)</h3>
@@ -231,26 +237,39 @@
   <li>After warp, the page reloads showing the de-skewed rectangular image</li>
   <li>Drag individual grid lines to match actual cell boundaries (solid lines, row/col resize cursors)</li>
   <li>Live crop preview strip shows sample cells below the image</li>
-  <li>Click <strong>"Apply Grid"</strong> (shows "Saving grid..." while working) &mdash; saves lines, recomputes crop bounds, re-queues OCR</li>
-  <li>Green banner confirms save; red banner shows errors</li>
+  <li>Check <strong>"Re-run OCR after save"</strong> to trigger OCR automatically on save</li>
+  <li>Click <strong>"Apply Grid"</strong> &mdash; saves lines, recomputes crop bounds</li>
+  <li>If OCR was checked: redirects to OCR review page with live progress strip</li>
+  <li>If OCR was unchecked: stays on grid-align with green confirmation banner</li>
   <li><strong>"Re-place Corners"</strong> resets the warp and returns to Stage A</li>
+  <li><strong>"Clear OCR Results"</strong> wipes all OCR and draft data for this page (for re-running after grid fixes)</li>
 </ul>
 
 <div class="info">
   <strong>Copy from Previous Page:</strong> If a prior page has been calibrated, a "Copy from..." button appears. Calendar pages from the same brand typically have the same grid layout.
 </div>
 
+<h3>Non-Alignable Pages (Hand-Drawn Grid Lines)</h3>
+<p>Some calendar pages have squiggly, hand-drawn grid lines that can't be precisely aligned. For these:</p>
+<ol>
+  <li>Place corners and warp as usual &mdash; even rough alignment is helpful</li>
+  <li>Adjust grid lines to approximate the hand-drawn lines (doesn't need to be perfect)</li>
+  <li>Save the grid with <strong>OCR unchecked</strong> &mdash; OCR won't produce useful results on bad crops</li>
+  <li>Navigate to the correction queue &mdash; these days show as <strong>"Manual entry"</strong></li>
+  <li>The day editor shows a padded cell crop (best guess, with surrounding context) plus the full page image with the current cell highlighted in red</li>
+  <li>Madonna types corrections while looking at the handwriting on screen</li>
+</ol>
+
 <h2>Phase 3: OCR Pipeline</h2>
 
-<p>The OCR worker runs as a one-shot script on the droplet. Two stages, run independently:</p>
+<p>OCR runs <strong>automatically</strong> when you save grid lines with "Re-run OCR after save" checked. No SSH or manual commands needed. Two stages run back-to-back:</p>
 
 <div class="session-step">
   <span class="step-num">7</span>
-  <div>Run Stage 1 (Google Vision full-page):
-    <br><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts --stage=page_ocr</code>
+  <div><strong>Stage 1 &mdash; Google Vision full-page scan:</strong>
     <ul>
       <li>Downloads full warped page image, converts to grayscale + normalize + sharpen</li>
-      <li>Sends to Google Vision <code>DOCUMENT_TEXT_DETECTION</code> (one API call per page)</li>
+      <li>Sends to Google Vision <code>DOCUMENT_TEXT_DETECTION</code> (one API call per page, ~5&ndash;10 seconds)</li>
       <li>Maps words to grid cells using bounding-box overlap</li>
       <li>Writes one <code>ocr_runs</code> row per cell, enqueues <code>llm_cleanup</code> jobs</li>
     </ul>
@@ -259,26 +278,29 @@
 
 <div class="session-step">
   <span class="step-num">8</span>
-  <div>Run Stage 2 (Claude cleanup):
-    <br><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts --stage=llm_cleanup</code>
+  <div><strong>Stage 2 &mdash; Claude cleanup (per cell):</strong>
     <ul>
       <li>For each cell: crops from the warped page (grayscale + normalize + sharpen)</li>
       <li>Sends Claude Sonnet the cell image + Google Vision raw text + dynamic family context prompt</li>
       <li>Prompt assembled from <code>ocr_vocabulary</code> + <code>correction_lexicon</code> + <code>notation_key</code> tables (manage at <code>/admin/vocabulary</code>)</li>
-      <li>Writes one <code>llm_draft_runs</code> row per cell (linked to <code>ocr_runs</code>)</li>
-      <li>~3 seconds per cell, ~$0.50 per page</li>
+      <li>Writes one <code>llm_draft_runs</code> row per cell (~2&ndash;4 seconds per cell, ~$0.50 per page)</li>
     </ul>
   </div>
 </div>
 
-<p>Or run both stages together: <code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></p>
+<h3>Live Progress</h3>
+<p>After grid save with OCR triggered, you're redirected to the OCR review page. A sticky progress strip shows:</p>
+<ul>
+  <li><strong>Stage 1:</strong> "Google Vision scan &mdash; queued / scanning / done (N words, Ns)" or failed with error</li>
+  <li><strong>Stage 2:</strong> Progress bar &mdash; "12 of 30 days cleaned up..." with latest day's text preview</li>
+  <li>On completion: strip says "OCR complete", grid auto-refreshes to show results</li>
+  <li><strong>"Refresh now"</strong> button and <strong>"Back to grid"</strong> link always available</li>
+</ul>
 
 <div class="info">
-  <strong>Useful flags:</strong>
-  <code>--dry-run</code> (claim jobs but skip API calls),
-  <code>--page-id=N</code> (one page only),
-  <code>--limit=N</code> (max N jobs),
-  <code>--show-prompt</code> (print the assembled cleanup prompt and exit)
+  <strong>Manual worker run</strong> (if needed for debugging):
+  <code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code>
+  <br>Flags: <code>--dry-run</code>, <code>--page-id=N</code>, <code>--limit=N</code>, <code>--stage=page_ocr|llm_cleanup</code>, <code>--show-prompt</code>
 </div>
 
 <h2>Phase 4: Substitution Pass</h2>
@@ -322,12 +344,17 @@
   <span class="step-num">11</span>
   <div>Madonna corrects at <span class="url">https://madonnahist.gaylon.photos/correct</span>
     <ul>
-      <li>Month list with progress bars &mdash; "Resume Correcting" goes to first uncorrected day</li>
-      <li>Two-column editor: cell image (click to zoom, "View full page" for context) + corrected text textarea</li>
-      <li><strong>Save &amp; Next</strong> &mdash; saves accepted correction, advances to next day</li>
+      <li>Month list with progress bars &mdash; "Resume Correcting" goes to first pending day</li>
+      <li>Click a month to see day list with status badges + text previews</li>
+      <li><strong>OCR'd days:</strong> Two-column editor &mdash; cell image (click to zoom, "View full page" for context) + machine draft + corrected text textarea</li>
+      <li><strong>Manual entry days:</strong> Padded cell crop (best guess with context) + full page image with cell highlight + corrected text textarea</li>
+      <li><strong>Day narrative:</strong> Optional textarea for memories/stories this entry brings to mind</li>
+      <li><strong>Save &amp; Next</strong> &mdash; saves accepted correction, advances to next pending day</li>
+      <li><strong>Save</strong> (on already-corrected days) &mdash; saves and stays on the same day</li>
       <li><strong>Skip</strong> &mdash; marks as in-progress, moves forward (won't reappear in queue)</li>
       <li><strong>Flag Illegible</strong> &mdash; modal with optional note, marks as illegible</li>
       <li>Accepted corrections auto-populate the <code>correction_lexicon</code> (word-level diffs improve future OCR)</li>
+      <li>Manual-entry corrections do not populate the lexicon (no OCR errors to learn from)</li>
     </ul>
   </div>
 </div>
@@ -354,11 +381,10 @@
   <tr><th>Substitutions</th><td class="url">https://madonnahist.gaylon.photos/admin/substitutions</td></tr>
   <tr><th>Correction UI</th><td class="url">https://madonnahist.gaylon.photos/correct</td></tr>
   <tr><th>Runs on</th><td class="bold">Everything on DO droplet. Only Lumix Tether runs on the Mac.</td></tr>
-  <tr><th>Run OCR (on droplet)</th><td><code>npx tsx --env-file=.env backend/workers/ocr-worker.ts</code></td></tr>
   <tr><th>Deploy</th><td><code>./scripts/deploy-to-DO.sh</code></td></tr>
   <tr><th>Vision API</th><td>1,000 free calls/month (1 call per page for full-page OCR)</td></tr>
   <tr><th>Claude API</th><td>~$0.50 per page (31 cell cleanups via Sonnet)</td></tr>
-  <tr><th>Typical per-page time</th><td>Shoot &rarr; rsync &rarr; Classify &rarr; Ingest: 3 min. Grid align: 2 min. OCR: 2 min.</td></tr>
+  <tr><th>Typical per-page time</th><td>Shoot &rarr; rsync &rarr; Classify &rarr; Ingest: 3 min. Grid align: 2 min. OCR: 2 min (auto).</td></tr>
 </table>
 
 <h2>Troubleshooting</h2>
@@ -366,18 +392,21 @@
   <tr><th>"Tether folder not found"</th><td><code>TETHER_DIR</code> in <code>.env</code> doesn't exist on the droplet. Verify <code>/opt/madonnahist/tether/</code> exists and rsync has run.</td></tr>
   <tr><th>Images don't appear after shooting</th><td>Wait 2 min for rsync, then reload. Check <code>~/Library/Logs/madonnahist-tether-sync.log</code> on Mac. Manual sync: <code>rsync -avz ...</code></td></tr>
   <tr><th>Preview images blank</th><td>Check that <code>source_path</code> in <code>capture_intake</code> is relative (e.g., <code>20260525/P1034702.jpg</code>), not absolute. Files must exist under <code>TETHER_DIR</code>.</td></tr>
-  <tr><th>"GOOGLE_VISION_API_KEY is not configured"</th><td>Set in <code>.env</code> on the droplet and restart PM2.</td></tr>
   <tr><th>Duplicate month detected</th><td>Card shows warning with old filename. Replace if no corrections; otherwise handle via admin.</td></tr>
+  <tr><th>Wrong month ingested</th><td>Expand Completed section in capture intake, click <strong>"Un-ingest"</strong>, re-classify with correct month.</td></tr>
   <tr><th>Warp takes too long / hangs</th><td>Normal for full-res G9 II images (15&ndash;30 sec). Button shows "Processing warp..." The perspective transform is pure JS bilinear interpolation on ~22M pixels.</td></tr>
-  <tr><th>OCR worker: "stale grid version"</th><td>Grid was updated after the OCR job was enqueued. Re-run the worker &mdash; it will pick up fresh jobs.</td></tr>
-  <tr><th>OCR worker: "No pending jobs"</th><td>All jobs processed. Re-queue via grid-align (check "Re-run OCR" + Apply Grid) or manually INSERT a <code>page_ocr</code> job.</td></tr>
+  <tr><th>OCR not running after grid save</th><td>Make sure "Re-run OCR after save" checkbox is checked before clicking Apply Grid.</td></tr>
+  <tr><th>OCR progress strip stuck</th><td>Click "Refresh now" or reload the page. Check <code>ocr-worker.log</code> on the droplet for errors.</td></tr>
+  <tr><th>OCR results look wrong</th><td>Go to grid-align, adjust lines, click <strong>"Clear OCR Results"</strong>, then re-save grid with OCR checked.</td></tr>
+  <tr><th>OCR worker: "stale grid version"</th><td>Grid was updated after the OCR job was enqueued. Save grid again with OCR checked to re-trigger.</td></tr>
+  <tr><th>Hand-drawn grid lines</th><td>Align as best you can, save with OCR <strong>unchecked</strong>. Days appear as "Manual entry" in the correction queue. Use the padded crop + full page image to transcribe.</td></tr>
   <tr><th>Not authenticated / 403</th><td>Sign in at <code>/login</code>. Admin pages require the <code>admin</code> role (gaylon). Correction pages require <code>corrector</code> or <code>admin</code>.</td></tr>
   <tr><th>rsync failing</th><td>Check SSH key auth: <code>ssh root@134.199.211.199 echo ok</code>. Check LaunchAgent is loaded: <code>launchctl list | grep tether</code>.</td></tr>
   <tr><th>Layout says "won't fit"</th><td>The grid template can't hold the selected month. Try <code>5-row-wrapped</code> or <code>6-row-standard</code>.</td></tr>
 </table>
 
 <div class="footer">
-  Capture &amp; Processing Workflow &mdash; madonnahist &mdash; 2026-06-04
+  Capture &amp; Processing Workflow &mdash; madonnahist &mdash; 2026-06-06
   <br>See also: <code>docs/capture-quick-reference.html</code> (camera settings),
   <code>docs/equipment-shortlist.md</code> (full equipment guide)
 </div>
