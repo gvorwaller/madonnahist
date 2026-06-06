@@ -50,8 +50,22 @@
 	});
 
 	const imageSrc = $derived(`/correct/day/${data.day.entry_date}/cell-image`);
+	const paddedCropSrc = $derived(`/correct/day/${data.day.entry_date}/cell-image?pad=20`);
 	const pageImageSrc = $derived(`/correct/day/${data.day.entry_date}/page-image`);
 	const manualEntry = $derived(!data.day.draft_text && !data.day.ocr_raw_text);
+
+	let pageImageContainer: HTMLDivElement | undefined = $state(undefined);
+
+	$effect(() => {
+		if (!manualEntry || !pageImageContainer || !data.day.crop_bounds || !data.day.page_height) return;
+		const cb = data.day.crop_bounds;
+		const ph = data.day.page_height;
+		const containerH = pageImageContainer.clientHeight;
+		const imgH = pageImageContainer.querySelector('img')?.clientHeight;
+		if (!imgH) return;
+		const targetY = (cb.y / ph) * imgH - containerH / 2 + (cb.height / ph) * imgH / 2;
+		pageImageContainer.scrollTop = Math.max(0, targetY);
+	});
 
 	const highlightStyle = $derived.by(() => {
 		const cb = data.day.crop_bounds;
@@ -106,7 +120,10 @@
 	<div class="editor-grid">
 		<div class="col-image">
 			{#if manualEntry}
-				<div class="page-image-container">
+				<div class="manual-crop-section">
+					<img src={paddedCropSrc} alt="Day {dayNum} crop" class="manual-crop-img" />
+				</div>
+				<div class="page-image-container" bind:this={pageImageContainer}>
 					<img src={pageImageSrc} alt="Full page — {monthNames[data.day.month]} {data.day.year}" class="page-img-inline" />
 					{#if highlightStyle}
 						<div class="cell-highlight" style={highlightStyle}></div>
@@ -361,9 +378,21 @@
 		border: 1px solid #ccc;
 		display: block;
 	}
+	.manual-crop-section {
+		border: 2px solid #c33;
+		border-radius: 4px;
+		margin-bottom: 0.5rem;
+		background: #fff;
+	}
+	.manual-crop-img {
+		width: 100%;
+		height: auto;
+		display: block;
+		border-radius: 3px;
+	}
 	.page-image-container {
 		position: relative;
-		max-height: 70vh;
+		max-height: 40vh;
 		overflow: auto;
 		border: 1px solid #ccc;
 		border-radius: 4px;
