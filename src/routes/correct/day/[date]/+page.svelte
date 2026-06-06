@@ -51,6 +51,15 @@
 
 	const imageSrc = $derived(`/correct/day/${data.day.entry_date}/cell-image`);
 	const pageImageSrc = $derived(`/correct/day/${data.day.entry_date}/page-image`);
+	const manualEntry = $derived(!data.day.draft_text && !data.day.ocr_raw_text);
+
+	const highlightStyle = $derived.by(() => {
+		const cb = data.day.crop_bounds;
+		const pw = data.day.page_width;
+		const ph = data.day.page_height;
+		if (!cb || !pw || !ph) return '';
+		return `left:${(cb.x / pw) * 100}%;top:${(cb.y / ph) * 100}%;width:${(cb.width / pw) * 100}%;height:${(cb.height / ph) * 100}%`;
+	});
 </script>
 
 <svelte:window onkeydown={(e) => {
@@ -96,12 +105,22 @@
 
 	<div class="editor-grid">
 		<div class="col-image">
-			<button class="img-btn" onclick={() => lightboxOpen = true}>
-				<img src={imageSrc} alt="Day cell {dayNum}" class="cell-img" />
-			</button>
-			<button class="page-btn" onclick={() => pageImageOpen = true}>
-				View full page
-			</button>
+			{#if manualEntry}
+				<div class="page-image-container">
+					<img src={pageImageSrc} alt="Full page — {monthNames[data.day.month]} {data.day.year}" class="page-img-inline" />
+					{#if highlightStyle}
+						<div class="cell-highlight" style={highlightStyle}></div>
+					{/if}
+				</div>
+				<div class="manual-label">Manual entry — day {dayNum}</div>
+			{:else}
+				<button class="img-btn" onclick={() => lightboxOpen = true}>
+					<img src={imageSrc} alt="Day cell {dayNum}" class="cell-img" />
+				</button>
+				<button class="page-btn" onclick={() => pageImageOpen = true}>
+					View full page
+				</button>
+			{/if}
 		</div>
 
 		<div class="col-editor">
@@ -341,6 +360,32 @@
 		border-radius: 4px;
 		border: 1px solid #ccc;
 		display: block;
+	}
+	.page-image-container {
+		position: relative;
+		max-height: 70vh;
+		overflow: auto;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+	}
+	.page-img-inline {
+		width: 100%;
+		height: auto;
+		display: block;
+	}
+	.cell-highlight {
+		position: absolute;
+		border: 3px solid #c33;
+		background: rgba(204, 51, 51, 0.08);
+		border-radius: 2px;
+		pointer-events: none;
+	}
+	.manual-label {
+		margin-top: 0.4rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #8b7355;
+		text-align: center;
 	}
 	.col-editor {
 		display: flex;

@@ -43,8 +43,7 @@
 	}
 
 	function startPolling() {
-		if (pollTimer) return;
-		pollingStopped = false;
+		if (pollTimer || pollingStopped) return;
 		fetchProgress();
 		pollTimer = setInterval(fetchProgress, 3000);
 	}

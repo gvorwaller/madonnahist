@@ -50,7 +50,7 @@
 						{#if day.correction_status === 'accepted' && day.corrected_text}
 							{day.corrected_text.length > 80 ? day.corrected_text.slice(0, 80) + '...' : day.corrected_text}
 						{:else if !day.has_draft}
-							<span class="no-draft">No OCR draft</span>
+							<span class="no-draft">Manual entry</span>
 						{:else}
 							&nbsp;
 						{/if}

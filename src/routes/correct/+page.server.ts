@@ -23,7 +23,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		       COUNT(*) FILTER (WHERE cd.correction_status = 'in_progress')::int AS skipped_count,
 		       COUNT(*) FILTER (WHERE cd.correction_status = 'pending')::int AS pending_count,
 		       COUNT(*) FILTER (WHERE cd.latest_llm_draft_run_id IS NOT NULL)::int AS draft_ready_count,
-		       MIN(cd.entry_date::text) FILTER (WHERE cd.correction_status = 'pending' AND cd.latest_llm_draft_run_id IS NOT NULL) AS first_pending_date
+		       MIN(cd.entry_date::text) FILTER (WHERE cd.correction_status = 'pending') AS first_pending_date
 		  FROM calendar_pages cp
 		  JOIN calendar_days cd ON cd.page_id = cp.id
 		 GROUP BY cp.year, cp.month
@@ -33,7 +33,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const resumeRes = await query<{ entry_date: string }>(
 		`SELECT entry_date::text AS entry_date FROM calendar_days
 		  WHERE correction_status = 'pending'
-		    AND latest_llm_draft_run_id IS NOT NULL
 		  ORDER BY entry_date LIMIT 1`
 	);
 

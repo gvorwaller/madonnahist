@@ -14,7 +14,6 @@ async function nextUncorrectedDate(afterDate: string): Promise<string | null> {
 		`SELECT entry_date::text AS entry_date FROM calendar_days
 		  WHERE entry_date > $1
 		    AND correction_status = 'pending'
-		    AND latest_llm_draft_run_id IS NOT NULL
 		  ORDER BY entry_date LIMIT 1`, [afterDate]
 	);
 	return res.rows[0]?.entry_date ?? null;
@@ -25,7 +24,6 @@ async function prevUncorrectedDate(beforeDate: string): Promise<string | null> {
 		`SELECT entry_date::text AS entry_date FROM calendar_days
 		  WHERE entry_date < $1
 		    AND correction_status = 'pending'
-		    AND latest_llm_draft_run_id IS NOT NULL
 		  ORDER BY entry_date DESC LIMIT 1`, [beforeDate]
 	);
 	return res.rows[0]?.entry_date ?? null;
@@ -65,8 +63,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		draft_text: string | null;
 		llm_draft_run_id: number | null;
 		ocr_raw_text: string | null;
+		crop_bounds: { x: number; y: number; width: number; height: number } | null;
 		year: number;
 		month: number;
+		page_width: number | null;
+		page_height: number | null;
 	}>(`
 		SELECT cd.id AS day_id,
 		       cd.entry_date::text AS entry_date,
@@ -78,8 +79,11 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		       ldr.draft_text,
 		       ldr.id AS llm_draft_run_id,
 		       orr.raw_text AS ocr_raw_text,
+		       cd.crop_bounds,
 		       cp.year,
-		       cp.month
+		       cp.month,
+		       COALESCE(cp.warped_width, cp.image_width) AS page_width,
+		       COALESCE(cp.warped_height, cp.image_height) AS page_height
 		  FROM calendar_days cd
 		  JOIN calendar_pages cp ON cp.id = cd.page_id
 		  LEFT JOIN llm_draft_runs ldr ON ldr.id = cd.latest_llm_draft_run_id

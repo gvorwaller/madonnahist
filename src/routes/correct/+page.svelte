@@ -53,10 +53,10 @@
 								<span class="value pending">{m.pending_count}</span>
 								<span class="label">pending</span>
 							</span>
-						{:else if m.draft_ready_count === 0}
+						{:else if m.draft_ready_count === 0 && m.pending_count > 0}
 							<span class="stat">
-								<span class="value pending">no drafts</span>
-								<span class="label">OCR needed</span>
+								<span class="value pending">{m.pending_count}</span>
+								<span class="label">manual entry</span>
 							</span>
 						{/if}
 					</div>
