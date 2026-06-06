@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { openSync, existsSync, mkdirSync } from 'fs';
+import { openSync, existsSync } from 'fs';
 import { query } from '$lib/db';
 
 const STALE_THRESHOLD_MINUTES = 10;
