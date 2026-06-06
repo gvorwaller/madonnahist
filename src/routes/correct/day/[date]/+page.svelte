@@ -54,7 +54,7 @@
 	const pageImageSrc = $derived(`/correct/day/${data.day.entry_date}/page-image`);
 	const manualEntry = $derived(!data.day.draft_text && !data.day.ocr_raw_text);
 
-	let pageImageContainer: HTMLDivElement | undefined = $state(undefined);
+	let pageImageContainer: HTMLElement | undefined = $state(undefined);
 
 	$effect(() => {
 		if (!manualEntry || !pageImageContainer || !data.day.crop_bounds || !data.day.page_height) return;
@@ -123,12 +123,12 @@
 				<div class="manual-crop-section">
 					<img src={paddedCropSrc} alt="Day {dayNum} crop" class="manual-crop-img" />
 				</div>
-				<div class="page-image-container" bind:this={pageImageContainer}>
+				<button class="page-image-container" bind:this={pageImageContainer} onclick={() => pageImageOpen = true}>
 					<img src={pageImageSrc} alt="Full page — {monthNames[data.day.month]} {data.day.year}" class="page-img-inline" />
 					{#if highlightStyle}
 						<div class="cell-highlight" style={highlightStyle}></div>
 					{/if}
-				</div>
+				</button>
 				<div class="manual-label">Manual entry — day {dayNum}</div>
 			{:else}
 				<button class="img-btn" onclick={() => lightboxOpen = true}>
@@ -396,6 +396,11 @@
 		overflow: auto;
 		border: 1px solid #ccc;
 		border-radius: 4px;
+		padding: 0;
+		background: none;
+		cursor: zoom-in;
+		display: block;
+		width: 100%;
 	}
 	.page-img-inline {
 		width: 100%;
