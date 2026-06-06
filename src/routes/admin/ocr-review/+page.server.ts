@@ -11,17 +11,14 @@ export const load: PageServerLoad = async () => {
 		ocr_complete: number;
 		avg_confidence: number | null;
 		flagged_count: number;
-		failed_count: number;
 	}>(`
 		SELECT cp.id, cp.year, cp.month, cp.page_image_path,
 		       COUNT(cd.id)::int AS total_days,
 		       COUNT(cd.latest_ocr_run_id)::int AS ocr_complete,
 		       ROUND(AVG(cd.latest_confidence_score)::numeric, 3)::float AS avg_confidence,
-		       COUNT(*) FILTER (WHERE cd.correction_status = 'flagged')::int AS flagged_count,
-		       COUNT(jr.id) FILTER (WHERE jr.status = 'failed')::int AS failed_count
+		       COUNT(*) FILTER (WHERE cd.correction_status = 'flagged')::int AS flagged_count
 		  FROM calendar_pages cp
 		  JOIN calendar_days cd ON cd.page_id = cp.id
-		  LEFT JOIN job_runs jr ON jr.payload->>'day_id' = cd.id::text AND jr.job_type = 'ocr'
 		 GROUP BY cp.id
 		 ORDER BY cp.year, cp.month
 	`);

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { invalidateAll } from '$app/navigation';
+
 	const { data } = $props();
 
 	const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -14,6 +16,59 @@
 	let lightboxAlt: string = $state('');
 	let lightboxText: string = $state('');
 
+	// --- Progress polling ---
+	interface ProgressData {
+		gridVersion: number;
+		active: boolean;
+		stage1: { status: string; wordCount?: number; durationMs?: number; error?: string };
+		stage2: { status: string; total?: number; done?: number; failed?: number; latestDay?: { date: string; preview: string } | null };
+	}
+
+	let progress: ProgressData | null = $state(null);
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+	let pollingStopped = $state(false);
+
+	async function fetchProgress() {
+		try {
+			const res = await fetch(`/admin/ocr-review/${data.page.id}/progress`);
+			if (!res.ok) return;
+			progress = await res.json();
+
+			if (progress && !progress.active) {
+				stopPolling();
+				pollingStopped = true;
+				await invalidateAll();
+			}
+		} catch { /* network error — keep polling */ }
+	}
+
+	function startPolling() {
+		if (pollTimer) return;
+		pollingStopped = false;
+		fetchProgress();
+		pollTimer = setInterval(fetchProgress, 3000);
+	}
+
+	function stopPolling() {
+		if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+	}
+
+	$effect(() => {
+		startPolling();
+		return () => stopPolling();
+	});
+
+	async function retryOcr() {
+		const form = new FormData();
+		form.set('gridLines', JSON.stringify({}));
+		form.set('rerunOcr', 'true');
+		form.set('rows', '5');
+		form.set('cols', '7');
+		// Redirect to grid-align to re-trigger via the standard save flow
+		window.location.href = `/admin/grid-align/${data.page.id}`;
+	}
+
+	// --- Lightbox ---
 	function openLightbox(src: string, alt: string, text: string) {
 		lightboxSrc = src;
 		lightboxAlt = alt;
@@ -84,6 +139,69 @@
 		</div>
 	</header>
 
+	{#if progress && (progress.active || (progress.stage1.status !== 'none' && !pollingStopped))}
+		<div class="progress-strip">
+			<div class="progress-stages">
+				<div class="progress-stage">
+					<span class="stage-label">Google Vision scan</span>
+					{#if progress.stage1.status === 'queued'}
+						<span class="stage-status pending-pulse">queued...</span>
+					{:else if progress.stage1.status === 'scanning'}
+						<span class="stage-status pending-pulse">scanning...</span>
+					{:else if progress.stage1.status === 'done'}
+						<span class="stage-status done">done
+							{#if progress.stage1.wordCount}({progress.stage1.wordCount} words, {((progress.stage1.durationMs ?? 0) / 1000).toFixed(1)}s){/if}
+						</span>
+					{:else if progress.stage1.status === 'failed'}
+						<span class="stage-status failed">failed: {progress.stage1.error ?? 'unknown error'}</span>
+					{:else if progress.stage1.status === 'stalled'}
+						<span class="stage-status failed">stalled (no response for 10+ min)</span>
+					{/if}
+				</div>
+
+				{#if progress.stage2.status !== 'none'}
+					<div class="progress-stage">
+						<span class="stage-label">Claude cleanup</span>
+						{#if progress.stage2.status === 'queued'}
+							<span class="stage-status pending-pulse">queued...</span>
+						{:else if progress.stage2.status === 'cleaning'}
+							<span class="stage-status">
+								{progress.stage2.done}/{progress.stage2.total} days
+							</span>
+							{#if progress.stage2.total && progress.stage2.total > 0}
+								<div class="progress-bar">
+									<div class="progress-fill" style="width: {((progress.stage2.done ?? 0) / progress.stage2.total) * 100}%"></div>
+								</div>
+							{/if}
+						{:else if progress.stage2.status === 'complete'}
+							<span class="stage-status done">{progress.stage2.done}/{progress.stage2.total} days — complete</span>
+						{:else if progress.stage2.status === 'failed'}
+							<span class="stage-status failed">{progress.stage2.done}/{progress.stage2.total} done, {progress.stage2.failed} failed</span>
+						{/if}
+						{#if progress.stage2.latestDay}
+							<div class="latest-day">
+								<span class="latest-label">Latest:</span>
+								<span class="latest-date">{progress.stage2.latestDay.date}</span>
+								<span class="latest-preview">{progress.stage2.latestDay.preview}</span>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+
+			<div class="progress-actions">
+				{#if !progress.active && pollingStopped}
+					<span class="complete-msg">OCR complete</span>
+				{/if}
+				{#if progress.stage1.status === 'failed' || progress.stage1.status === 'stalled' || progress.stage2.status === 'failed'}
+					<a href="/admin/grid-align/{data.page.id}" class="progress-btn retry">Retry from grid align</a>
+				{/if}
+				<a href="/admin/grid-align/{data.page.id}" class="progress-btn">Back to grid</a>
+				<button class="progress-btn" onclick={() => invalidateAll()}>Refresh now</button>
+			</div>
+		</div>
+	{/if}
+
 	<div class="calendar-header">
 		{#each dayNames as dn}
 			<div class="dow">{dn}</div>
@@ -152,6 +270,126 @@
 		max-width: 1400px;
 		margin: 0 auto;
 		padding: 1rem;
+	}
+
+	/* Progress strip */
+	.progress-strip {
+		position: sticky;
+		top: 0;
+		z-index: 100;
+		background: #f8f9fa;
+		border: 1px solid #dee2e6;
+		border-radius: 6px;
+		padding: 0.6rem 1rem;
+		margin-bottom: 1rem;
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+		box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+	}
+	.progress-stages {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		flex: 1;
+	}
+	.progress-stage {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+	}
+	.stage-label {
+		font-weight: 600;
+		font-size: 0.8rem;
+		color: #333;
+		min-width: 120px;
+	}
+	.stage-status {
+		font-size: 0.8rem;
+		color: #555;
+	}
+	.stage-status.done {
+		color: #1a7a1a;
+	}
+	.stage-status.failed {
+		color: #c33;
+	}
+	.pending-pulse {
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+	@keyframes pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.5; }
+	}
+	.progress-bar {
+		width: 140px;
+		height: 8px;
+		background: #e0e0e0;
+		border-radius: 4px;
+		overflow: hidden;
+	}
+	.progress-fill {
+		height: 100%;
+		background: #1a7a1a;
+		border-radius: 4px;
+		transition: width 0.3s ease;
+	}
+	.latest-day {
+		font-size: 0.75rem;
+		color: #666;
+		display: flex;
+		gap: 0.3rem;
+		align-items: baseline;
+		width: 100%;
+		padding-left: 120px;
+	}
+	.latest-label {
+		color: #888;
+	}
+	.latest-date {
+		font-weight: 600;
+		color: #555;
+	}
+	.latest-preview {
+		color: #777;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+		max-width: 400px;
+	}
+	.progress-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		flex-shrink: 0;
+	}
+	.complete-msg {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #1a7a1a;
+	}
+	.progress-btn {
+		padding: 0.25rem 0.6rem;
+		border: 1px solid #ccc;
+		border-radius: 4px;
+		background: #fff;
+		font-size: 0.75rem;
+		text-decoration: none;
+		color: #333;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.progress-btn:hover {
+		background: #f0f0f0;
+	}
+	.progress-btn.retry {
+		border-color: #c33;
+		color: #c33;
+	}
+	.progress-btn.retry:hover {
+		background: #fde2e2;
 	}
 	header {
 		margin-bottom: 1rem;

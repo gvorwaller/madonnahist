@@ -5,7 +5,7 @@
  *   1. compute deterministic Spaces key, mark capture_intake.ingest_phase
  *   2. EXIF-normalize the page image, upload it (HEAD-then-skip idempotent)
  *   3. ONE DB transaction: calendar_pages + calendar_days (per cell/date) +
- *      OCR job_runs + flip capture_intake → ingested
+ *      flip capture_intake → ingested
  *
  * Only the page image is uploaded here; per-day cell crops are derived later
  * by the OCR worker from the page image + crop_bounds, so no network I/O
@@ -35,11 +35,9 @@ export type IngestOutcome =
 	| { ok: true; pageId: number; dayCount: number; spacesKey: string; uploaded: boolean }
 	| { ok: false; error: string };
 
-const OCR_VENDOR = 'google-vision';
-
 async function setPhase(
 	intakeId: number,
-	phase: 'uploading' | 'db_insert' | 'enqueue_ocr',
+	phase: 'uploading' | 'db_insert',
 	extra?: { spacesKey?: string; bumpAttempts?: boolean }
 ): Promise<void> {
 	await query(
@@ -126,13 +124,6 @@ export async function ingestPage(input: IngestInput): Promise<IngestOutcome> {
 						 VALUES ($1, $2, $3, $4::jsonb, $5, $6)
 						 RETURNING id`,
 						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds), cell.row, cell.col]
-					);
-					const dayId = dayRes.rows[0].id;
-
-					await client.query(
-						`INSERT INTO job_runs (job_type, payload)
-						 VALUES ('ocr', $1::jsonb)`,
-						[JSON.stringify({ day_id: dayId, page_id: pageId, vendor: OCR_VENDOR })]
 					);
 					dayCount++;
 				}
@@ -249,10 +240,6 @@ export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
 						`INSERT INTO calendar_days (page_id, entry_date, crop_template_id, crop_bounds, grid_row, grid_col)
 						 VALUES ($1, $2, $3, $4::jsonb, $5, $6) RETURNING id`,
 						[pageId, entryDate, cropTemplateId, JSON.stringify(bounds), cell.row, cell.col]
-					);
-					await client.query(
-						`INSERT INTO job_runs (job_type, payload) VALUES ('ocr', $1::jsonb)`,
-						[JSON.stringify({ day_id: dayRes.rows[0].id, page_id: pageId, vendor: OCR_VENDOR })]
 					);
 					dayCount++;
 				}

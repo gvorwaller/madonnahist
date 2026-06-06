@@ -37,12 +37,6 @@
 								<span class="value conf-low">{p.flagged_count}</span>
 							</span>
 						{/if}
-						{#if p.failed_count > 0}
-							<span class="stat">
-								<span class="label">Failed</span>
-								<span class="value conf-low">{p.failed_count}</span>
-							</span>
-						{/if}
 					</div>
 					{#if p.ocr_complete === 0}
 						<p class="pending-note">OCR not yet run</p>

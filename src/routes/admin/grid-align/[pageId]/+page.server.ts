@@ -11,6 +11,7 @@ import {
 } from '$lib/ingest/day-grid';
 import { perspectiveWarp, validateCorners, transformLinesToWarped, type Point } from '$lib/image/perspective';
 import { error, fail, redirect } from '@sveltejs/kit';
+import { spawnOcrWorker } from '$lib/workers/spawn';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -260,7 +261,8 @@ export const actions = {
 			await deleteObject(oldWarpedPath);
 		}
 
-		redirect(303, `/admin/grid-align/${pageId}?saved=1`);
+		await spawnOcrWorker(pageId);
+		redirect(303, `/admin/ocr-review/${pageId}`);
 	},
 
 	saveGrid: async ({ params, request }) => {
@@ -340,6 +342,10 @@ export const actions = {
 			);
 		});
 
+		if (rerunOcr) {
+			await spawnOcrWorker(pageId);
+			redirect(303, `/admin/ocr-review/${pageId}`);
+		}
 		redirect(303, `/admin/grid-align/${pageId}?saved=1`);
 	},
 
