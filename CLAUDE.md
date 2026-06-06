@@ -25,7 +25,7 @@ The system has two active surfaces (family viewer deferred):
 
 Built with **SvelteKit** (TypeScript, adapter-node, Svelte 5 with runes), **PostgreSQL** as source of truth (port 5434, db `madonnahist`, role `madonnahist_app`), hosted on a shared DigitalOcean droplet (with gaylonphotos and giftlist) behind Nginx + Cloudflare at `madonnahist.gaylon.photos`. Image storage in DigitalOcean Spaces. AI harness workers (OCR, LLM cleanup) are queue-driven (Postgres-based) PM2 processes separate from the web app.
 
-Implementation follows the 4-phase plan in `docs/calendar-history-system-V4.md` § 11.
+Implementation follows `docs/calendar-history-system-V5.md` (authoritative; supersedes V4).
 
 ## Commands
 
@@ -49,7 +49,8 @@ npm run check
 ## Architecture
 
 ### Document Hierarchy
-- `docs/calendar-history-system-V4.md` — **authoritative system spec**. Architecture, data model (with append-only `ocr_runs` / `llm_draft_runs` / `day_corrections`), DB roles & grants, trigger-maintained denormalizations, module specs, phases. If other docs conflict, this wins.
+- `docs/calendar-history-system-V5.md` — **authoritative system spec**. What's built (Phase 1 complete), what's not built yet (Phases 2-4), end-user vision, technical reference. Supersedes V4. If other docs conflict, V5 wins.
+- `docs/calendar-history-system-V4.md` — historical reference. Original architecture, full DDL, trigger specs, module specs. V5 is current; V4 is retained for schema/trigger detail.
 - `docs/ui-mockups-V2.md` — UI mockups for Madonna's correction UI (iPad) and the family viewer (phone). Information architecture, not pixel-perfect designs; visual polish (palette, fonts) deferred.
 - `docs/equipment-shortlist.md` — capture-side workflow: G9 II + Olympus 60mm macro on tripod (horizontal, conservation-lab geometry), Lumix Tether → LR Classic → JPG Fine exports feed the ingestion module.
 - `docs/capture-intake-reference.html` — visual pipeline walkthrough: capture → classify → ingest → OCR → LLM cleanup → substitution pass → correction. Open in browser for the reference guide.
