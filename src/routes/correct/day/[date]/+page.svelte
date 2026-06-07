@@ -13,10 +13,10 @@
 	);
 
 	let correctedText = $state('');
-	$effect(() => { correctedText = initialText; });
+	$effect(() => { data.day.entry_date; correctedText = initialText; });
 
 	let dayNarrative = $state('');
-	$effect(() => { dayNarrative = data.day.day_narrative ?? ''; });
+	$effect(() => { data.day.entry_date; dayNarrative = data.day.day_narrative ?? ''; });
 
 	let saving = $state(false);
 	let saveError = $state('');
