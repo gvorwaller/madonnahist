@@ -1,5 +1,5 @@
 import { query } from '$lib/db';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { getClaimForMonth, claimMonth, releaseClaim } from '$lib/server/claims';
 import type { PageServerLoad, Actions } from './$types';
 
@@ -90,6 +90,6 @@ export const actions: Actions = {
 		if (claim && (claim.userId === userId || locals.user.role === 'admin')) {
 			await releaseClaim(claim.sessionId);
 		}
-		return { success: true };
+		redirect(303, '/correct');
 	},
 };
