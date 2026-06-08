@@ -44,6 +44,12 @@
 				<span class="sep">&middot;</span>
 				<span>{pendingWithDraft} ready for correction</span>
 			{/if}
+			{#if data.hasClaim}
+				<span class="sep">&middot;</span>
+				<form method="POST" action="?/release" use:enhance class="release-form">
+					<button type="submit" class="release-link">Release claim</button>
+				</form>
+			{/if}
 		</div>
 	</header>
 
@@ -244,4 +250,19 @@
 		min-height: 44px;
 	}
 	.btn-release:hover { background: #fde2e2; }
+
+	.release-form {
+		display: inline;
+	}
+	.release-link {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		font-size: 0.9rem;
+		color: #888;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+	.release-link:hover { color: #555; }
 </style>

@@ -60,6 +60,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		month: parsed.month,
 		days: days.rows,
 		otherClaim,
+		hasClaim: !otherClaim,
 		isAdmin: locals.user.role === 'admin',
 	};
 };
@@ -80,12 +81,13 @@ export const actions: Actions = {
 	},
 
 	release: async ({ params, locals }) => {
-		if (!locals.user || locals.user.role !== 'admin') return fail(403, { error: 'Admin only' });
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const parsed = parseMonthKey(params.monthKey);
 		if (!parsed) return fail(400, { error: 'Invalid month' });
+		const userId = Number(locals.user.id);
 
 		const claim = await getClaimForMonth(parsed.year, parsed.month);
-		if (claim) {
+		if (claim && (claim.userId === userId || locals.user.role === 'admin')) {
 			await releaseClaim(claim.sessionId);
 		}
 		return { success: true };
