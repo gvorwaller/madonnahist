@@ -1,9 +1,12 @@
 import { query } from '$lib/db';
 import { error } from '@sveltejs/kit';
+import { getClaimsForAllMonths, getUserResume } from '$lib/server/claims';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) error(401, 'Not authenticated');
+
+	const userId = Number(locals.user.id);
 
 	const monthsRes = await query<{
 		year: number;
@@ -30,14 +33,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 		 ORDER BY cp.year, cp.month
 	`);
 
-	const resumeRes = await query<{ entry_date: string }>(
-		`SELECT entry_date::text AS entry_date FROM calendar_days
-		  WHERE correction_status = 'pending'
-		  ORDER BY entry_date LIMIT 1`
-	);
+	const [userResume, claims, globalResumeRes] = await Promise.all([
+		getUserResume(userId),
+		getClaimsForAllMonths(),
+		query<{ entry_date: string }>(
+			`SELECT entry_date::text AS entry_date FROM calendar_days
+			  WHERE correction_status = 'pending'
+			  ORDER BY entry_date LIMIT 1`
+		),
+	]);
 
 	return {
 		months: monthsRes.rows,
-		resumeDate: resumeRes.rows[0]?.entry_date ?? null
+		resumeDate: userResume?.entryDate ?? globalResumeRes.rows[0]?.entry_date ?? null,
+		claims: claims.map(c => ({
+			year: c.year,
+			month: c.month,
+			displayName: c.displayName,
+			userId: c.userId,
+			lastActivity: c.lastActivity.toISOString(),
+			isFresh: c.isFresh,
+		})),
+		currentUserId: userId,
 	};
 };

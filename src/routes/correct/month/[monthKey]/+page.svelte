@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	const { data } = $props();
 
 	const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
@@ -20,6 +21,17 @@
 		if (s === 'in_progress') return 'skip';
 		return 'pending';
 	}
+
+	function relativeTime(iso: string): string {
+		const diff = Date.now() - new Date(iso).getTime();
+		const mins = Math.floor(diff / 60_000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins}m ago`;
+		const hrs = Math.floor(mins / 60);
+		if (hrs < 24) return `${hrs}h ago`;
+		const days = Math.floor(hrs / 24);
+		return `${days}d ago`;
+	}
 </script>
 
 <div class="page">
@@ -34,6 +46,27 @@
 			{/if}
 		</div>
 	</header>
+
+	{#if data.otherClaim}
+		<div class="claim-banner">
+			<p class="claim-banner-text">
+				<strong>{data.otherClaim.displayName}</strong> is working on this month
+				(active {relativeTime(data.otherClaim.lastActivity)}).
+				It's safer to pick a different month.
+			</p>
+			<div class="claim-banner-actions">
+				<a href="/correct" class="btn-back">Go Back</a>
+				<form method="POST" action="?/takeover" use:enhance>
+					<button type="submit" class="btn-takeover">Continue Anyway</button>
+				</form>
+				{#if data.isAdmin}
+					<form method="POST" action="?/release" use:enhance>
+						<button type="submit" class="btn-release">Release Claim</button>
+					</form>
+				{/if}
+			</div>
+		</div>
+	{/if}
 
 	{#if data.days.length === 0}
 		<p class="empty">No days found for this month.</p>
@@ -153,4 +186,62 @@
 		color: #aaa;
 		font-style: italic;
 	}
+
+	.claim-banner {
+		background: #fff8e1;
+		border: 1px solid #e6c54a;
+		border-radius: 6px;
+		padding: 1rem 1.25rem;
+		margin-bottom: 1.5rem;
+	}
+	.claim-banner-text {
+		margin: 0 0 0.75rem;
+		font-size: 0.95rem;
+		color: #5d4200;
+	}
+	.claim-banner-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+	}
+	.btn-back {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.6rem 1.25rem;
+		background: #1a7a1a;
+		color: #fff;
+		font-size: 0.9rem;
+		font-weight: 600;
+		border-radius: 5px;
+		text-decoration: none;
+		min-height: 44px;
+	}
+	.btn-back:hover { background: #156215; }
+	.btn-takeover {
+		padding: 0.6rem 1.25rem;
+		background: #fff;
+		border: 1px solid #ccc;
+		color: #333;
+		font-size: 0.9rem;
+		font-weight: 500;
+		border-radius: 5px;
+		cursor: pointer;
+		font-family: inherit;
+		min-height: 44px;
+	}
+	.btn-takeover:hover { background: #f5f5f5; border-color: #999; }
+	.btn-release {
+		padding: 0.6rem 1.25rem;
+		background: transparent;
+		border: 1px solid #c33;
+		color: #c33;
+		font-size: 0.85rem;
+		font-weight: 500;
+		border-radius: 5px;
+		cursor: pointer;
+		font-family: inherit;
+		min-height: 44px;
+	}
+	.btn-release:hover { background: #fde2e2; }
 </style>

@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { page } from '$app/stores';
 
 	const { data } = $props();
+
+	const conflictBy = $derived($page.url.searchParams.get('conflict'));
+	let conflictDismissed = $state(false);
 
 	const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
 		'July', 'August', 'September', 'October', 'November', 'December'];
@@ -17,6 +21,8 @@
 
 	let dayNarrative = $state('');
 	$effect(() => { data.day.entry_date; dayNarrative = data.day.day_narrative ?? ''; });
+
+	$effect(() => { data.day.entry_date; conflictDismissed = false; });
 
 	let saving = $state(false);
 	let saveError = $state('');
@@ -117,6 +123,13 @@
 		</div>
 	</header>
 
+	{#if conflictBy && !conflictDismissed}
+		<div class="conflict-bar" role="status">
+			<span>Note: <strong>{conflictBy}</strong> also edited the previous day while you were on it. Your save is canonical.</span>
+			<button class="conflict-dismiss" onclick={() => conflictDismissed = true}>Dismiss</button>
+		</div>
+	{/if}
+
 	<div class="editor-grid">
 		<div class="col-image">
 			{#if manualEntry}
@@ -208,6 +221,7 @@
 		}}>
 			<input type="hidden" name="correctedText" value={correctedText} />
 			<input type="hidden" name="dayNarrative" value={dayNarrative} />
+			<input type="hidden" name="pageLoadedAt" value={data.serverLoadedAt} />
 			<button type="submit" class="action-btn btn-primary" disabled={saving || correctedText.trim() === ''}>
 				{saving ? 'Saving...' : data.day.correction_status === 'accepted' ? 'Save' : 'Save & Next'}
 			</button>
@@ -663,6 +677,32 @@
 		border-radius: 4px;
 		object-fit: contain;
 	}
+
+	.conflict-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		background: #e8f4fd;
+		border: 1px solid #b3d9f2;
+		border-radius: 6px;
+		padding: 0.6rem 1rem;
+		margin-bottom: 1rem;
+		font-size: 0.85rem;
+		color: #1a4a6b;
+	}
+	.conflict-dismiss {
+		padding: 0.3rem 0.75rem;
+		background: transparent;
+		border: 1px solid #b3d9f2;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		cursor: pointer;
+		font-family: inherit;
+		color: #1a4a6b;
+		flex-shrink: 0;
+	}
+	.conflict-dismiss:hover { background: #d4ecf7; }
 
 	@media (max-width: 768px) {
 		.editor-grid {

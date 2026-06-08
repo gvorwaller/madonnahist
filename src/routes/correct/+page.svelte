@@ -46,6 +46,25 @@
 		expandedYears = next;
 	}
 
+	const claimMap = $derived.by(() => {
+		const map = new Map<string, typeof data.claims[0]>();
+		for (const c of data.claims) {
+			map.set(`${c.year}-${c.month}`, c);
+		}
+		return map;
+	});
+
+	function relativeTime(iso: string): string {
+		const diff = Date.now() - new Date(iso).getTime();
+		const mins = Math.floor(diff / 60_000);
+		if (mins < 1) return 'just now';
+		if (mins < 60) return `${mins}m ago`;
+		const hrs = Math.floor(mins / 60);
+		if (hrs < 24) return `${hrs}h ago`;
+		const days = Math.floor(hrs / 24);
+		return `${days}d ago`;
+	}
+
 	let jumpTarget = $state('');
 
 	function handleJump(e: Event) {
@@ -117,6 +136,7 @@
 									{@const pct = m.total_days > 0 ? Math.round((m.corrected_count / m.total_days) * 100) : 0}
 									{@const ready = m.draft_ready_count > 0 && m.pending_count > 0}
 									{@const monthKey = `${m.year}-${String(m.month).padStart(2, '0')}`}
+									{@const claim = claimMap.get(`${m.year}-${m.month}`)}
 									<a href="/correct/month/{monthKey}" class="month-card">
 										<h2>{monthNames[m.month]}</h2>
 										<div class="progress-bar">
@@ -151,6 +171,20 @@
 												</span>
 											{/if}
 										</div>
+										{#if claim}
+											<div class="claim-indicator">
+												{#if claim.userId === data.currentUserId}
+													<span class="claim-dot self"></span>
+													<span class="claim-text self">You</span>
+												{:else if claim.isFresh}
+													<span class="claim-dot other"></span>
+													<span class="claim-text other">{claim.displayName} · {relativeTime(claim.lastActivity)}</span>
+												{:else}
+													<span class="claim-dot stale"></span>
+													<span class="claim-text stale">{claim.displayName} (stale)</span>
+												{/if}
+											</div>
+										{/if}
 									</a>
 								{/each}
 							</div>
@@ -351,4 +385,29 @@
 	.stat .value.flag { color: #c33; }
 	.stat .value.skip { color: #b8860b; }
 	.stat .value.pending { color: #666; }
+
+	.claim-indicator {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		margin-top: 0.5rem;
+		padding-top: 0.5rem;
+		border-top: 1px solid #eee;
+	}
+	.claim-dot {
+		width: 8px;
+		height: 8px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+	.claim-dot.self { background: #1a7a1a; }
+	.claim-dot.other { background: #d4880f; }
+	.claim-dot.stale { background: #999; }
+	.claim-text {
+		font-size: 0.75rem;
+		font-weight: 500;
+	}
+	.claim-text.self { color: #1a7a1a; }
+	.claim-text.other { color: #8a5500; }
+	.claim-text.stale { color: #666; }
 </style>

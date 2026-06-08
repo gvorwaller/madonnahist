@@ -1,6 +1,7 @@
 import { query } from '$lib/db';
-import { error } from '@sveltejs/kit';
-import type { PageServerLoad } from './$types';
+import { error, fail } from '@sveltejs/kit';
+import { getClaimForMonth, claimMonth, releaseClaim } from '$lib/server/claims';
+import type { PageServerLoad, Actions } from './$types';
 
 function parseMonthKey(key: string): { year: number; month: number } | null {
 	const m = key.match(/^(\d{4})-(\d{2})$/);
@@ -15,6 +16,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) error(401, 'Not authenticated');
 	const parsed = parseMonthKey(params.monthKey);
 	if (!parsed) error(400, 'Invalid month (expected YYYY-MM)');
+	const userId = Number(locals.user.id);
 
 	const days = await query<{
 		entry_date: string;
@@ -36,9 +38,56 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		 ORDER BY cd.entry_date
 	`, [parsed.year, parsed.month]);
 
+	const claim = await getClaimForMonth(parsed.year, parsed.month);
+	let otherClaim: { sessionId: number; displayName: string; lastActivity: string; isFresh: boolean } | null = null;
+
+	if (!claim || claim.userId === userId) {
+		await claimMonth(userId, parsed.year, parsed.month);
+	} else if (!claim.isFresh) {
+		await releaseClaim(claim.sessionId);
+		await claimMonth(userId, parsed.year, parsed.month);
+	} else {
+		otherClaim = {
+			sessionId: claim.sessionId,
+			displayName: claim.displayName,
+			lastActivity: claim.lastActivity.toISOString(),
+			isFresh: claim.isFresh,
+		};
+	}
+
 	return {
 		year: parsed.year,
 		month: parsed.month,
-		days: days.rows
+		days: days.rows,
+		otherClaim,
+		isAdmin: locals.user.role === 'admin',
 	};
+};
+
+export const actions: Actions = {
+	takeover: async ({ params, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const parsed = parseMonthKey(params.monthKey);
+		if (!parsed) return fail(400, { error: 'Invalid month' });
+		const userId = Number(locals.user.id);
+
+		const claim = await getClaimForMonth(parsed.year, parsed.month);
+		if (claim && claim.userId !== userId) {
+			await releaseClaim(claim.sessionId);
+		}
+		await claimMonth(userId, parsed.year, parsed.month);
+		return { success: true };
+	},
+
+	release: async ({ params, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') return fail(403, { error: 'Admin only' });
+		const parsed = parseMonthKey(params.monthKey);
+		if (!parsed) return fail(400, { error: 'Invalid month' });
+
+		const claim = await getClaimForMonth(parsed.year, parsed.month);
+		if (claim) {
+			await releaseClaim(claim.sessionId);
+		}
+		return { success: true };
+	},
 };

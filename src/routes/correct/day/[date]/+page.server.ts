@@ -1,5 +1,6 @@
 import { query } from '$lib/db';
 import { populateLexicon } from '$lib/correction-lexicon';
+import { heartbeat, completeSession } from '$lib/server/claims';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -122,7 +123,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		prevDate,
 		nextAny,
 		prevAny,
-		monthKey
+		monthKey,
+		serverLoadedAt: new Date().toISOString(),
 	};
 };
 
@@ -135,16 +137,19 @@ export const actions = {
 		const formData = await request.formData();
 		const correctedText = (formData.get('correctedText') as string ?? '').trim();
 		const dayNarrative = (formData.get('dayNarrative') as string ?? '').trim() || null;
+		const pageLoadedAt = formData.get('pageLoadedAt') as string | null;
 		if (correctedText === '') return fail(400, { error: 'Corrected text cannot be empty' });
 
 		const userId = Number(locals.user.id);
 
-		const dayRes = await query<{ day_id: number; llm_draft_run_id: number | null; correction_status: string }>(
-			`SELECT cd.id AS day_id, cd.latest_llm_draft_run_id AS llm_draft_run_id, cd.correction_status
-			   FROM calendar_days cd WHERE cd.entry_date = $1`, [entryDate]
+		const dayRes = await query<{ day_id: number; llm_draft_run_id: number | null; correction_status: string; year: number; month: number }>(
+			`SELECT cd.id AS day_id, cd.latest_llm_draft_run_id AS llm_draft_run_id, cd.correction_status, cp.year, cp.month
+			   FROM calendar_days cd
+			   JOIN calendar_pages cp ON cp.id = cd.page_id
+			  WHERE cd.entry_date = $1`, [entryDate]
 		);
 		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
-		const { day_id, llm_draft_run_id, correction_status } = dayRes.rows[0];
+		const { day_id, llm_draft_run_id, correction_status, year, month } = dayRes.rows[0];
 		const wasAlreadyCorrected = correction_status === 'accepted';
 
 		await query(
@@ -160,12 +165,34 @@ export const actions = {
 			[dayNarrative, day_id]
 		);
 
+		await heartbeat(userId, year, month, day_id);
+
 		if (wasAlreadyCorrected) {
 			redirect(303, `/correct/day/${entryDate}`);
 		}
 
 		const nextDate = await nextUncorrectedDate(entryDate);
-		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+
+		if (!nextDate) {
+			await completeSession(userId, year, month);
+		}
+
+		// Conflict detection
+		let conflictParam = '';
+		if (pageLoadedAt) {
+			const conflictRes = await query<{ display_name: string }>(
+				`SELECT u.display_name FROM day_corrections dc
+				   JOIN users u ON u.id = dc.editor_user_id
+				  WHERE dc.day_id = $1 AND dc.editor_user_id != $2 AND dc.created_at > $3::timestamptz
+				  ORDER BY dc.created_at DESC LIMIT 1`,
+				[day_id, userId, pageLoadedAt]
+			);
+			if (conflictRes.rows[0]) {
+				conflictParam = `?conflict=${encodeURIComponent(conflictRes.rows[0].display_name)}`;
+			}
+		}
+
+		redirect(303, `/correct/day/${nextDate ?? entryDate}${conflictParam}`);
 	},
 
 	skip: async ({ params, locals }) => {
@@ -175,16 +202,21 @@ export const actions = {
 
 		const userId = Number(locals.user.id);
 
-		const dayRes = await query<{ day_id: number }>(
-			`SELECT id AS day_id FROM calendar_days WHERE entry_date = $1`, [entryDate]
+		const dayRes = await query<{ day_id: number; year: number; month: number }>(
+			`SELECT cd.id AS day_id, cp.year, cp.month
+			   FROM calendar_days cd JOIN calendar_pages cp ON cp.id = cd.page_id
+			  WHERE cd.entry_date = $1`, [entryDate]
 		);
 		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id, year, month } = dayRes.rows[0];
 
 		await query(
 			`INSERT INTO day_corrections (day_id, corrected_text, review_note, status_after, editor_user_id)
 			 VALUES ($1, '', 'skipped', 'in_progress', $2)`,
-			[dayRes.rows[0].day_id, userId]
+			[day_id, userId]
 		);
+
+		await heartbeat(userId, year, month, day_id);
 
 		const nextDate = await nextUncorrectedDate(entryDate);
 		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
@@ -199,16 +231,21 @@ export const actions = {
 		const reviewNote = (formData.get('reviewNote') as string ?? '').trim() || 'Flagged as illegible';
 		const userId = Number(locals.user.id);
 
-		const dayRes = await query<{ day_id: number }>(
-			`SELECT id AS day_id FROM calendar_days WHERE entry_date = $1`, [entryDate]
+		const dayRes = await query<{ day_id: number; year: number; month: number }>(
+			`SELECT cd.id AS day_id, cp.year, cp.month
+			   FROM calendar_days cd JOIN calendar_pages cp ON cp.id = cd.page_id
+			  WHERE cd.entry_date = $1`, [entryDate]
 		);
 		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id, year, month } = dayRes.rows[0];
 
 		await query(
 			`INSERT INTO day_corrections (day_id, corrected_text, review_note, status_after, editor_user_id)
 			 VALUES ($1, '', $2, 'illegible', $3)`,
-			[dayRes.rows[0].day_id, reviewNote, userId]
+			[day_id, reviewNote, userId]
 		);
+
+		await heartbeat(userId, year, month, day_id);
 
 		const nextDate = await nextUncorrectedDate(entryDate);
 		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
