@@ -14,6 +14,7 @@
 	let ingesting = $state(false);
 	let showCompleted = $state(false);
 	let confirmUningest = $state<{ intakeId: number; pageId: number; label: string } | null>(null);
+	let expandedYears = $state<Set<number>>(new Set());
 
 	const months = [
 		'January', 'February', 'March', 'April', 'May', 'June',
@@ -110,6 +111,26 @@
 		const existing = existingByYM.get(`${y}-${m}`);
 		if (!existing) return null;
 		return { page_id: existing.page_id, camera_filename: existing.camera_filename, hasCorrections: existing.correction_count > 0 };
+	}
+
+	const completedByYear = $derived(() => {
+		const map = new Map<number, typeof data.completed>();
+		for (const r of data.completed) {
+			const y = r.approved_year ?? 0;
+			if (!map.has(y)) map.set(y, []);
+			map.get(y)!.push(r);
+		}
+		for (const arr of map.values()) {
+			arr.sort((a, b) => (a.approved_month ?? 0) - (b.approved_month ?? 0));
+		}
+		return [...map.entries()].sort((a, b) => a[0] - b[0]);
+	});
+
+	function toggleYear(year: number) {
+		const next = new Set(expandedYears);
+		if (next.has(year)) next.delete(year);
+		else next.add(year);
+		expandedYears = next;
 	}
 
 	let replacing = $state<Record<number, boolean>>({});
@@ -313,18 +334,40 @@
 				{showCompleted ? '▾' : '▸'} Completed ({data.completed.length})
 			</button>
 			{#if showCompleted}
-				<ul class="completed-list">
-					{#each data.completed as r (r.id)}
-						<li>
-							<span class="mono">{r.camera_filename}</span>
-							→ {r.approved_year}-{String(r.approved_month).padStart(2, '0')}
-							<span class="muted">(page #{r.page_id})</span>
-							{#if r.page_id}
-								<button class="btn-uningest" onclick={() => confirmUningest = { intakeId: r.id, pageId: r.page_id!, label: `${r.camera_filename} → ${r.approved_year}-${String(r.approved_month).padStart(2, '0')}` }}>Un-ingest</button>
+				<div class="completed-years">
+					{#each completedByYear() as [year, items] (year)}
+						<div class="year-section">
+							<button
+								class="year-bar"
+								aria-expanded={expandedYears.has(year)}
+								onclick={() => toggleYear(year)}
+							>
+								<span class="year-label">{year}</span>
+								<span class="year-count">{items.length} page{items.length === 1 ? '' : 's'}</span>
+								<span class="chevron">{expandedYears.has(year) ? '▴' : '▾'}</span>
+							</button>
+							{#if expandedYears.has(year)}
+								<ul class="completed-list">
+									{#each items as r (r.id)}
+										<li>
+											<span class="month-label">{months[(r.approved_month ?? 1) - 1]}</span>
+											<span class="muted">{r.camera_filename}</span>
+											{#if r.page_id}
+												<button
+													type="button"
+													class="btn-view"
+													onclick={() => { lightboxSrc = `/admin/grid-align/${r.page_id}/page-image?w=2400`; }}
+													title="View full page"
+												>View</button>
+												<button class="btn-uningest" onclick={() => confirmUningest = { intakeId: r.id, pageId: r.page_id!, label: `${months[(r.approved_month ?? 1) - 1]} ${r.approved_year}` }}>Un-ingest</button>
+											{/if}
+										</li>
+									{/each}
+								</ul>
 							{/if}
-						</li>
+						</div>
 					{/each}
-				</ul>
+				</div>
 			{/if}
 		</section>
 	{/if}
@@ -446,10 +489,34 @@
 	.completed-toggle {
 		background: none; border: none; font: inherit; font-weight: 600; cursor: pointer; color: #333; padding: 0;
 	}
-	.completed-list { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.85rem; color: #555; }
-	.completed-list li { padding: 0.15rem 0; }
+	.completed-years { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; }
+	.year-section {
+		border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;
+	}
+	.year-bar {
+		display: flex; align-items: center; gap: 0.75rem;
+		width: 100%; padding: 0.65rem 1rem; background: #f5f5f5;
+		border: none; cursor: pointer; font: inherit; font-weight: 600; font-size: 0.95rem;
+		color: #333; text-align: left;
+	}
+	.year-bar:hover { background: #ebebeb; }
+	.year-label { min-width: 3rem; }
+	.year-count { flex: 1; font-weight: 400; font-size: 0.8rem; color: #666; }
+	.chevron { font-size: 0.75rem; color: #888; }
+	.completed-list { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; color: #555; }
+	.completed-list li {
+		display: flex; align-items: center; gap: 0.5rem;
+		padding: 0.45rem 1rem; border-top: 1px solid #eee; background: #fff;
+	}
+	.completed-list li:hover { background: #f9f9f9; }
+	.month-label { font-weight: 600; color: #333; min-width: 5.5rem; }
 	.mono { font-family: ui-monospace, monospace; }
-	.muted { color: #888; }
+	.muted { color: #888; flex: 1; }
+	.btn-view {
+		padding: 0.15rem 0.5rem; border: 1px solid #1a73e8; border-radius: 3px;
+		background: #fff; color: #1a73e8; font-size: 0.75rem; cursor: pointer;
+	}
+	.btn-view:hover { background: #e8f0fe; }
 
 	.lightbox {
 		position: fixed; inset: 0; z-index: 1000;
