@@ -93,6 +93,13 @@ npm run build
 # Run schema migrations (idempotent, connects as owner role)
 ./backend/db/migrate_pg.sh
 
+# Local isolated test DB (never use 5433, 5435, or PGDATABASE=madonnahist)
+npm run test:env
+npm run test:db:start
+npm run test:db:reset
+npm run test:db:migrate
+npm run test:db:invariants
+
 # Deploy to droplet (git push, pull, build, run migrations, restart PM2, health check)
 ./scripts/deploy-to-DO.sh
 ```
@@ -144,3 +151,21 @@ All evaluation and test scripts are executed using `npx tsx` from the repository
 - **Production Host App Port**: `3002` (reverse proxied via Nginx + Cloudflare at https://madonnahist.gaylon.photos)
 - **PostgreSQL Port**: `5434` (local & production), DB: `madonnahist`
 - **Spaces Credentials**: DO Spaces credentials live in the `private_data.api_credentials` table (never `.env`). Load using the `credentialService` helper.
+
+## Local Test Environment Safety
+
+Follow [docs/local-test-environment.md](file:///Users/gaylonvorwaller/madonnahist/docs/local-test-environment.md) for local tests.
+
+- Never use port `5433` for madonnahist tests; it belongs to BTC-dashboard.
+- Never use port `5435` for madonnahist tests; it is the production DB tunnel.
+- Never run local tests against `PGDATABASE=madonnahist`.
+- Use the dedicated local test database `madonnahist_test` on port `15434`.
+- Use `MADONNAHIST_ENV=test` and `MADONNAHIST_OBJECT_STORE=local`.
+- Do not seed production DigitalOcean Spaces credentials into the test DB.
+- Do not restore production dumps into shared local Postgres clusters.
+
+The migrations grant privileges to canonical role names
+`madonnahist_owner`, `madonnahist_app`, and `madonnahist_worker`; local tests
+reuse those role names only inside the isolated repo-local Postgres cluster.
+Destructive image flows must use the local filesystem object store under
+`.local/object-store-test/`, never production DigitalOcean Spaces.

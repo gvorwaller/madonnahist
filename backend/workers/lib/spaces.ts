@@ -1,5 +1,7 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { query } from './db.js';
+import { readFile } from 'node:fs/promises';
+import { resolve, sep } from 'node:path';
 
 interface SpacesConfig {
 	client: S3Client;
@@ -7,6 +9,23 @@ interface SpacesConfig {
 }
 
 let cached: SpacesConfig | undefined;
+
+function useLocalObjectStore(): boolean {
+	return process.env.MADONNAHIST_OBJECT_STORE === 'local';
+}
+
+function localStoreRoot(): string {
+	return resolve(process.cwd(), process.env.MADONNAHIST_LOCAL_OBJECT_STORE_DIR ?? '.local/object-store-test');
+}
+
+function localObjectPath(key: string): string {
+	const root = localStoreRoot();
+	const path = resolve(root, key);
+	if (path !== root && !path.startsWith(root + sep)) {
+		throw new Error(`Object key escapes local object store root: ${key}`);
+	}
+	return path;
+}
 
 async function getCredential(service: string, key: string): Promise<string> {
 	const r = await query<{ credential_value: string }>(
@@ -55,6 +74,10 @@ async function getSpaces(): Promise<SpacesConfig> {
 }
 
 export async function getObject(key: string): Promise<Buffer> {
+	if (useLocalObjectStore()) {
+		return readFile(localObjectPath(key));
+	}
+
 	const { client, bucket } = await getSpaces();
 	const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
 	const stream = res.Body;

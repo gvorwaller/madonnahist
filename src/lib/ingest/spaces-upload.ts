@@ -10,6 +10,9 @@
  */
 import { S3Client, PutObjectCommand, HeadObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { credentialService } from '$lib/credentials';
+import { env } from '$env/dynamic/private';
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 
 interface SpacesConfig {
 	client: S3Client;
@@ -17,6 +20,23 @@ interface SpacesConfig {
 }
 
 let cached: SpacesConfig | undefined;
+
+function useLocalObjectStore(): boolean {
+	return env.MADONNAHIST_OBJECT_STORE === 'local';
+}
+
+function localStoreRoot(): string {
+	return resolve(process.cwd(), env.MADONNAHIST_LOCAL_OBJECT_STORE_DIR ?? '.local/object-store-test');
+}
+
+function localObjectPath(key: string): string {
+	const root = localStoreRoot();
+	const path = resolve(root, key);
+	if (path !== root && !path.startsWith(root + sep)) {
+		throw new Error(`Object key escapes local object store root: ${key}`);
+	}
+	return path;
+}
 
 async function getSpaces(): Promise<SpacesConfig> {
 	if (cached) return cached;
@@ -56,6 +76,16 @@ interface HeadResult {
 }
 
 async function headObject(key: string): Promise<HeadResult> {
+	if (useLocalObjectStore()) {
+		try {
+			const info = await stat(localObjectPath(key));
+			return { exists: info.isFile(), size: info.isFile() ? info.size : null };
+		} catch (err: unknown) {
+			if ((err as { code?: string }).code === 'ENOENT') return { exists: false, size: null };
+			throw err;
+		}
+	}
+
 	const { client, bucket } = await getSpaces();
 	try {
 		const r = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
@@ -89,6 +119,13 @@ export async function uploadIfAbsent(
 		return { key, uploaded: false };
 	}
 
+	if (useLocalObjectStore()) {
+		const path = localObjectPath(key);
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, body);
+		return { key, uploaded: true };
+	}
+
 	const { client, bucket } = await getSpaces();
 	await client.send(
 		new PutObjectCommand({
@@ -104,6 +141,10 @@ export async function uploadIfAbsent(
 
 /** Download an object from Spaces. */
 export async function getObject(key: string): Promise<Buffer> {
+	if (useLocalObjectStore()) {
+		return readFile(localObjectPath(key));
+	}
+
 	const { client, bucket } = await getSpaces();
 	const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
 	const stream = res.Body;
@@ -118,6 +159,11 @@ export async function getObject(key: string): Promise<Buffer> {
 /** Best-effort delete of a Spaces object. Returns true if deleted or already absent. */
 export async function deleteObject(key: string): Promise<boolean> {
 	try {
+		if (useLocalObjectStore()) {
+			await rm(localObjectPath(key), { force: true });
+			return true;
+		}
+
 		const { client, bucket } = await getSpaces();
 		await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 		return true;

@@ -4,8 +4,10 @@
 # Connects as MIGRATION_PGUSER (madonnahist_owner), NOT the runtime PGUSER.
 #
 # Usage:
-#   ./migrate_pg.sh             # apply pending migrations
-#   ./migrate_pg.sh --dry-run   # show what would be applied
+#   ./migrate_pg.sh                         # apply pending migrations
+#   ./migrate_pg.sh --dry-run               # show what would be applied
+#   ./migrate_pg.sh --env .env.test         # load an explicit env file
+#   ./migrate_pg.sh --env .env.test --dry-run
 
 set -euo pipefail
 
@@ -15,8 +17,30 @@ YELLOW=$'\033[1;33m'
 NC=$'\033[0m'
 
 DRY_RUN=false
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN=true
+EXPLICIT_ENV_FILE=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
+    --env)
+      if [[ -z "${2:-}" ]]; then
+        echo "${RED}ERROR: --env requires a file path${NC}" >&2
+        exit 1
+      fi
+      EXPLICIT_ENV_FILE="$2"
+      shift 2
+      ;;
+    *)
+      echo "${RED}ERROR: unknown argument: $1${NC}" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ "$DRY_RUN" == "true" ]]; then
   echo "${YELLOW}DRY RUN MODE - No changes will be applied${NC}"
 fi
 
@@ -25,7 +49,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 ENV_FILE=""
-if [[ -f "$REPO_ROOT/.env" ]]; then
+if [[ -n "$EXPLICIT_ENV_FILE" ]]; then
+  if [[ "$EXPLICIT_ENV_FILE" = /* ]]; then
+    ENV_FILE="$EXPLICIT_ENV_FILE"
+  else
+    ENV_FILE="$REPO_ROOT/$EXPLICIT_ENV_FILE"
+  fi
+  if [[ ! -f "$ENV_FILE" ]]; then
+    echo "${RED}ERROR: env file not found: $ENV_FILE${NC}" >&2
+    exit 1
+  fi
+elif [[ -f "$REPO_ROOT/.env" ]]; then
   ENV_FILE="$REPO_ROOT/.env"
 elif [[ -f "/opt/madonnahist/.env" ]]; then
   ENV_FILE="/opt/madonnahist/.env"
@@ -51,6 +85,17 @@ PGPORT="${PGPORT:-5434}"
 PGDATABASE="${PGDATABASE:-madonnahist}"
 OWNER_USER="${MIGRATION_PGUSER:-madonnahist_owner}"
 OWNER_PW="${MIGRATION_PGPASSWORD:-}"
+
+if [[ "${MADONNAHIST_ENV:-}" == "test" ]]; then
+  if [[ "$PGPORT" == "5433" || "$PGPORT" == "5435" ]]; then
+    echo "${RED}ERROR: refusing test migration on reserved port ${PGPORT} (5433=BTC-dashboard, 5435=prod tunnel)${NC}" >&2
+    exit 1
+  fi
+  if [[ "$PGDATABASE" == "madonnahist" ]]; then
+    echo "${RED}ERROR: refusing test migration against production database name 'madonnahist'${NC}" >&2
+    exit 1
+  fi
+fi
 
 if [[ -z "$OWNER_PW" ]]; then
   echo "${RED}ERROR: MIGRATION_PGPASSWORD is empty. Set it in .env.${NC}" >&2

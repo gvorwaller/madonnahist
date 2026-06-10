@@ -15,7 +15,13 @@
 -- ─────────────────────────────────────────────────────────────────
 -- Connect + schema usage
 -- ─────────────────────────────────────────────────────────────────
-GRANT CONNECT ON DATABASE madonnahist TO madonnahist_app, madonnahist_worker;
+DO $$
+BEGIN
+  EXECUTE format(
+    'GRANT CONNECT ON DATABASE %I TO madonnahist_app, madonnahist_worker',
+    current_database()
+  );
+END $$;
 GRANT USAGE  ON SCHEMA public        TO madonnahist_app, madonnahist_worker;
 
 -- Default privileges for future tables created by owner.

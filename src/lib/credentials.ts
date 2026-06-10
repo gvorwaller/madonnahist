@@ -1,4 +1,5 @@
 import { query } from './db';
+import { env } from '$env/dynamic/private';
 
 type CacheKey = `${string}::${string}`;
 const cache = new Map<CacheKey, string | null>();
@@ -32,6 +33,8 @@ export type SpacesHealth = 'ok' | 'not_configured' | 'error';
 
 export async function spacesHealthCheck(): Promise<SpacesHealth> {
 	try {
+		if (env.MADONNAHIST_OBJECT_STORE === 'local') return 'ok';
+
 		const required = ['SPACES_KEY', 'SPACES_SECRET', 'SPACES_BUCKET', 'SPACES_REGION', 'SPACES_ENDPOINT'];
 		const values = await Promise.all(required.map((k) => credentialService.getCredential('do_spaces', k)));
 		const presentCount = values.filter((v) => v && v.length > 0).length;

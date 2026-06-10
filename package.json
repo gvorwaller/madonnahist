@@ -10,6 +10,12 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"migrate": "./backend/db/migrate_pg.sh",
+		"test:env": "./scripts/test-env-check.sh",
+		"test:db:start": "./scripts/test-db-start.sh",
+		"test:db:stop": "./scripts/test-db-stop.sh",
+		"test:db:reset": "./scripts/test-db-reset.sh",
+		"test:db:migrate": "./scripts/test-db-migrate.sh",
+		"test:db:invariants": "./backend/db/tests/v4_invariants.sh",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

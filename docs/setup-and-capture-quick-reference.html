@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Setup & Capture Quick Reference — Calendar Archive</title>
+<style>
+  @media print {
+    body { margin: 0.4in; font-size: 11pt; }
+    .no-print { display: none; }
+    h1 { font-size: 16pt; }
+    h2 { font-size: 13pt; }
+    table { page-break-inside: avoid; }
+  }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 7.5in;
+    margin: 0 auto;
+    padding: 0.5in;
+    color: #1a1a1a;
+    line-height: 1.45;
+  }
+  h1 {
+    font-size: 1.4em;
+    border-bottom: 2px solid #333;
+    padding-bottom: 0.3em;
+    margin-bottom: 0.6em;
+  }
+  h2 {
+    font-size: 1.1em;
+    margin-top: 1.2em;
+    margin-bottom: 0.4em;
+    background: #f0f0f0;
+    padding: 0.25em 0.5em;
+  }
+  h3 {
+    font-size: 1.0em;
+    margin-top: 0.8em;
+    margin-bottom: 0.3em;
+    text-transform: uppercase;
+    color: #555;
+    letter-spacing: 0.05em;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0.5em 0;
+  }
+  th, td {
+    border: 1px solid #999;
+    padding: 0.3em 0.6em;
+    text-align: left;
+  }
+  th {
+    background: #e8e8e8;
+    font-weight: 600;
+    width: 35%;
+  }
+  td { font-weight: 400; }
+  .bold { font-weight: 700; }
+  ol, ul { margin: 0.3em 0; padding-left: 1.4em; }
+  li { margin-bottom: 0.25em; }
+  .step-num {
+    display: inline-block;
+    background: #333;
+    color: #fff;
+    width: 1.5em;
+    height: 1.5em;
+    line-height: 1.5em;
+    text-align: center;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.85em;
+    margin-right: 0.3em;
+    flex-shrink: 0;
+  }
+  .session-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4em;
+    margin-bottom: 0.45em;
+  }
+  .session-step p { margin: 0; }
+  .warn {
+    background: #fff3cd;
+    border-left: 4px solid #b8860b;
+    padding: 0.4em 0.6em;
+    margin: 0.5em 0;
+    font-size: 0.95em;
+  }
+  kbd {
+    display: inline-block;
+    background: #e8e8e8;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    padding: 0.05em 0.35em;
+    font-family: inherit;
+    font-size: 0.9em;
+  }
+  .footer {
+    margin-top: 1.5em;
+    font-size: 0.8em;
+    color: #666;
+    border-top: 1px solid #ccc;
+    padding-top: 0.4em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Setup & Capture Quick Reference &mdash; Calendar Archive</h1>
+
+<p>This quick-reference sheet documents the physical rig settings, actual measurements, camera configuration, and session capture workflow derived from our actual production setups.</p>
+
+<h2>1. Physical Setup &amp; Actual Measurements</h2>
+
+<h3>Easel &amp; Page Placement</h3>
+<table>
+  <tr><th>Easel table offset</th><td class="bold">10&Prime; in from front edge of table</td></tr>
+  <tr><th>Page center position</th><td>X = 26&Prime;, Y = 16&Prime; (measured to easel center from table origin)</td></tr>
+  <tr><th>Edge placement guides</th><td>Taped corner brackets (foamcore) on easel face</td></tr>
+</table>
+
+<h3>Camera Tripod Height &amp; Position</h3>
+<table>
+  <tr><th>Tripod hinge height</th><td class="bold">44&Prime; floor to leg hinge (right rear leg)</td></tr>
+  <tr><th>Tripod center location</th><td>X = -18&Prime;, Y = 36&Prime; (from table origin)</td></tr>
+  <tr><th>Foot 1 mark</th><td>(-18, 30)</td></tr>
+  <tr><th>Foot 2 mark</th><td>(-26, 42)</td></tr>
+  <tr><th>Foot 3 mark</th><td>(-10, 42)</td></tr>
+  <tr><th>Alignment</th><td>Aimed horizontally, bubble-level on hot shoe</td></tr>
+</table>
+
+<h3>Lights (2x Godox SL100Bi)</h3>
+<table>
+  <tr><th>Light stand height</th><td class="bold">52&Prime; floor to light attachment point</td></tr>
+  <tr><th>Left stand location</th><td>X = -6&Prime;, Y = 18&Prime;</td></tr>
+  <tr><th>Right stand location</th><td>X = 46&Prime;, Y = 18&Prime;</td></tr>
+  <tr><th>Output brightness</th><td class="bold">14% (yields 1/60 s exposure at f/5.6, ISO 200)</td></tr>
+  <tr><th>Color temperature</th><td class="bold">5000 K</td></tr>
+  <tr><th>Polarization</th><td>Rosco #7300 linear sheets taped over softbox faces</td></tr>
+</table>
+
+<h2>2. Camera Settings (Lumix G9 II + Olympus 60mm Macro)</h2>
+<div class="warn">Lock these settings into camera Custom Mode <strong>C1</strong> for instant recall.</div>
+
+<table>
+  <tr><th>Mode</th><td class="bold">Manual (M) or Aperture Priority (A)</td></tr>
+  <tr><th>Resolution</th><td class="bold">High Res Mode &mdash; Tripod (100 MP JPEG)</td></tr>
+  <tr><th>File format</th><td class="bold">JPEG Only (Fine)</td></tr>
+  <tr><th>Aperture</th><td class="bold">f/5.6 (lens sweet spot)</td></tr>
+  <tr><th>ISO</th><td class="bold">200 (base ISO)</td></tr>
+  <tr><th>Shutter speed</th><td>Auto or fixed to ~1/60 s (verify in 1/60 &ndash; 1/125 s range)</td></tr>
+  <tr><th>Shutter type</th><td class="bold">Electronic</td></tr>
+  <tr><th>Focus</th><td class="bold">Manual Focus (MF) &mdash; zoom 10&times; in live view to set once</td></tr>
+  <tr><th>White balance</th><td class="bold">Custom (set off ColorChecker WB panel)</td></tr>
+  <tr><th>IBIS</th><td class="bold">Off (stabilization off on tripod)</td></tr>
+  <tr><th>Color profile</th><td class="bold">Standard baselines</td></tr>
+</table>
+
+<h2>3. Lumix Tether &amp; Ingestion Pipeline Workflow</h2>
+<div class="warn">We bypass Lightroom entirely. The camera writes JPEGs directly to the Mac, which are then processed via the Capture Intake UI.</div>
+
+<h3>Rig Setup &amp; Calibration Sequence</h3>
+<div class="session-step"><span class="step-num">1</span><p>Set up tripod and light stands on their taped floor marks.</p></div>
+<div class="session-step"><span class="step-num">2</span><p>Adjust tripod hinge to <strong>44&Prime;</strong> and light stands to <strong>52&Prime;</strong> height.</p></div>
+<div class="session-step"><span class="step-num">3</span><p>Power lights to <strong>5000 K</strong> at <strong>14%</strong> brightness.</p></div>
+<div class="session-step"><span class="step-num">4</span><p><strong>Close window blinds fully</strong> to block ambient daylight and avoid mixed illumination.</p></div>
+<div class="session-step"><span class="step-num">5</span><p>Mount camera, connect USB to Mac, power on, and rotate mode dial to <strong>C1</strong>.</p></div>
+<div class="session-step"><span class="step-num">6</span><p>Open <strong>Lumix Tether</strong> on the Mac to check the live view.</p></div>
+<div class="session-step"><span class="step-num">7</span><p><strong>Custom WB</strong>: Place ColorChecker WB panel flat on easel. Sample custom WB on camera body to lock it in-camera.</p></div>
+<div class="session-step"><span class="step-num">8</span><p><strong>Exposure Check</strong>: Swap in Gray Panel. Verify shutter speed reads between <strong>1/60 &ndash; 1/125 s</strong>.</p></div>
+<div class="session-step"><span class="step-num">9</span><p><strong>Manual Focus</strong>: Zoom to 10&times; in live view on a calendar page. Focus manually on the ink. Do not touch focus again.</p></div>
+
+<h3>Capture Sequence</h3>
+<div class="session-step"><span class="step-num">1</span><p>Load the calendar page into the table edge guides.</p></div>
+<div class="session-step"><span class="step-num">2</span><p>Trigger the shutter via Lumix Tether interface (or spacebar / remote release).</p></div>
+<div class="session-step"><span class="step-num">3</span><p>Confirm the JPEG file lands directly in <code>~/Lumix Tether/</code> and check focus/framing in the preview.</p></div>
+<div class="session-step"><span class="step-num">4</span><p>Place the next page on the cradle and repeat.</p></div>
+<div class="session-step"><span class="step-num">5</span><p>After the final page, review all captures before tearing down the rig.</p></div>
+
+<h2>4. Ingestion UI Workflow (Gaylon/Admin)</h2>
+
+<h3>1. File Sync / Discovery</h3>
+<ul>
+  <li><strong>Local Mode (Capture Station)</strong>: The local SvelteKit server reads <code>~/Lumix Tether/</code> directly.</li>
+  <li><strong>Production Mode (DO Droplet)</strong>: A LaunchAgent on the Mac runs <code>rsync</code> automatically every 2 minutes to push JPEGs from <code>~/Lumix Tether/</code> to the remote droplet.</li>
+</ul>
+
+<h3>2. Capture Intake UI</h3>
+<div class="step"><span class="step-num">1</span><p>Navigate to <code>/admin/capture</code> on the server page.</p></div>
+<div class="step"><span class="step-num">2</span><p>Click <strong>"Classify All"</strong> to run the full-page Vision pass and auto-detect month/year headers.</p></div>
+<div class="step"><span class="step-num">3</span><p>Verify or adjust the proposed month/year, check quality indicators (warnings for blur/clipping), and select the appropriate layout grid fit.</p></div>
+<div class="step"><span class="step-num">4</span><p>Select the pages to import and click <strong>"Ingest Selected"</strong> to upload to Spaces, create DB records, queue OCR cell crops, and move files to completed status.</p></div>
+
+<div class="footer">
+  Created 2026-06-09 &mdash; Companion reference to <code>docs/equipment-shortlist.md</code>.
+</div>
+
+</body>
+</html>
