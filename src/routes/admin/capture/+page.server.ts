@@ -12,8 +12,8 @@ import { join, extname, sep } from 'node:path';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { fail } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
 import { query, withTransaction } from '$lib/db';
+import { credentialService } from '$lib/credentials';
 import { deleteObject } from '$lib/ingest/spaces-upload';
 import { classifyImage } from '$lib/ingest/classify';
 import { assessQuality } from '$lib/ingest/quality';
@@ -195,8 +195,8 @@ async function loadIntake(id: number) {
 export const actions: Actions = {
 	/** OCR + quality-assess every unclassified image. */
 	classify: async () => {
-		const apiKey = env.GOOGLE_VISION_API_KEY;
-		if (!apiKey) return fail(500, { error: 'GOOGLE_VISION_API_KEY is not configured' });
+		const apiKey = await credentialService.getCredential('google_vision', 'API_KEY');
+		if (!apiKey) return fail(500, { error: 'Google Vision API key not found in private_data.api_credentials' });
 
 		const pending = await query<{ id: number; source_path: string }>(
 			`SELECT id, source_path FROM capture_intake WHERE status = 'unclassified'`
