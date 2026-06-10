@@ -87,6 +87,7 @@
 
 	const activeLexicon = $derived(data.lexicon.filter((l: { is_active: boolean }) => l.is_active));
 	const suppressedLexicon = $derived(data.lexicon.filter((l: { is_active: boolean }) => !l.is_active));
+	const vocabTerms = $derived(new Set(data.vocabulary.map((v: { term: string }) => v.term.toLowerCase())));
 </script>
 
 <svelte:window onkeydown={(e) => {
@@ -325,12 +326,21 @@
 					{#each activeLexicon as l (l.id)}
 						<tr>
 							<td class="token">{l.ocr_token}</td>
-							<td class="token">{l.corrected_token}</td>
+							<td class="token">
+								{l.corrected_token}
+								{#if vocabTerms.has(l.corrected_token.toLowerCase())}
+									<span class="promoted-tag">in vocabulary</span>
+								{/if}
+							</td>
 							<td class="col-num">{l.frequency}</td>
 							<td class="date-cell">{l.first_seen}</td>
 							<td class="date-cell">{l.last_seen}</td>
 							<td class="col-actions">
-								<button class="btn btn-sm btn-secondary" onclick={() => { promoteTarget = { id: l.id, token: l.corrected_token }; promoteCategory = 'person'; }}>Promote</button>
+								{#if vocabTerms.has(l.corrected_token.toLowerCase())}
+									<span class="promoted-done">Promoted</span>
+								{:else}
+									<button class="btn btn-sm btn-secondary" onclick={() => { promoteTarget = { id: l.id, token: l.corrected_token }; promoteCategory = 'person'; }}>Promote</button>
+								{/if}
 								<button class="btn btn-sm btn-danger" onclick={() => deleteTarget = { type: 'lexicon', id: l.id, label: `"${l.ocr_token}" → "${l.corrected_token}"` }}>Suppress</button>
 							</td>
 						</tr>
@@ -555,6 +565,24 @@
 	.token {
 		font-family: monospace;
 		font-size: 0.85rem;
+	}
+	.promoted-tag {
+		display: inline-block;
+		font-family: -apple-system, sans-serif;
+		font-size: 0.65rem;
+		font-weight: 600;
+		color: #14431a;
+		background: #e8f5e9;
+		border: 1px solid #2e7d32;
+		border-radius: 3px;
+		padding: 0.05rem 0.35rem;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+	}
+	.promoted-done {
+		font-size: 0.75rem;
+		color: #2e7d32;
+		font-weight: 600;
 	}
 	.suppressed-header td {
 		padding-top: 0.75rem;
