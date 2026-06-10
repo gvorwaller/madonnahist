@@ -4,6 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > **DO NOT modify this file without explicitly asking the user first.**
 
+## Immediate Local Test Setup
+
+For any local test work, start with the isolated repo-local stack. Do not infer
+test settings from production `.env`.
+
+- Config: `.env.test` from `.env.test.example`
+- Database: `madonnahist_test` on `127.0.0.1:15434`
+- Environment: `MADONNAHIST_ENV=test`
+- Object store: `MADONNAHIST_OBJECT_STORE=local`
+- Local image/object files: `.local/object-store-test/`
+- Reference: `docs/local-test-environment.md`
+
+Quick start:
+
+```bash
+cp .env.test.example .env.test
+npm run test:env
+npm run test:db:start
+npm run test:db:reset
+npm run test:db:migrate
+npm run test:db:invariants
+```
+
+Run the app against the test stack with:
+
+```bash
+npx vite dev --host 127.0.0.1 --port 5177 --strictPort --mode test
+```
+
+Never use port `5433`, port `5435`, `PGDATABASE=madonnahist`, production
+DigitalOcean Spaces credentials, or production dumps for local tests.
+
 ## Session Startup (Do These First, In Order)
 
 1. **Read `cs.md`** — hard rules on debugging methodology, infrastructure details, and historical failures. Non-negotiable.
