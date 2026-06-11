@@ -28,6 +28,7 @@ module.exports = {
 			restart_delay: 5000,
 			max_restarts: 10,
 			min_uptime: '30s',
+			max_memory_restart: '2500M',
 
 			// Capture stdout/stderr in PM2's rotated logs.
 			out_file: '/var/log/pm2/madonnahist.out.log',
