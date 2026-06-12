@@ -1,3 +1,4 @@
+import '$lib/server/monitoring';
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE_NAME, validateSession, type SessionUser } from '$server/session';

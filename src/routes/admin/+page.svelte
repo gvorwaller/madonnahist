@@ -26,6 +26,11 @@
 			<h2>Substitutions</h2>
 			<p>Apply notation and lexicon replacements to uncorrected LLM drafts in bulk.</p>
 		</a>
+
+		<a href="/admin/system-health" class="tool">
+			<h2>System Health</h2>
+			<p>Memory usage, job queue status, worker health, and ingestion stats.</p>
+		</a>
 	</div>
 </div>
 

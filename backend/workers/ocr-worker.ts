@@ -11,6 +11,7 @@
  *   --stage=llm_cleanup   Run only the LLM cleanup stage
  *   --retry-stale-minutes=N  Re-claim in_progress jobs older than N minutes (default 10)
  *   --show-prompt            Print the assembled cleanup prompt and exit
+ *   --daemon                 Run as persistent queue poller (for PM2)
  */
 import sharp from 'sharp';
 import Anthropic from '@anthropic-ai/sdk';
@@ -27,6 +28,8 @@ const PAGE_ID_FILTER = process.argv.find(a => a.startsWith('--page-id='))?.split
 const DRY_RUN = process.argv.includes('--dry-run');
 const SHOW_PROMPT = process.argv.includes('--show-prompt');
 const STAGE_FILTER = process.argv.find(a => a.startsWith('--stage='))?.split('=')[1] as 'page_ocr' | 'llm_cleanup' | undefined;
+const DAEMON = process.argv.includes('--daemon');
+const DAEMON_POLL_MS = 5000;
 const PROMPT_REFRESH_INTERVAL = 50;
 
 interface PromptCache {
@@ -132,6 +135,7 @@ interface DayInfo {
 	grid_row: number | null;
 	grid_col: number | null;
 	crop_bounds: { x: number; y: number; width: number; height: number } | null;
+	day_image_path: string | null;
 }
 
 // ─── Job claiming ───
@@ -174,12 +178,12 @@ async function claimJobs(jobType: string): Promise<ClaimedJob[]> {
 
 // ─── Stage 1: Google Vision full-page OCR ───
 
-async function runPageOcr() {
+async function runPageOcr(): Promise<number> {
 	log('Stage 1: Google Vision full-page OCR');
 
 	const gvApiKey = await getApiKey('google_vision', 'API_KEY', 'GOOGLE_VISION_API_KEY');
 	const jobs = await claimJobs('page_ocr');
-	if (jobs.length === 0) { log('  No pending page_ocr jobs'); return; }
+	if (jobs.length === 0) { log('  No pending page_ocr jobs'); return 0; }
 	log(`  Claimed ${jobs.length} page_ocr job(s)`);
 
 	let succeeded = 0, failed = 0;
@@ -245,7 +249,7 @@ async function runPageOcr() {
 
 			// Get days for this page
 			const dayRes = await query<DayInfo>(
-				`SELECT id, entry_date::text AS entry_date, grid_row, grid_col, crop_bounds
+				`SELECT id, entry_date::text AS entry_date, grid_row, grid_col, crop_bounds, day_image_path
 				   FROM calendar_days WHERE page_id = $1 ORDER BY entry_date`, [pageId]
 			);
 
@@ -338,11 +342,12 @@ async function runPageOcr() {
 	}
 
 	log(`Stage 1 complete: ${succeeded} succeeded, ${failed} failed`);
+	return succeeded + failed;
 }
 
 // ─── Stage 2: Claude LLM cleanup ───
 
-async function runLlmCleanup() {
+async function runLlmCleanup(): Promise<number> {
 	log('Stage 2: Claude LLM cleanup');
 
 	const anthropicKey = await getApiKey('anthropic', 'API_KEY', 'ANTHROPIC_API_KEY');
@@ -350,7 +355,7 @@ async function runLlmCleanup() {
 	const model = 'claude-sonnet-4-6';
 
 	const jobs = await claimJobs('llm_cleanup');
-	if (jobs.length === 0) { log('  No pending llm_cleanup jobs'); return; }
+	if (jobs.length === 0) { log('  No pending llm_cleanup jobs'); return 0; }
 	log(`  Claimed ${jobs.length} llm_cleanup job(s)`);
 
 	// Group by page to share the downloaded image
@@ -380,10 +385,12 @@ async function runLlmCleanup() {
 
 		const page = pageRes.rows[0];
 		const imagePath = page.warped_image_path ?? page.page_image_path;
-		log(`  page ${pageId}: downloading ${imagePath}`);
 
-		let pageBuffer: Buffer;
-		try {
+		// Lazily download page image — only needed if a day lacks a pre-generated crop
+		let pageBuffer: Buffer | null = null;
+		async function getPageBuf(): Promise<Buffer> {
+			if (pageBuffer) return pageBuffer;
+			log(`  page ${pageId}: downloading ${imagePath}`);
 			const raw = await getObject(imagePath);
 			pageBuffer = await sharp(raw)
 				.rotate()
@@ -391,13 +398,7 @@ async function runLlmCleanup() {
 				.normalize()
 				.sharpen({ sigma: 1.5 })
 				.toBuffer();
-		} catch (err) {
-			log(`    download failed: ${err instanceof Error ? err.message : err}`);
-			for (const j of pageJobs) {
-				await query(`UPDATE job_runs SET status='failed', last_error='image download failed', completed_at=NOW() WHERE id=$1`, [j.id]);
-			}
-			failed += pageJobs.length;
-			continue;
+			return pageBuffer;
 		}
 
 		for (const job of pageJobs) {
@@ -426,7 +427,7 @@ async function runLlmCleanup() {
 
 				// Get day info for crop + date context
 				const dayRes = await query<DayInfo>(
-					`SELECT id, entry_date::text AS entry_date, grid_row, grid_col, crop_bounds
+					`SELECT id, entry_date::text AS entry_date, grid_row, grid_col, crop_bounds, day_image_path
 					   FROM calendar_days WHERE id = $1`, [dayId]
 				);
 				if (!dayRes.rows[0] || !dayRes.rows[0].crop_bounds) {
@@ -436,14 +437,26 @@ async function runLlmCleanup() {
 				}
 				const day = dayRes.rows[0];
 
-				// Crop the cell from the page image
-				const cellBuffer = await cropRegion(pageBuffer, day.crop_bounds!);
-				const cellJpeg = await sharp(cellBuffer)
-					.grayscale()
-					.normalize()
-					.sharpen({ sigma: 1.5 })
-					.jpeg({ quality: 95 })
-					.toBuffer();
+				// Use pre-generated crop from Spaces if available, else crop on demand
+				let cellJpeg: Buffer;
+				if (day.day_image_path) {
+					const pregenCrop = await getObject(day.day_image_path);
+					cellJpeg = await sharp(pregenCrop)
+						.grayscale()
+						.normalize()
+						.sharpen({ sigma: 1.5 })
+						.jpeg({ quality: 95 })
+						.toBuffer();
+				} else {
+					const buf = await getPageBuf();
+					const cellBuffer = await cropRegion(buf, day.crop_bounds!);
+					cellJpeg = await sharp(cellBuffer)
+						.grayscale()
+						.normalize()
+						.sharpen({ sigma: 1.5 })
+						.jpeg({ quality: 95 })
+						.toBuffer();
+				}
 
 				if (DRY_RUN) {
 					log(`    [DRY] day_id=${dayId} (${day.entry_date}) ocr="${ocrText.slice(0, 50).replace(/\n/g, ' ')}..."`);
@@ -532,9 +545,69 @@ async function runLlmCleanup() {
 	}
 
 	log(`Stage 2 complete: ${succeeded} succeeded, ${failed} failed`);
+	return succeeded + failed;
 }
 
 // ─── Main ───
+
+async function runOnce(): Promise<number> {
+	let processed = 0;
+	if (!STAGE_FILTER || STAGE_FILTER === 'page_ocr') {
+		processed += await runPageOcr();
+	}
+	if (!STAGE_FILTER || STAGE_FILTER === 'llm_cleanup') {
+		processed += await runLlmCleanup();
+	}
+	return processed;
+}
+
+async function writeHeartbeat(): Promise<void> {
+	try {
+		const rss = Math.round(process.memoryUsage().rss / 1024 / 1024);
+		await query(
+			`INSERT INTO app_state (key, value, updated_at)
+			 VALUES ('worker_heartbeat', $1::jsonb, NOW())
+			 ON CONFLICT (key) DO UPDATE SET value = $1::jsonb, updated_at = NOW()`,
+			[JSON.stringify({ pid: process.pid, rss_mb: rss, last_poll: new Date().toISOString() })]
+		);
+	} catch { /* best-effort */ }
+}
+
+async function runDaemon(): Promise<void> {
+	log('OCR Worker — daemon mode (persistent polling)');
+	let shuttingDown = false;
+	let pollCount = 0;
+
+	const graceful = () => {
+		if (shuttingDown) return;
+		shuttingDown = true;
+		log('Shutting down gracefully...');
+	};
+	process.on('SIGINT', graceful);
+	process.on('SIGTERM', graceful);
+
+	while (!shuttingDown) {
+		try {
+			const processed = await runOnce();
+			await writeHeartbeat();
+
+			pollCount++;
+			if (pollCount % 60 === 0) {
+				const mem = process.memoryUsage();
+				log(`[MEM] rss=${Math.round(mem.rss / 1024 / 1024)}MB heap=${Math.round(mem.heapUsed / 1024 / 1024)}MB`);
+			}
+
+			if (processed === 0 && !shuttingDown) {
+				await new Promise(r => setTimeout(r, DAEMON_POLL_MS));
+			}
+		} catch (err) {
+			log(`Poll error: ${err instanceof Error ? err.message : err}`);
+			if (!shuttingDown) {
+				await new Promise(r => setTimeout(r, DAEMON_POLL_MS));
+			}
+		}
+	}
+}
 
 async function main() {
 	log('OCR Worker — two-stage pipeline');
@@ -549,11 +622,10 @@ async function main() {
 
 	if (DRY_RUN) log('DRY RUN');
 
-	if (!STAGE_FILTER || STAGE_FILTER === 'page_ocr') {
-		await runPageOcr();
-	}
-	if (!STAGE_FILTER || STAGE_FILTER === 'llm_cleanup') {
-		await runLlmCleanup();
+	if (DAEMON) {
+		await runDaemon();
+	} else {
+		await runOnce();
 	}
 }
 

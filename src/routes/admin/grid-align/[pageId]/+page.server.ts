@@ -12,6 +12,7 @@ import {
 import { perspectiveWarp, validateCorners, transformLinesToWarped, type Point } from '$lib/image/perspective';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { spawnOcrWorker } from '$lib/workers/spawn';
+import { generateCropsForPage, clearCropPaths, deleteCropKeys } from '$lib/image/generate-crops';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -222,7 +223,7 @@ export const actions = {
 
 		const oldWarpedPath = page.warped_image_path;
 
-		await withTransaction(async (client) => {
+		const oldCropKeys = await withTransaction(async (client) => {
 			await client.query(
 				`UPDATE calendar_pages
 				    SET warped_image_path = $2, warped_width = $3, warped_height = $4,
@@ -246,18 +247,25 @@ export const actions = {
 				);
 			}
 
+			const oldKeys = await clearCropPaths(client, pageId);
+
 			await client.query(
 				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
 				 VALUES ($1, 'warp_apply', 'calendar_page', $2, NULL, $3::jsonb, $4)`,
 				[null, pageId, JSON.stringify({ corners, warpedKey, warpedWidth: warped.width, warpedHeight: warped.height }),
 				 `Perspective warp applied, grid v${newVersion}`]
 			);
+
+			return oldKeys;
 		});
 
-		// Best-effort delete old warped image
+		// Best-effort delete old warped image and old crops (after commit)
 		if (oldWarpedPath && oldWarpedPath !== warpedKey) {
 			await deleteObject(oldWarpedPath);
 		}
+		await deleteCropKeys(oldCropKeys);
+
+		await generateCropsForPage(pageId);
 
 		redirect(303, `/admin/grid-align/${pageId}?saved=1`);
 	},
@@ -304,7 +312,7 @@ export const actions = {
 		const oldGridLines = page.grid_lines;
 		const newVersion = page.grid_version + 1;
 
-		await withTransaction(async (client) => {
+		const oldCropKeys = await withTransaction(async (client) => {
 			await client.query(
 				`UPDATE calendar_pages
 				    SET grid_lines = $2::jsonb, grid_version = $3
@@ -325,6 +333,8 @@ export const actions = {
 				);
 			}
 
+			const oldKeys = await clearCropPaths(client, pageId);
+
 			if (rerunOcr) {
 				await cancelAndRequeueOcr(client, pageId, newVersion);
 			}
@@ -337,7 +347,12 @@ export const actions = {
 				 JSON.stringify(gridLines),
 				 `Grid updated to v${newVersion}${rerunOcr ? ', OCR re-queued' : ''}`]
 			);
+
+			return oldKeys;
 		});
+
+		await deleteCropKeys(oldCropKeys);
+		await generateCropsForPage(pageId);
 
 		if (rerunOcr) {
 			await spawnOcrWorker(pageId);
@@ -370,7 +385,7 @@ export const actions = {
 		// Rebuild grid lines in original coordinates from the stored corners
 		const existingCorners = page.grid_lines?.corners;
 
-		await withTransaction(async (client) => {
+		const oldCropKeys = await withTransaction(async (client) => {
 			// Determine row/col count from days
 			const dayMeta = await client.query<{ max_row: number; max_col: number }>(
 				`SELECT MAX(grid_row) AS max_row, MAX(grid_col) AS max_col
@@ -395,26 +410,47 @@ export const actions = {
 				[pageId, JSON.stringify(newGridLines), newVersion]
 			);
 
+			// Recompute crop_bounds in original coordinate space
+			const dayRes = await client.query<{
+				id: number; grid_row: number | null; grid_col: number | null;
+			}>(`SELECT id, grid_row, grid_col FROM calendar_days WHERE page_id = $1`, [pageId]);
+
+			for (const day of dayRes.rows) {
+				if (day.grid_row === null || day.grid_col === null) continue;
+				const bounds = cellBoundsFromGridLines(newGridLines, day.grid_row, day.grid_col);
+				await client.query(
+					`UPDATE calendar_days SET crop_bounds = $2::jsonb WHERE id = $1`,
+					[day.id, JSON.stringify(bounds)]
+				);
+			}
+
 			await client.query(
 				`UPDATE job_runs
 				    SET status = 'canceled', completed_at = NOW()
-				  WHERE job_type = 'ocr'
+				  WHERE job_type IN ('ocr', 'page_ocr', 'llm_cleanup')
 				    AND status IN ('pending', 'in_progress')
 				    AND payload->>'page_id' = $1::text`,
 				[String(pageId)]
 			);
+
+			const oldKeys = await clearCropPaths(client, pageId);
 
 			await client.query(
 				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
 				 VALUES ($1, 'warp_reset', 'calendar_page', $2, NULL, NULL, $3)`,
 				[null, pageId, `Warp reset, grid v${newVersion}, OCR canceled`]
 			);
+
+			return oldKeys;
 		});
 
-		// Best-effort delete warped image
+		// Best-effort delete warped image and old crops (after commit)
 		if (page.warped_image_path) {
 			await deleteObject(page.warped_image_path);
 		}
+		await deleteCropKeys(oldCropKeys);
+
+		await generateCropsForPage(pageId);
 
 		redirect(303, `/admin/grid-align/${pageId}`);
 	},

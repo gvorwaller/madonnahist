@@ -41,6 +41,33 @@ module.exports = {
 				HOST: '127.0.0.1',
 				PORT: 3002
 			}
+		},
+		{
+			name: 'madonnahist-worker',
+			script: 'backend/workers/ocr-worker.ts',
+			interpreter: 'node_modules/.bin/tsx',
+			interpreter_args: '--env-file=.env',
+			cwd: '/opt/madonnahist',
+			args: '--daemon',
+
+			instances: 1,
+			exec_mode: 'fork',
+
+			autorestart: true,
+			restart_delay: 5000,
+			max_restarts: 10,
+			min_uptime: '30s',
+			max_memory_restart: '1000M',
+			kill_timeout: 10000,
+
+			out_file: '/var/log/pm2/madonnahist-worker.out.log',
+			error_file: '/var/log/pm2/madonnahist-worker.err.log',
+			merge_logs: true,
+			time: true,
+
+			env: {
+				NODE_ENV: 'production'
+			}
 		}
 	]
 };

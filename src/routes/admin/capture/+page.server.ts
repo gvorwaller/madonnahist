@@ -15,6 +15,7 @@ import { fail } from '@sveltejs/kit';
 import { query, withTransaction } from '$lib/db';
 import { credentialService } from '$lib/credentials';
 import { deleteObject } from '$lib/ingest/spaces-upload';
+import { getCropKeysForPage, deleteCropKeys } from '$lib/image/generate-crops';
 import { classifyImage } from '$lib/ingest/classify';
 import { assessQuality } from '$lib/ingest/quality';
 import { ingestPage, replacePage } from '$lib/ingest/ingest';
@@ -409,6 +410,9 @@ export const actions: Actions = {
 		);
 		const oldPaths = pageRes.rows[0];
 
+		// Collect crop keys BEFORE the transaction removes the day rows they reference
+		const oldCropKeys = await getCropKeysForPage(pageId);
+
 		await withTransaction(async (client) => {
 			// Clear intake FK before deleting the page it references
 			await client.query(
@@ -427,8 +431,8 @@ export const actions: Actions = {
 			await client.query(`DELETE FROM calendar_days WHERE page_id = $1`, [pageId]);
 			await client.query(`DELETE FROM calendar_pages WHERE id = $1`, [pageId]);
 		});
-
-		// Best-effort delete Spaces objects
+		// Best-effort delete Spaces objects (after commit)
+		await deleteCropKeys(oldCropKeys);
 		if (oldPaths) {
 			try { await deleteObject(oldPaths.page_image_path); } catch { /* ignore */ }
 			if (oldPaths.warped_image_path) {

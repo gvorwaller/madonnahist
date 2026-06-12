@@ -125,13 +125,9 @@ else
   echo "==> nginx config unchanged"
 fi
 
-echo "==> pm2 (start if absent, restart otherwise)"
-if pm2 describe "${PM2_APP}" > /dev/null 2>&1; then
-  pm2 restart "${PM2_APP}" --update-env
-else
-  pm2 start ecosystem.config.cjs
-  pm2 save
-fi
+echo "==> pm2 (startOrReload all apps from ecosystem config)"
+pm2 startOrReload ecosystem.config.cjs --update-env
+pm2 save
 
 # Health gate: db must be ok. spaces==not_configured is tolerated (bootstrap).
 echo "==> health check (internal)"

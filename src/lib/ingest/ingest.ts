@@ -18,6 +18,7 @@
 import sharp from 'sharp';
 import { query, withTransaction } from '$lib/db';
 import { pageObjectKey, uploadIfAbsent, deleteObject } from './spaces-upload';
+import { generateCropsForPage, getCropKeysForPage } from '$lib/image/generate-crops';
 import { GRID_TEMPLATES, buildDayGrid, cellBounds, type GridLayout } from './day-grid';
 
 export interface IngestInput {
@@ -143,11 +144,11 @@ export async function ingestPage(input: IngestInput): Promise<IngestOutcome> {
 			return { pageId, dayCount };
 		});
 
+		try { await generateCropsForPage(result.pageId); } catch { /* page is ingested; crops fall back to on-demand */ }
+
 		return { ok: true, pageId: result.pageId, dayCount: result.dayCount, spacesKey, uploaded: upload.uploaded };
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		// Record the failure; leave ingest_phase as-is for diagnosis. The row
-		// stays pre-ingested so the operator can retry.
 		await query(`UPDATE capture_intake SET ingest_error = $2 WHERE id = $1`, [
 			input.intakeId,
 			message
@@ -198,6 +199,9 @@ export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
 		if (pageWidth === 0 || pageHeight === 0) throw new Error('Could not read normalized page dimensions');
 
 		await uploadIfAbsent(spacesKey, normalized);
+
+		// Collect old crop keys BEFORE the transaction deletes old day rows
+		const oldCropKeys = await getCropKeysForPage(input.replacePageId);
 
 		// Phase 2: ONE transaction — delete old, insert new. If anything fails,
 		// the old page is untouched (ROLLBACK) and the new Spaces object is an
@@ -256,8 +260,11 @@ export async function replacePage(input: ReplaceInput): Promise<IngestOutcome> {
 			return { pageId, dayCount };
 		});
 
-		// Phase 3: best-effort cleanup of old Spaces object (after commit).
+		// Phase 3: best-effort cleanup of old Spaces objects (after commit).
 		if (oldSpacesKey && oldSpacesKey !== spacesKey) await deleteObject(oldSpacesKey);
+		for (const key of oldCropKeys) { try { await deleteObject(key); } catch { /* best-effort */ } }
+
+		try { await generateCropsForPage(result.pageId); } catch { /* page is replaced; crops fall back to on-demand */ }
 
 		return { ok: true, pageId: result.pageId, dayCount: result.dayCount, spacesKey, uploaded: true };
 	} catch (err) {

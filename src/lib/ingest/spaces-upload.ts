@@ -70,6 +70,12 @@ export function pageObjectKey(year: number, month: number, hash8: string): strin
 	return `pages/${year}/${mm}/page-${year}-${mm}-${hash8}.jpg`;
 }
 
+/** Object key for a pre-generated day-cell crop. Includes grid_version to avoid stale crops. */
+export function cropObjectKey(entryDate: string, gridVersion: number): string {
+	const [year, mm] = entryDate.split('-');
+	return `crops/${year}/${mm}/${entryDate}-v${gridVersion}.jpg`;
+}
+
 interface HeadResult {
 	exists: boolean;
 	size: number | null;
@@ -137,6 +143,31 @@ export async function uploadIfAbsent(
 		})
 	);
 	return { key, uploaded: true };
+}
+
+/** Force-upload `body` to `key` (no HEAD check — always writes). Used for crop regeneration. */
+export async function uploadObject(
+	key: string,
+	body: Buffer,
+	contentType = 'image/jpeg'
+): Promise<void> {
+	if (useLocalObjectStore()) {
+		const path = localObjectPath(key);
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, body);
+		return;
+	}
+
+	const { client, bucket } = await getSpaces();
+	await client.send(
+		new PutObjectCommand({
+			Bucket: bucket,
+			Key: key,
+			Body: body,
+			ContentType: contentType,
+			ACL: 'private'
+		})
+	);
 }
 
 /** Download an object from Spaces. */
