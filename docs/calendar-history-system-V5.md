@@ -8,6 +8,52 @@
 > - `docs/capture-intake-reference.html` — visual pipeline walkthrough (open in browser)
 > - `docs/V4-addendum-A-ocr-pipeline.md` — OCR pipeline detail (three-stage pipeline, correction lexicon, five-field editor spec)
 
+---
+
+## What Remains — Quick Reference (2026-06-13)
+
+**Current priority**: Get more months through the pipeline — ingest, align, OCR, substitute, correct, repeat. Development resumes when the pipeline hits friction or when enough text is corrected to make the viewer worth building.
+
+### Phase 1 Gaps (correction workflow polish — not blocking Madonna)
+
+- Auto-save (1s debounce on inactivity; preserve half-typed drafts on crash/close)
+- Correction session lifecycle (`correction_sessions` with active/paused/completed/abandoned states, session summary screen)
+- "Accept LLM" one-click button (accept Claude draft as-is without editing)
+- History button (side-by-side comparison of prior OCR/draft runs for a day)
+
+### Phase 2 — UX & Search (family viewer; needs meaningful corrected text volume)
+
+- Day detail viewer (`/app/day/[date]`) — read-only view with image, corrected text, tags, entities, AI summary; swipe navigation
+- "On this day" landing (`/app`) — entries from today's date across all 60 years
+- Full-text search (`/app/search`) — FTS index exists in DB; needs UI with highlighting and filters
+- Year browse (`/app/year/[year]`) — month-grouped timeline of daily entries
+- Calendar navigation — month-grid navigator for the viewer
+- Tag UI in correction editor — add/remove `day_tags` during correction (table exists, no UI)
+- Mobile viewer polish — phone-first CSS, touch, SSR optimization
+
+### Phase 3 — AI Enrichment (needs accepted corrections to extract from)
+
+- Entity extractor worker — extract people/places/events from corrected text, write to `entities`/`day_entities`, propose AI-sourced tags
+- Person pages (`/app/person/[slug]`) — all days mentioning a person, alias-resolved
+- Place pages (`/app/place/[slug]`) — same for places
+- AI tag suggestions in correction UI
+- Alias resolution admin UI — manage entity aliases ("Marc" → "Marcus")
+
+### Phase 4 — Narrative & Polish (the "read 1968 as a book" goal)
+
+- Summary generator worker — year/decade/person summaries into `narrative_summaries`
+- Book view (`/app/book/[scope]/[key]`) — immersive reading, 3-5 days per page, serif text, image thumbnails in margins
+- Decade summaries (`/app/decade/[decade]`)
+- Transkribus handwriting training — may not be needed if Google Vision + Claude keeps working well
+- Semantic search (pgvector) — conceptual queries; full-text + tags + entities should cover 90% first
+- Backup automation — nightly `pg_dump` to Spaces, 30-day retention
+
+### Parked
+
+- Squiggly line detection (td-73260e) — curved grid line detection; manual entry mode is the current workaround
+
+---
+
 ## 1. Purpose
 
 A private, family-access web app that digitizes ~60 years of handwritten family calendar entries into a structured, searchable, and explorable archive of daily life. The end goal: a grandchild can sit down and read 1968 as a book.
