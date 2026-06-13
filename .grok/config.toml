@@ -1,0 +1,23 @@
+[permission]
+allow = [
+    "Read",
+    "Bash(git -C /Users/gaylonvorwaller/madonnahist status --short)",
+    "Bash(git -C /Users/gaylonvorwaller/madonnahist log --oneline -10)",
+    "mcp__claude-relay__relay_send",
+    "mcp__claude-relay__relay_receive",
+    "mcp__claude-relay__relay_status",
+    "mcp__claude-relay__relay_peers",
+    "WebFetch(domain:www.bhphotovideo.com)",
+    "WebFetch(domain:www.amazon.com)",
+    "Read(//opt/homebrew/Cellar/postgresql@17/17.7_1/bin/**)",
+    "Bash(/opt/homebrew/opt/postgresql@17/bin/psql --version)",
+    "Read(//opt/homebrew/var/**)",
+    'Bash(sips -s format jpeg -Z 400 "/Users/gaylonvorwaller/Lumix Tether/20260525/P1034714.RW2" --out /tmp/test_thumb.jpg)',
+    "Read(//tmp/**)",
+    "WebFetch(domain:www.transkribus.org)",
+    "WebFetch(domain:help.transkribus.org)",
+    "WebFetch(domain:transkribus.eu)",
+    "WebFetch(domain:github.com)",
+    "WebFetch(domain:docs.cloud.google.com)",
+    "Bash(npm ls *)",
+]

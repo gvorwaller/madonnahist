@@ -10,8 +10,10 @@
 # want a clean on-disk snapshot.
 #
 # Outputs (under <project>/data/backup/):
-#   local/madonnahist.pgdump          — local dev DB, pg_dump -Fc (custom format)
-#   local/PULL_OK_AT                  — ISO-8601 timestamp on success
+#   local/madonnahist.pgdump          — local dev DB, pg_dump -Fc (custom format), when running
+#   local/PULL_OK_AT                  — ISO-8601 timestamp on local success
+#   local/SKIPPED_AT                  — ISO-8601 timestamp when local PG is unavailable
+#   local/FAILED_AT                   — ISO-8601 timestamp when local dump/verify fails
 #   prod/madonnahist.pgdump           — prod DB, pulled via SSH
 #   prod/.env                         — /opt/madonnahist/.env (600)
 #   prod/nginx.conf                   — /etc/nginx/sites-available/madonnahist.gaylon.photos
@@ -24,8 +26,9 @@
 #   preflight.log                     — tee of every run (uid, args, stdout, stderr)
 #
 # Use --local-only to skip the prod pull (offline / dev-only scenarios).
-# Prod pull failures exit 3 but the local snapshot is still produced first so
-# CCC has at least the dev DB to upload.
+# The production snapshot is the mandatory backup. Local dev PostgreSQL may be
+# stopped, so local snapshot failures are logged but are only fatal in
+# --local-only mode.
 
 set -euo pipefail
 
@@ -42,6 +45,10 @@ BACKUP_DIR="${PROJECT_ROOT}/data/backup"
 LOCAL_BACKUP_DIR="${BACKUP_DIR}/local"
 LOCAL_DUMP="${LOCAL_BACKUP_DIR}/madonnahist.pgdump"
 LOCAL_PULL_MARKER="${LOCAL_BACKUP_DIR}/PULL_OK_AT"
+LOCAL_SKIP_MARKER="${LOCAL_BACKUP_DIR}/SKIPPED_AT"
+LOCAL_SKIP_REASON="${LOCAL_BACKUP_DIR}/SKIPPED_REASON"
+LOCAL_FAIL_MARKER="${LOCAL_BACKUP_DIR}/FAILED_AT"
+LOCAL_FAIL_REASON="${LOCAL_BACKUP_DIR}/FAILED_REASON"
 
 PROD_BACKUP_DIR="${BACKUP_DIR}/prod"
 PROD_DUMP="${PROD_BACKUP_DIR}/madonnahist.pgdump"
@@ -120,33 +127,52 @@ done
 # TCP so ~/.pgpass is consulted (peer auth on the unix socket would bypass
 # password and fail when running as root via CCC).
 export PGPASSFILE="${USER_PGPASSFILE}"
+
+mark_local_skipped() {
+  local reason=$1
+  rm -f "${LOCAL_PULL_MARKER}" "${LOCAL_FAIL_MARKER}" "${LOCAL_FAIL_REASON}" "${LOCAL_DUMP}.tmp"
+  /bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${LOCAL_SKIP_MARKER}"
+  printf '%s\n' "${reason}" > "${LOCAL_SKIP_REASON}"
+  echo "[backup-pg] WARN: local snapshot skipped: ${reason}"
+  if [[ ${LOCAL_ONLY} -eq 1 ]]; then
+    exit 1
+  fi
+}
+
+mark_local_failed() {
+  local reason=$1
+  rm -f "${LOCAL_PULL_MARKER}" "${LOCAL_SKIP_MARKER}" "${LOCAL_SKIP_REASON}" "${LOCAL_DUMP}.tmp"
+  /bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${LOCAL_FAIL_MARKER}"
+  printf '%s\n' "${reason}" > "${LOCAL_FAIL_REASON}"
+  echo "[backup-pg] WARN: local snapshot failed: ${reason}" >&2
+  if [[ ${LOCAL_ONLY} -eq 1 ]]; then
+    exit 2
+  fi
+}
+
 if [[ ! -f "${PGPASSFILE}" ]]; then
-  echo "[backup-pg] ${PGPASSFILE} not found — local dump will fail without it" >&2
-  exit 1
+  mark_local_skipped "${PGPASSFILE} not found"
+elif ! /usr/bin/nc -z "${LOCAL_PGHOST}" "${LOCAL_PGPORT}" 2>/dev/null; then
+  mark_local_skipped "local PG not listening on ${LOCAL_PGHOST}:${LOCAL_PGPORT}"
+elif ! pg_dump \
+    -h "${LOCAL_PGHOST}" -p "${LOCAL_PGPORT}" \
+    -U "${LOCAL_PGUSER}" -d "${LOCAL_PGDATABASE}" \
+    -Fc --no-owner --no-privileges \
+    -f "${LOCAL_DUMP}.tmp"; then
+  mark_local_failed "pg_dump failed for ${LOCAL_PGDATABASE} on ${LOCAL_PGHOST}:${LOCAL_PGPORT}"
+else
+  mv -f "${LOCAL_DUMP}.tmp" "${LOCAL_DUMP}"
+
+  # Verify the dump by listing its table of contents (cheap structural check).
+  if ! pg_restore -l "${LOCAL_DUMP}" >/dev/null 2>&1; then
+    mark_local_failed "pg_restore -l verification failed for ${LOCAL_DUMP}"
+  else
+    LOCAL_SIZE="$(/usr/bin/stat -f%z "${LOCAL_DUMP}" 2>/dev/null || /usr/bin/wc -c < "${LOCAL_DUMP}")"
+    /bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${LOCAL_PULL_MARKER}"
+    rm -f "${LOCAL_SKIP_MARKER}" "${LOCAL_SKIP_REASON}" "${LOCAL_FAIL_MARKER}" "${LOCAL_FAIL_REASON}"
+    echo "[backup-pg] local snapshot ok: ${LOCAL_DUMP} (${LOCAL_SIZE} bytes)"
+  fi
 fi
-
-if ! /usr/bin/nc -z "${LOCAL_PGHOST}" "${LOCAL_PGPORT}" 2>/dev/null; then
-  echo "[backup-pg] local PG not listening on ${LOCAL_PGHOST}:${LOCAL_PGPORT}" >&2
-  exit 1
-fi
-
-pg_dump \
-  -h "${LOCAL_PGHOST}" -p "${LOCAL_PGPORT}" \
-  -U "${LOCAL_PGUSER}" -d "${LOCAL_PGDATABASE}" \
-  -Fc --no-owner --no-privileges \
-  -f "${LOCAL_DUMP}.tmp"
-
-mv -f "${LOCAL_DUMP}.tmp" "${LOCAL_DUMP}"
-
-# Verify the dump by listing its table of contents (cheap structural check).
-if ! pg_restore -l "${LOCAL_DUMP}" >/dev/null 2>&1; then
-  echo "[backup-pg] local dump failed pg_restore -l verification" >&2
-  exit 2
-fi
-
-LOCAL_SIZE="$(/usr/bin/stat -f%z "${LOCAL_DUMP}" 2>/dev/null || /usr/bin/wc -c < "${LOCAL_DUMP}")"
-/bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${LOCAL_PULL_MARKER}"
-echo "[backup-pg] local snapshot ok: ${LOCAL_DUMP} (${LOCAL_SIZE} bytes)"
 
 # --- prod pull --------------------------------------------------------------
 if [[ ${LOCAL_ONLY} -eq 1 ]]; then
@@ -215,9 +241,8 @@ fi
 
 # 4. DO Spaces — bucket inventory + CORS. Best-effort: the droplet has the
 #    credentials in private_data.api_credentials. We read them with a tiny
-#    psql call (TCP + .env's PGPASSWORD) then drive aws-cli (or s3cmd) if
-#    either is installed. If neither is, we log and continue — Phase 1
-#    Spaces is empty anyway, this matters once images land.
+#    psql call (TCP + .env's PGPASSWORD), then prefer aws-cli and fall back to
+#    the app's installed @aws-sdk/client-s3 dependency.
 ssh ${SSH_OPTS} "${DROPLET}" "bash -s" <<REMOTE_SPACES > /dev/null 2>&1
 set -e
 cd "${PROD_APP_DIR}"
@@ -251,8 +276,77 @@ if command -v aws >/dev/null 2>&1; then
     s3api get-bucket-cors --bucket "\${BUCKET}" --output json \
     > "${PROD_TMP_SPACES_CORS}" 2>/dev/null || echo '{"error":"get-bucket-cors failed or unset"}' > "${PROD_TMP_SPACES_CORS}"
 else
-  echo '{"skipped":"aws CLI not installed on droplet"}' > "${PROD_TMP_SPACES_LIST}"
-  echo '{"skipped":"aws CLI not installed on droplet"}' > "${PROD_TMP_SPACES_CORS}"
+  export SPACES_KEY="\${C[SPACES_KEY]}"
+  export SPACES_SECRET="\${C[SPACES_SECRET]}"
+  export SPACES_BUCKET="\${BUCKET}"
+  export SPACES_REGION="\${REGION}"
+  export SPACES_ENDPOINT="\${ENDPOINT}"
+  export SPACES_LIST_PATH="${PROD_TMP_SPACES_LIST}"
+  export SPACES_CORS_PATH="${PROD_TMP_SPACES_CORS}"
+  if ! node --input-type=module <<'NODE_SPACES'
+import { writeFile } from 'node:fs/promises';
+import {
+  S3Client,
+  ListObjectsV2Command,
+  GetBucketCorsCommand
+} from '@aws-sdk/client-s3';
+
+const bucket = process.env.SPACES_BUCKET;
+const client = new S3Client({
+  region: process.env.SPACES_REGION,
+  endpoint: process.env.SPACES_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.SPACES_KEY,
+    secretAccessKey: process.env.SPACES_SECRET
+  },
+  forcePathStyle: false
+});
+
+const writeJson = (path, value) => writeFile(path, JSON.stringify(value, null, 2) + '\n');
+
+try {
+  const contents = [];
+  let ContinuationToken;
+  do {
+    const page = await client.send(new ListObjectsV2Command({
+      Bucket: bucket,
+      ContinuationToken
+    }));
+    for (const obj of page.Contents ?? []) {
+      contents.push({
+        Key: obj.Key,
+        LastModified: obj.LastModified?.toISOString?.() ?? obj.LastModified,
+        ETag: obj.ETag,
+        Size: obj.Size,
+        StorageClass: obj.StorageClass
+      });
+    }
+    ContinuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (ContinuationToken);
+  await writeJson(process.env.SPACES_LIST_PATH, {
+    Name: bucket,
+    KeyCount: contents.length,
+    Contents: contents
+  });
+} catch (err) {
+  await writeJson(process.env.SPACES_LIST_PATH, {
+    error: err instanceof Error ? err.message : String(err)
+  });
+}
+
+try {
+  const cors = await client.send(new GetBucketCorsCommand({ Bucket: bucket }));
+  await writeJson(process.env.SPACES_CORS_PATH, cors);
+} catch (err) {
+  await writeJson(process.env.SPACES_CORS_PATH, {
+    error: err instanceof Error ? err.message : String(err)
+  });
+}
+NODE_SPACES
+  then
+    echo '{"skipped":"aws CLI and @aws-sdk/client-s3 unavailable on droplet"}' > "${PROD_TMP_SPACES_LIST}"
+    echo '{"skipped":"aws CLI and @aws-sdk/client-s3 unavailable on droplet"}' > "${PROD_TMP_SPACES_CORS}"
+  fi
 fi
 chmod 644 "${PROD_TMP_SPACES_LIST}" "${PROD_TMP_SPACES_CORS}"
 REMOTE_SPACES
@@ -300,13 +394,27 @@ warn_if_fail() {
     echo "[backup-pg] ${label} ok: ${path} (${sz} bytes)"
   fi
 }
+warn_json_if_fail() {
+  local rc=$1 label=$2 path=$3
+  if [[ ${rc} -ne 0 ]]; then
+    echo "[backup-pg] WARN: ${label} pull failed (rc=${rc}) — ${path}"
+  elif /usr/bin/grep -Eq '"(skipped|error)"' "${path}"; then
+    local msg
+    msg="$(/usr/bin/tr -d '\n' < "${path}")"
+    echo "[backup-pg] WARN: ${label} unavailable — ${msg}"
+  else
+    local sz
+    sz="$(/usr/bin/stat -f%z "${path}" 2>/dev/null || /usr/bin/wc -c < "${path}")"
+    echo "[backup-pg] ${label} ok: ${path} (${sz} bytes)"
+  fi
+}
 warn_if_fail ${SCP_ENV_RC}         "prod .env"          "${PROD_ENV_DEST}"
 warn_if_fail ${SCP_NGINX_RC}       "prod nginx.conf"    "${PROD_NGINX_DEST}"
 warn_if_fail ${SSH_PGCONF_RC}      "prod postgresql.conf" "${PROD_PGCONF_DEST}"
 warn_if_fail ${SSH_PGHBA_RC}       "prod pg_hba.conf"   "${PROD_PGHBA_DEST}"
 warn_if_fail ${SCP_PM2_RC}         "prod pm2 jlist"     "${PROD_PM2_DEST}"
-warn_if_fail ${SCP_SPACES_LIST_RC} "Spaces inventory"   "${PROD_SPACES_LIST_DEST}"
-warn_if_fail ${SCP_SPACES_CORS_RC} "Spaces CORS"        "${PROD_SPACES_CORS_DEST}"
+warn_json_if_fail ${SCP_SPACES_LIST_RC} "Spaces inventory" "${PROD_SPACES_LIST_DEST}"
+warn_json_if_fail ${SCP_SPACES_CORS_RC} "Spaces CORS"      "${PROD_SPACES_CORS_DEST}"
 
 PROD_DUMP_SIZE="$(/usr/bin/stat -f%z "${PROD_DUMP}" 2>/dev/null || /usr/bin/wc -c < "${PROD_DUMP}")"
 /bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${PROD_PULL_MARKER}"
