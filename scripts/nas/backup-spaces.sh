@@ -19,8 +19,21 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 LOG="$BASE/logs/spaces-rclone-$STAMP.log"
 SOURCE_SIZE="$BASE/manifests/spaces-source-size-$STAMP.json"
 MANIFEST="$BASE/manifests/spaces-rclone-manifest-$STAMP.json"
+LATEST_MANIFEST="$BASE/manifests/latest-spaces-rclone-manifest.json"
+LATEST_SOURCE_SIZE="$BASE/manifests/latest-spaces-source-size.json"
+LATEST_DRY_RUN_MANIFEST="$BASE/manifests/latest-dry-run-spaces-rclone-manifest.json"
+LATEST_DRY_RUN_SOURCE_SIZE="$BASE/manifests/latest-dry-run-spaces-source-size.json"
+LAST_RUN_STATUS="$BASE/LAST_RUN_STATUS.json"
+LAST_SUCCESS="$BASE/LAST_SUCCESS"
+LAST_FAILURE="$BASE/LAST_FAILURE.json"
+LAST_DRY_RUN_STATUS="$BASE/LAST_DRY_RUN_STATUS.json"
+LATEST_LOG_PATH="$BASE/LATEST_LOG_PATH"
 DRY_RUN=0
 EXTRA_ARGS=""
+
+DSM_NOTIFY_BIN="${MADONNAHIST_DSM_NOTIFY_BIN:-/usr/syno/bin/synodsmnotify}"
+DSM_NOTIFY_TARGET="${MADONNAHIST_DSM_NOTIFY_TARGET:-@administrators}"
+DSM_NOTIFY_ON_DRY_RUN_FAILURE="${MADONNAHIST_DSM_NOTIFY_ON_DRY_RUN_FAILURE:-0}"
 
 for arg in "$@"; do
 	case "$arg" in
@@ -37,7 +50,67 @@ done
 
 mkdir -p "$DEST" "$BASE/logs" "$BASE/manifests" "$BASE/restore-drills"
 
-rclone size "$SOURCE" --json > "$SOURCE_SIZE"
+notify_failure() {
+	rc="$1"
+	[ -x "$DSM_NOTIFY_BIN" ] || return 0
+	if [ "$DRY_RUN" -eq 1 ] && [ "$DSM_NOTIFY_ON_DRY_RUN_FAILURE" != "1" ]; then
+		return 0
+	fi
+
+	"$DSM_NOTIFY_BIN" \
+		-l error \
+		"$DSM_NOTIFY_TARGET" \
+		"Madonna History Spaces backup failed" \
+		"NAS Spaces backup failed with rc=$rc. Check $LAST_RUN_STATUS and $LOG." \
+		>/dev/null 2>&1 || true
+}
+
+write_failure_status() {
+	rc="$1"
+	status_file="$LAST_RUN_STATUS"
+	[ "$DRY_RUN" -eq 1 ] && status_file="$LAST_DRY_RUN_STATUS"
+
+	cat > "$status_file" <<JSON
+{
+  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "failure",
+  "mode": "$(if [ "$DRY_RUN" -eq 1 ]; then echo dry-run; else echo live; fi)",
+  "exitCode": $rc,
+  "source": "$SOURCE",
+  "destination": "$DEST",
+  "sourceSizeJson": "$SOURCE_SIZE",
+  "log": "$LOG"
+}
+JSON
+
+	if [ "$DRY_RUN" -eq 0 ]; then
+		cp -f "$status_file" "$LAST_FAILURE"
+	fi
+}
+
+SUCCESS=0
+on_exit() {
+	rc="$?"
+	if [ "$SUCCESS" -eq 1 ] || [ "$rc" -eq 0 ]; then
+		return 0
+	fi
+
+	write_failure_status "$rc" || true
+	notify_failure "$rc" || true
+	exit "$rc"
+}
+trap on_exit EXIT
+
+{
+	echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] starting $SOURCE -> $DEST"
+	if [ "$DRY_RUN" -eq 1 ]; then
+		echo "mode=dry-run"
+	else
+		echo "mode=live"
+	fi
+} > "$LOG"
+
+rclone size "$SOURCE" --json > "$SOURCE_SIZE" 2>> "$LOG"
 # shellcheck disable=SC2086
 rclone copy "$SOURCE" "$DEST" \
 	--checksum \
@@ -56,6 +129,7 @@ if [ "$DRY_RUN" -eq 1 ]; then mode="dry-run"; fi
 cat > "$MANIFEST" <<JSON
 {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "status": "success",
   "mode": "$mode",
   "source": "$SOURCE",
   "destination": "$DEST",
@@ -66,4 +140,17 @@ cat > "$MANIFEST" <<JSON
 }
 JSON
 
+if [ "$DRY_RUN" -eq 1 ]; then
+	cp -f "$MANIFEST" "$LATEST_DRY_RUN_MANIFEST"
+	cp -f "$SOURCE_SIZE" "$LATEST_DRY_RUN_SOURCE_SIZE"
+	cp -f "$MANIFEST" "$LAST_DRY_RUN_STATUS"
+else
+	cp -f "$MANIFEST" "$LATEST_MANIFEST"
+	cp -f "$SOURCE_SIZE" "$LATEST_SOURCE_SIZE"
+	cp -f "$MANIFEST" "$LAST_RUN_STATUS"
+	printf '%s\n' "$LOG" > "$LATEST_LOG_PATH"
+	date -u +%Y-%m-%dT%H:%M:%SZ > "$LAST_SUCCESS"
+fi
+
+SUCCESS=1
 echo "[nas-backup-spaces] $mode complete: objects=$object_count bytes=$total_bytes log=$LOG manifest=$MANIFEST"

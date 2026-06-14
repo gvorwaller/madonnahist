@@ -77,6 +77,40 @@ The script writes:
 - `logs/spaces-rclone-*.log`
 - `manifests/spaces-source-size-*.json`
 - `manifests/spaces-rclone-manifest-*.json`
+- `manifests/latest-spaces-rclone-manifest.json`
+- `manifests/latest-spaces-source-size.json`
+- `LAST_RUN_STATUS.json`
+- `LAST_SUCCESS`
+- `LATEST_LOG_PATH`
+
+On live-run failure, the script writes:
+
+- `LAST_RUN_STATUS.json`
+- `LAST_FAILURE.json`
+
+It also sends a failure-only DSM notification via:
+
+```text
+/usr/syno/bin/synodsmnotify
+```
+
+The default notification target is:
+
+```text
+@administrators
+```
+
+Override it by setting `MADONNAHIST_DSM_NOTIFY_TARGET` in the cron environment
+or wrapper if a narrower DSM user/group should receive alerts.
+
+Dry runs do not overwrite the live health files. They write:
+
+- `LAST_DRY_RUN_STATUS.json`
+- `manifests/latest-dry-run-spaces-rclone-manifest.json`
+- `manifests/latest-dry-run-spaces-source-size.json`
+
+Dry-run failures do not notify by default. Set
+`MADONNAHIST_DSM_NOTIFY_ON_DRY_RUN_FAILURE=1` to opt in.
 
 ## Snapshot Policy
 
@@ -118,6 +152,26 @@ b39c89e27ff1c5fe3418816b3290968d183c0cd5c089a2297580214373c73826
 ```
 
 ## Manual Commands
+
+Check the latest live backup status:
+
+```sh
+cat /volume3/madonnahist-spaces-backup/LAST_RUN_STATUS.json
+cat /volume3/madonnahist-spaces-backup/LAST_SUCCESS
+cat /volume3/madonnahist-spaces-backup/LATEST_LOG_PATH
+```
+
+Check the latest live manifest:
+
+```sh
+cat /volume3/madonnahist-spaces-backup/manifests/latest-spaces-rclone-manifest.json
+```
+
+Check recent cron output:
+
+```sh
+tail -n 80 /volume3/madonnahist-spaces-backup/logs/spaces-cron.log
+```
 
 Dry-run the pull:
 
