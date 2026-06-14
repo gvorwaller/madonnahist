@@ -32,9 +32,11 @@
 
 set -euo pipefail
 
-# CCC may invoke us with a stripped PATH. Add Homebrew's postgresql@17 so
-# pg_dump/psql resolve when this runs as root.
-export PATH="/opt/homebrew/opt/postgresql@17/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+# CCC may invoke us with a stripped PATH. Add Homebrew PostgreSQL client
+# locations explicitly so pg_restore/psql resolve when this runs as root. libpq
+# is keg-only, and this machine currently has libpq/Postgres 16 clients rather
+# than a populated postgresql@17 opt path.
+export PATH="/opt/homebrew/opt/libpq/bin:/opt/homebrew/opt/postgresql@17/bin:/opt/homebrew/opt/postgresql@16/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 # Resolve the project root relative to this script so CCC can invoke it via
 # any working directory.
@@ -52,6 +54,7 @@ LOCAL_FAIL_REASON="${LOCAL_BACKUP_DIR}/FAILED_REASON"
 
 PROD_BACKUP_DIR="${BACKUP_DIR}/prod"
 PROD_DUMP="${PROD_BACKUP_DIR}/madonnahist.pgdump"
+PROD_DUMP_TMP="${PROD_DUMP}.tmp"
 PROD_ENV_DEST="${PROD_BACKUP_DIR}/.env"
 PROD_NGINX_DEST="${PROD_BACKUP_DIR}/nginx.conf"
 PROD_PGCONF_DEST="${PROD_BACKUP_DIR}/postgresql.conf"
@@ -73,6 +76,15 @@ mkdir -p "${BACKUP_DIR}" "${LOCAL_BACKUP_DIR}" "${PROD_BACKUP_DIR}"
   echo "args=$*"
 } >> "${LOG_FILE}"
 exec > >(/usr/bin/tee -a "${LOG_FILE}") 2> >(/usr/bin/tee -a "${LOG_FILE}" >&2)
+
+PG_DUMP_BIN="$(command -v pg_dump || true)"
+PG_RESTORE_BIN="$(command -v pg_restore || true)"
+echo "[backup-pg] pg_dump=${PG_DUMP_BIN:-missing}"
+echo "[backup-pg] pg_restore=${PG_RESTORE_BIN:-missing}"
+if [[ -z "${PG_RESTORE_BIN}" ]]; then
+  echo "[backup-pg] required PostgreSQL client not found: pg_restore" >&2
+  exit 10
+fi
 
 DROPLET="root@134.199.211.199"
 PROD_APP_DIR="/opt/madonnahist"
@@ -154,19 +166,21 @@ if [[ ! -f "${PGPASSFILE}" ]]; then
   mark_local_skipped "${PGPASSFILE} not found"
 elif ! /usr/bin/nc -z "${LOCAL_PGHOST}" "${LOCAL_PGPORT}" 2>/dev/null; then
   mark_local_skipped "local PG not listening on ${LOCAL_PGHOST}:${LOCAL_PGPORT}"
-elif ! pg_dump \
+elif [[ -z "${PG_DUMP_BIN}" ]]; then
+  mark_local_failed "required PostgreSQL client not found: pg_dump"
+elif ! "${PG_DUMP_BIN}" \
     -h "${LOCAL_PGHOST}" -p "${LOCAL_PGPORT}" \
     -U "${LOCAL_PGUSER}" -d "${LOCAL_PGDATABASE}" \
     -Fc --no-owner --no-privileges \
     -f "${LOCAL_DUMP}.tmp"; then
   mark_local_failed "pg_dump failed for ${LOCAL_PGDATABASE} on ${LOCAL_PGHOST}:${LOCAL_PGPORT}"
 else
-  mv -f "${LOCAL_DUMP}.tmp" "${LOCAL_DUMP}"
-
   # Verify the dump by listing its table of contents (cheap structural check).
-  if ! pg_restore -l "${LOCAL_DUMP}" >/dev/null 2>&1; then
-    mark_local_failed "pg_restore -l verification failed for ${LOCAL_DUMP}"
+  if ! LOCAL_VERIFY_OUTPUT="$("${PG_RESTORE_BIN}" -l "${LOCAL_DUMP}.tmp" 2>&1 >/dev/null)"; then
+    echo "${LOCAL_VERIFY_OUTPUT}" >&2
+    mark_local_failed "pg_restore -l verification failed for ${LOCAL_DUMP}.tmp"
   else
+    mv -f "${LOCAL_DUMP}.tmp" "${LOCAL_DUMP}"
     LOCAL_SIZE="$(/usr/bin/stat -f%z "${LOCAL_DUMP}" 2>/dev/null || /usr/bin/wc -c < "${LOCAL_DUMP}")"
     /bin/date -u +%Y-%m-%dT%H:%M:%SZ > "${LOCAL_PULL_MARKER}"
     rm -f "${LOCAL_SKIP_MARKER}" "${LOCAL_SKIP_REASON}" "${LOCAL_FAIL_MARKER}" "${LOCAL_FAIL_REASON}"
@@ -206,7 +220,8 @@ if [[ $? -ne 0 ]]; then
   exit 3
 fi
 
-scp ${SSH_OPTS} "${DROPLET}:${PROD_TMP_DUMP}" "${PROD_DUMP}"
+rm -f "${PROD_DUMP_TMP}"
+scp ${SSH_OPTS} "${DROPLET}:${PROD_TMP_DUMP}" "${PROD_DUMP_TMP}"
 SCP_DUMP_RC=$?
 
 # 2. Droplet-unique config files. Errors here aren't fatal individually — we
@@ -370,16 +385,20 @@ set -e
 # --- Aggregate prod outcomes ------------------------------------------------
 if [[ ${SCP_DUMP_RC} -ne 0 ]]; then
   echo "[backup-pg] scp of prod pg_dump failed" >&2
+  rm -f "${PROD_DUMP_TMP}"
   rm -f "${PROD_PULL_MARKER}"
   exit 3
 fi
 
 # Verify the prod dump is structurally sound before declaring success.
-if ! pg_restore -l "${PROD_DUMP}" >/dev/null 2>&1; then
-  echo "[backup-pg] prod dump failed pg_restore -l verification" >&2
+if ! PROD_VERIFY_OUTPUT="$("${PG_RESTORE_BIN}" -l "${PROD_DUMP_TMP}" 2>&1 >/dev/null)"; then
+  echo "[backup-pg] prod dump failed pg_restore -l verification for ${PROD_DUMP_TMP}" >&2
+  echo "${PROD_VERIFY_OUTPUT}" >&2
+  rm -f "${PROD_DUMP_TMP}"
   rm -f "${PROD_PULL_MARKER}"
   exit 4
 fi
+mv -f "${PROD_DUMP_TMP}" "${PROD_DUMP}"
 
 # .env, nginx, PG configs, PM2 state — log per-item but do NOT fail the run.
 # Missing nginx is suspicious; missing pm2/spaces is acceptable during early
