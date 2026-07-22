@@ -425,8 +425,7 @@
 		align-items: center;
 		flex-wrap: wrap;
 	}
-	.input,
-	select {
+	.input {
 		font-size: 0.85rem;
 		padding: 0.3rem 0.5rem;
 		border: 1px solid #ccc;
@@ -564,11 +563,6 @@
 		font-size: 0.85rem;
 		color: #444;
 		margin-bottom: 1rem;
-	}
-	.merge-select-label select {
-		display: block;
-		width: 100%;
-		margin-top: 0.35rem;
 	}
 	.modal-actions {
 		display: flex;

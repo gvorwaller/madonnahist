@@ -17,10 +17,14 @@
 	} = $props();
 
 	// Initialize the text from an existing selection (e.g. editing an alias
-	// that is already set). $state initializers run once.
+	// that is already set). Capturing only the initial value is deliberate:
+	// after mount the input text belongs to the user.
+	// svelte-ignore state_referenced_locally
 	let queryText = $state(options.find((o) => o.id === selectedId)?.display_name ?? '');
 	let open = $state(false);
 	let wrapper: HTMLElement | undefined = $state(undefined);
+	const uid = $props.id();
+	const listId = `${uid}-list`;
 
 	const filtered = $derived.by(() => {
 		const q = queryText.trim().toLowerCase();
@@ -72,11 +76,12 @@
 		aria-label={inputLabel}
 		role="combobox"
 		aria-expanded={open}
+		aria-controls={listId}
 		aria-autocomplete="list"
 		autocomplete="off"
 	/>
 	{#if open}
-		<ul class="picker-list" role="listbox">
+		<ul class="picker-list" id={listId} role="listbox">
 			{#each filtered as o (o.id)}
 				<li>
 					<button
