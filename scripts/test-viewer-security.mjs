@@ -11,7 +11,8 @@
 // running server, and cleans up in a finally block. Never touches port
 // 5433/5435 or PGDATABASE=madonnahist — see requireTestSafety() below.
 //
-// What this asserts (per the plan's Phase B verify section):
+// What this asserts (per the plan's Phase B verify section, extended for
+// Phase C tag UI in docs/2026-07-21-next-phases-search-viewer-narrative-plan.md):
 //   - accepted day page renders the real corrected_text
 //   - pending day page renders the friendly "not transcribed" state and
 //     NEVER leaks its corrected_text
@@ -20,6 +21,14 @@
 //     the point here is authorization, not object bytes); pending is a hard
 //     404 (denied before any object-store fetch is attempted)
 //   - search finds accepted-day text and never pending-day text
+//   - (Phase C) accepted day's tag chip renders on its day-detail page
+//   - (Phase C) /app/search?tag=<accepted-day's tag> finds the accepted day
+//     and /app/search?tag=<pending-day's tag> never finds the pending day
+//   - (Phase C) the pending day's tag never appears in the /app/search tag
+//     dropdown source (accepted-only)
+//   - (Phase C) POST ?/addTag and ?/removeTag on /correct/day/[date] as
+//     viewer are still 403 — route gating already blocks /correct for
+//     viewers; this proves that stays true for the new tag actions too
 //
 // Usage: node scripts/test-viewer-security.mjs [baseUrl]
 //   (or: npm run test:viewer)
@@ -86,6 +95,13 @@ const ARGON2_OPTS = {
 // match can only mean "this fixture's text," not a coincidence.
 const ACCEPTED_MARKER = 'ZQXPLORPTEST';
 const PENDING_MARKER = 'WOBBLEFRIMPTEST';
+
+// Same idea for the Phase C tag fixtures — distinctive slug/label pairs that
+// can't coincide with anything real.
+const ACCEPTED_TAG_SLUG = 'zqxplor-accepted-tag';
+const ACCEPTED_TAG_LABEL = 'Zqxplor Accepted Tag';
+const PENDING_TAG_SLUG = 'wobblefrim-pending-tag';
+const PENDING_TAG_LABEL = 'Wobblefrim Pending Tag';
 
 const FIXTURE_YEAR = 1899;
 const FIXTURE_MONTH = 1;
@@ -183,18 +199,34 @@ async function provisionFixtureDays(pool) {
 		[ACCEPTED_DATE, PENDING_DATE]
 	]);
 
-	await pool.query(
+	const acceptedRes = await pool.query(
 		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-		 VALUES ($1, $2, $3, $4, 'accepted')`,
+		 VALUES ($1, $2, $3, $4, 'accepted')
+		 RETURNING id`,
 		[pageId, ACCEPTED_DATE, 'fixtures/viewer-security-test/fake-accepted.jpg',
 			`Distinctive fixture entry for viewer security test: ${ACCEPTED_MARKER} happened here. A second sentence follows for preview purposes.`]
 	);
+	const acceptedDayId = acceptedRes.rows[0].id;
 
-	await pool.query(
+	const pendingRes = await pool.query(
 		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-		 VALUES ($1, $2, $3, $4, 'pending')`,
+		 VALUES ($1, $2, $3, $4, 'pending')
+		 RETURNING id`,
 		[pageId, PENDING_DATE, 'fixtures/viewer-security-test/fake-pending.jpg',
 			`Distinctive fixture entry for viewer security test: ${PENDING_MARKER} happened here — this must never leak.`]
+	);
+	const pendingDayId = pendingRes.rows[0].id;
+
+	// Phase C tag fixtures — one tag on the accepted day, one on the pending
+	// day, so tests can assert the tag chip/dropdown/filter all honor the
+	// same accepted-only predicate as the rest of /app.
+	await pool.query(
+		`INSERT INTO day_tags (day_id, tag_slug, tag_label, source) VALUES ($1, $2, $3, 'human')`,
+		[acceptedDayId, ACCEPTED_TAG_SLUG, ACCEPTED_TAG_LABEL]
+	);
+	await pool.query(
+		`INSERT INTO day_tags (day_id, tag_slug, tag_label, source) VALUES ($1, $2, $3, 'human')`,
+		[pendingDayId, PENDING_TAG_SLUG, PENDING_TAG_LABEL]
 	);
 
 	return pageId;
@@ -316,6 +348,72 @@ async function main() {
 			const linksToPendingDay = body.includes(`/app/day/${PENDING_DATE}`);
 			record('GET /app/search?q=<pending marker> [viewer] never finds it', !linksToPendingDay,
 				linksToPendingDay ? 'PENDING DAY LEAKED INTO SEARCH RESULTS' : 'no result card for the pending day, as required');
+		}
+
+		// ── Tag chip: accepted day's tag renders on its day-detail page ─────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATE}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const hasChip = body.includes(`/app/search?tag=${ACCEPTED_TAG_SLUG}`) && body.includes(ACCEPTED_TAG_LABEL);
+			record('GET /app/day/<accepted> [viewer] shows its tag chip', hasChip,
+				hasChip ? 'tag chip link + label present' : 'tag chip missing from body');
+		}
+
+		// ── Tag filter: accepted day's tag finds the accepted day ──────────
+		{
+			const url = `${BASE_URL}/app/search?${new URLSearchParams({ tag: ACCEPTED_TAG_SLUG })}`;
+			const res = await fetchNoRedirect(url, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const found = res.status === 200 && body.includes(`/app/day/${ACCEPTED_DATE}`);
+			record('GET /app/search?tag=<accepted tag> [viewer] finds the accepted day', found,
+				found ? 'result card links to the accepted day' : `status ${res.status}, day-link present: ${body.includes(`/app/day/${ACCEPTED_DATE}`)}`);
+		}
+
+		// ── Tag filter: pending day's tag never finds the pending day ──────
+		{
+			const url = `${BASE_URL}/app/search?${new URLSearchParams({ tag: PENDING_TAG_SLUG })}`;
+			const res = await fetchNoRedirect(url, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const leaked = body.includes(`/app/day/${PENDING_DATE}`);
+			record('GET /app/search?tag=<pending tag> [viewer] never finds the pending day', !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO TAG-FILTERED SEARCH RESULTS' : 'no result card for the pending day, as required');
+		}
+
+		// ── Tag dropdown source: pending day's tag never appears at all ────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/search`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const acceptedTagPresent = body.includes(ACCEPTED_TAG_SLUG);
+			const pendingTagLeaked = body.includes(PENDING_TAG_SLUG) || body.includes(PENDING_TAG_LABEL);
+			record('GET /app/search [viewer] tag dropdown includes the accepted tag', acceptedTagPresent,
+				acceptedTagPresent ? 'accepted tag slug present in dropdown source' : 'accepted tag slug missing');
+			record('GET /app/search [viewer] tag dropdown never includes the pending tag', !pendingTagLeaked,
+				pendingTagLeaked ? 'PENDING TAG LEAKED INTO DROPDOWN SOURCE' : 'pending tag slug/label absent, as required');
+		}
+
+		// ── Correction-editor tag actions stay gated for viewers ────────────
+		// /correct is already role-gated to admin|corrector in
+		// src/hooks.server.ts; this proves the new addTag/removeTag actions
+		// (Phase C) didn't accidentally carve out an exception.
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/addTag`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ tagLabel: 'should not be added' }).toString()
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/addTag [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/removeTag`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ tagSlug: ACCEPTED_TAG_SLUG }).toString()
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/removeTag [viewer] is 403', ok, `expected 403, got ${res.status}`);
 		}
 
 		console.log('\nViewer security results:\n');

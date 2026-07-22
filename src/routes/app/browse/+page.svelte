@@ -1,54 +1,117 @@
+<script lang="ts">
+	const { data } = $props();
+</script>
+
 <svelte:head>
 	<title>Browse — madonnahist</title>
 </svelte:head>
 
-<div class="browse-stub">
+<div class="browse-page">
 	<h1>Browse</h1>
-	<p class="coming">Coming soon</p>
-	<p class="desc">
-		Year and decade browsing — month grids of transcribed days, with narrative summaries and a
-		"read as a book" view — lands in the next phase.
-	</p>
-	<a href="/app" class="back">&larr; On this day</a>
+
+	{#if data.decades.length === 0}
+		<div class="empty-state">
+			<p>No calendar pages have been ingested yet — check back once capture work begins.</p>
+		</div>
+	{:else}
+		{#each data.decades as group (group.decade)}
+			<section class="decade-section">
+				<h2 class="decade-title">{group.decade}s</h2>
+				<ul class="year-list">
+					{#each group.years as y (y.year)}
+						<li>
+							<a href="/app/year/{y.year}" class="year-row">
+								<span class="year-num">{y.year}</span>
+								<span class="year-coverage">
+									{y.accepted} of {y.total} days ({y.percent}%)
+								</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/each}
+	{/if}
 </div>
 
 <style>
-	.browse-stub {
-		padding: 2rem 1rem;
-		text-align: center;
+	.browse-page {
+		padding: 1rem;
 	}
 	h1 {
 		font-family: var(--font-sans);
 		font-size: 1.25rem;
-		margin: 0 0 0.3rem;
+		margin: 0 0 1rem;
+		color: var(--color-ink);
 	}
-	.coming {
+	.decade-section {
+		margin-bottom: 1.5rem;
+	}
+	.decade-title {
 		font-family: var(--font-sans);
-		color: var(--color-amber);
-		font-size: 0.8rem;
+		font-size: 1rem;
 		font-weight: 700;
+		color: var(--color-amber);
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		margin: 0 0 1.25rem;
+		letter-spacing: 0.04em;
+		margin: 0 0 0.5rem;
+		padding-bottom: 0.3rem;
+		border-bottom: 1px solid var(--color-border);
 	}
-	.desc {
+	.year-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.year-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		min-height: 52px;
+		padding: 0.5rem 0.9rem;
+		background: var(--color-paper);
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+		text-decoration: none;
+		color: inherit;
+		box-sizing: border-box;
+	}
+	.year-row:hover {
+		border-color: var(--color-evergreen);
+	}
+	.year-row:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
+	.year-num {
+		font-family: var(--font-sans);
+		font-weight: 700;
+		font-size: 1.05rem;
+		color: var(--color-evergreen-dark);
+	}
+	.year-coverage {
+		font-family: var(--font-sans);
+		font-size: 0.8rem;
+		color: var(--color-ink-muted);
+		text-align: right;
+	}
+
+	.empty-state {
+		background: var(--color-paper);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		padding: 1.5rem 1.25rem;
+		text-align: center;
+	}
+	.empty-state p {
 		font-family: var(--font-serif);
 		font-size: 1.05rem;
 		line-height: 1.6;
 		color: var(--color-ink-muted);
-		max-width: 32rem;
-		margin: 0 auto 1.5rem;
-	}
-	.back {
-		display: inline-flex;
-		align-items: center;
-		min-height: 48px;
-		font-family: var(--font-sans);
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
-		font-weight: 600;
-	}
-	.back:hover {
-		text-decoration: underline;
+		margin: 0;
 	}
 </style>

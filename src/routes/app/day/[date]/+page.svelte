@@ -53,6 +53,17 @@
 
 		<div class="corrected-text">{data.correctedText}</div>
 
+		{#if data.tags.length > 0}
+			<div class="tags-block">
+				<p class="tags-heading">Tags</p>
+				<div class="tag-chips">
+					{#each data.tags as tag (tag.tag_slug)}
+						<a href="/app/search?tag={tag.tag_slug}" class="tag-chip">{tag.tag_label}</a>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		{#if data.dayNarrative}
 			<div class="narrative">
 				<p class="narrative-label">In context <span class="generated-tag">— generated</span></p>
@@ -106,6 +117,10 @@
 	.back-link:hover {
 		text-decoration: underline;
 	}
+	.back-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
 	h1 {
 		font-family: var(--font-sans);
 		font-size: 1.25rem;
@@ -142,6 +157,10 @@
 		position: relative;
 		overflow: hidden;
 	}
+	.image-btn:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
 	.day-image {
 		display: block;
 		width: 100%;
@@ -166,6 +185,45 @@
 		line-height: 1.7;
 		color: var(--color-ink);
 		white-space: pre-wrap;
+	}
+
+	.tags-block {
+		margin-top: 1.25rem;
+	}
+	.tags-heading {
+		font-family: var(--font-sans);
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-ink-muted);
+		margin: 0 0 0.5rem;
+	}
+	.tag-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		padding: 0.3rem 0.85rem;
+		background: var(--color-chip-bg);
+		color: var(--color-ink-muted);
+		border-radius: 999px;
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		font-weight: 500;
+		text-decoration: none;
+	}
+	.tag-chip:hover {
+		background: var(--color-highlight-bg);
+		color: var(--color-ink);
+	}
+	.tag-chip:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 
 	.narrative {
@@ -228,6 +286,10 @@
 		color: var(--color-ink-muted);
 		opacity: 0.6;
 	}
+	.nav-btn:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
 
 	.btn-primary {
 		display: inline-flex;
@@ -277,5 +339,9 @@
 		font-size: 1.75rem;
 		line-height: 1;
 		cursor: pointer;
+	}
+	.zoom-close:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 2px;
 	}
 </style>

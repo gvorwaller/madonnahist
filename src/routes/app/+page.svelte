@@ -93,6 +93,10 @@
 		text-decoration: none;
 		color: inherit;
 	}
+	.card:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
 	.thumb {
 		display: block;
 		width: 100%;

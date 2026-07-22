@@ -5,10 +5,15 @@
 		const params = new URLSearchParams();
 		if (data.q) params.set('q', data.q);
 		if (data.year) params.set('year', String(data.year));
+		if (data.tag) params.set('tag', data.tag);
 		if (targetPage > 1) params.set('page', String(targetPage));
 		const qs = params.toString();
 		return qs ? `/app/search?${qs}` : '/app/search';
 	}
+
+	const selectedTagLabel = $derived(
+		data.tag ? (data.tagOptions.find((t) => t.slug === data.tag)?.label ?? data.tag) : null
+	);
 </script>
 
 <svelte:head>
@@ -34,11 +39,20 @@
 			class="search-input"
 		/>
 		<label class="year-filter">
-			<span class="year-label">Filter:</span>
+			<span class="year-label">Year:</span>
 			<select name="year" value={data.year ?? ''}>
 				<option value="">any year</option>
 				{#each data.years as y (y)}
 					<option value={y}>{y}</option>
+				{/each}
+			</select>
+		</label>
+		<label class="year-filter">
+			<span class="year-label">Tag:</span>
+			<select name="tag" value={data.tag ?? ''}>
+				<option value="">any tag</option>
+				{#each data.tagOptions as t (t.slug)}
+					<option value={t.slug}>{t.label}</option>
 				{/each}
 			</select>
 		</label>
@@ -48,9 +62,19 @@
 	{#if !data.searched}
 		<p class="hint">Search sixty years of transcribed calendar entries — try a name, place, or activity.</p>
 	{:else if data.results.length === 0}
-		<p class="hint">No results for "{data.q}". Try a different word or phrase.</p>
+		<p class="hint">
+			{#if data.q && selectedTagLabel}
+				No results for "{data.q}" tagged "{selectedTagLabel}". Try a different word or tag.
+			{:else if selectedTagLabel}
+				No accepted days tagged "{selectedTagLabel}" yet.
+			{:else}
+				No results for "{data.q}". Try a different word or phrase.
+			{/if}
+		</p>
 	{:else}
-		<p class="result-count">{data.total} result{data.total === 1 ? '' : 's'}</p>
+		<p class="result-count">
+			{data.total} result{data.total === 1 ? '' : 's'}{#if selectedTagLabel} tagged "{selectedTagLabel}"{/if}
+		</p>
 
 		<ul class="results">
 			{#each data.results as result (result.entryDate)}
@@ -118,6 +142,10 @@
 		color: var(--color-ink);
 		box-sizing: border-box;
 	}
+	.search-input:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 1px;
+	}
 	.year-filter {
 		display: flex;
 		align-items: center;
@@ -135,6 +163,10 @@
 		background: var(--color-paper);
 		color: var(--color-ink);
 	}
+	.year-filter select:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 1px;
+	}
 	.search-btn {
 		min-height: 48px;
 		padding: 0.5rem 1.25rem;
@@ -146,6 +178,10 @@
 		font-weight: 700;
 		font-size: 0.95rem;
 		cursor: pointer;
+	}
+	.search-btn:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
 	}
 	.hint {
 		font-family: var(--font-serif);
@@ -175,6 +211,10 @@
 		padding: 0.85rem 1rem;
 		text-decoration: none;
 		color: inherit;
+	}
+	.result-card:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.result-date {
 		font-family: var(--font-sans);
@@ -220,6 +260,10 @@
 		border-color: var(--color-border);
 		color: var(--color-ink-muted);
 		opacity: 0.6;
+	}
+	.pager-btn:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.pager-status {
 		font-family: var(--font-sans);

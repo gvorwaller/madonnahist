@@ -23,6 +23,7 @@
 	$effect(() => { data.day.entry_date; dayNarrative = data.day.day_narrative ?? ''; });
 
 	$effect(() => { data.day.entry_date; conflictDismissed = false; });
+	$effect(() => { data.day.entry_date; newTagLabel = ''; tagError = ''; });
 
 	let saving = $state(false);
 	let saveError = $state('');
@@ -30,6 +31,8 @@
 	let flagNote = $state('');
 	let lightboxOpen = $state(false);
 	let pageImageOpen = $state(false);
+	let newTagLabel = $state('');
+	let tagError = $state('');
 
 	const dateLabel = $derived(
 		new Date(data.day.entry_date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -169,6 +172,71 @@
 					bind:value={correctedText}
 					placeholder="Type the corrected transcription here..."
 				></textarea>
+			</div>
+
+			<div class="tags-section">
+				<span class="section-label" id="tags-heading">Tags</span>
+				<div class="tag-chips" role="group" aria-labelledby="tags-heading">
+					{#each data.tags as tag (tag.tag_slug)}
+						<span class="tag-chip" class:ai-tag={tag.source === 'ai'}>
+							{tag.tag_label}
+							<form
+								method="POST"
+								action="?/removeTag"
+								use:enhance={() => {
+									tagError = '';
+									return ({ result, update }) => {
+										if (result.type === 'failure') {
+											tagError = (result.data as { error?: string })?.error ?? 'Remove failed';
+										}
+										update();
+									};
+								}}
+							>
+								<input type="hidden" name="tagSlug" value={tag.tag_slug} />
+								<button type="submit" class="tag-remove" aria-label="Remove tag {tag.tag_label}">&times;</button>
+							</form>
+						</span>
+					{:else}
+						<span class="tags-empty">No tags yet</span>
+					{/each}
+				</div>
+				<form
+					method="POST"
+					action="?/addTag"
+					class="tag-add-form"
+					use:enhance={() => {
+						tagError = '';
+						return ({ result, update }) => {
+							if (result.type === 'failure') {
+								tagError = (result.data as { error?: string })?.error ?? 'Add failed';
+							} else {
+								newTagLabel = '';
+							}
+							update();
+						};
+					}}
+				>
+					<input
+						type="text"
+						name="tagLabel"
+						list="tag-suggestions"
+						bind:value={newTagLabel}
+						maxlength="40"
+						placeholder="Add a tag…"
+						class="tag-input"
+						aria-label="Add a tag"
+					/>
+					<datalist id="tag-suggestions">
+						{#each data.tagSuggestions as s (s.tag_slug)}
+							<option value={s.tag_label}></option>
+						{/each}
+					</datalist>
+					<button type="submit" class="tag-add-btn" disabled={newTagLabel.trim() === ''}>Add</button>
+				</form>
+				{#if tagError}
+					<p class="tag-error" role="alert">{tagError}</p>
+				{/if}
 			</div>
 
 			<div class="narrative-section">
@@ -482,6 +550,97 @@
 	.correction-textarea:focus {
 		outline: none;
 		border-color: #1a7a1a;
+	}
+
+	.tags-section {
+		border-top: 1px solid #e0e0e0;
+		padding-top: 0.75rem;
+	}
+	.tag-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin: 0.4rem 0 0.6rem;
+	}
+	.tags-empty {
+		font-size: 0.85rem;
+		color: #888;
+		font-style: italic;
+	}
+	.tag-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.3rem 0.3rem 0.3rem 0.7rem;
+		background: #eef3ec;
+		border: 1px solid #c8d8c4;
+		border-radius: 999px;
+		font-size: 0.85rem;
+		color: #2b4a2b;
+	}
+	.tag-chip.ai-tag {
+		background: #f3ecf7;
+		border-color: #d8c4e8;
+		color: #4a2b5a;
+	}
+	.tag-chip form {
+		display: contents;
+	}
+	.tag-remove {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		margin: -0.3rem -0.3rem -0.3rem 0;
+		border: none;
+		background: none;
+		font-size: 1.1rem;
+		line-height: 1;
+		color: inherit;
+		cursor: pointer;
+		border-radius: 999px;
+	}
+	.tag-remove:hover {
+		background: rgba(0, 0, 0, 0.08);
+	}
+	.tag-add-form {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.tag-input {
+		flex: 1;
+		min-height: 44px;
+		font-size: 16px;
+		font-family: inherit;
+		padding: 0.4rem 0.7rem;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		box-sizing: border-box;
+	}
+	.tag-input:focus {
+		outline: none;
+		border-color: #1a7a1a;
+	}
+	.tag-add-btn {
+		min-height: 44px;
+		min-width: 60px;
+		padding: 0.4rem 0.9rem;
+		border: 1px solid #1a7a1a;
+		border-radius: 6px;
+		background: #fff;
+		color: #1a7a1a;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.tag-add-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+	.tag-error {
+		margin: 0.4rem 0 0;
+		font-size: 0.8rem;
+		color: #c33;
 	}
 
 	.narrative-section {

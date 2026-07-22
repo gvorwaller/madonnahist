@@ -32,7 +32,19 @@ export const load: PageServerLoad = async ({ params }) => {
 		return { found: false as const, entryDate, dateLabel };
 	}
 
-	const { prev, next } = await getAdjacentAcceptedDates(entryDate);
+	// Predicate re-applied independently here too (rather than trusting the
+	// row lookup above) — see src/lib/server/viewer.ts file header.
+	const [{ prev, next }, tagsRes] = await Promise.all([
+		getAdjacentAcceptedDates(entryDate),
+		query<{ tag_slug: string; tag_label: string }>(
+			`SELECT dt.tag_slug, dt.tag_label
+			   FROM day_tags dt
+			   JOIN calendar_days cd ON cd.id = dt.day_id
+			  WHERE cd.entry_date = $1 AND cd.correction_status = 'accepted'
+			  ORDER BY dt.tag_label`,
+			[entryDate]
+		)
+	]);
 
 	return {
 		found: true as const,
@@ -41,6 +53,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		correctedText: row.corrected_text ?? '',
 		dayNarrative: row.day_narrative,
 		hasImage: row.has_image,
+		tags: tagsRes.rows,
 		prevDate: prev,
 		nextDate: next
 	};

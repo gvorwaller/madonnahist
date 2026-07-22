@@ -92,6 +92,95 @@ export async function getAcceptedYears(): Promise<number[]> {
 	return res.rows.map((r) => r.year);
 }
 
+export interface YearCoverage {
+	year: number;
+	accepted: number;
+	total: number;
+	percent: number;
+}
+
+/**
+ * Per-year accepted/total counts for every year that has at least one
+ * ingested day, ascending — feeds the Browse index (decades → years). `total`
+ * is an aggregate count (no row content), same non-predicate precedent as
+ * `getCoverage()` above.
+ */
+export async function getYearCoverage(): Promise<YearCoverage[]> {
+	const res = await query<{ year: number; accepted: number; total: number }>(`
+		SELECT EXTRACT(YEAR FROM entry_date)::int AS year,
+		       COUNT(*) FILTER (WHERE correction_status = 'accepted')::int AS accepted,
+		       COUNT(*)::int AS total
+		  FROM calendar_days
+		 GROUP BY year
+		 ORDER BY year
+	`);
+	return res.rows.map((r) => ({
+		year: r.year,
+		accepted: r.accepted,
+		total: r.total,
+		percent: r.total > 0 ? Math.round((r.accepted / r.total) * 1000) / 10 : 0
+	}));
+}
+
+/** Nearest accepted-day year before/after `year` (exclusive), for year-browse chevrons. */
+export async function getAdjacentAcceptedYears(year: number): Promise<AdjacentAcceptedYears> {
+	const years = await getAcceptedYears();
+	const prevYears = years.filter((y) => y < year);
+	const nextYears = years.filter((y) => y > year);
+	return {
+		prev: prevYears.length > 0 ? prevYears[prevYears.length - 1] : null,
+		next: nextYears.length > 0 ? nextYears[0] : null
+	};
+}
+
+export interface AdjacentAcceptedYears {
+	prev: number | null;
+	next: number | null;
+}
+
+/** Accepted days for a single year, as a day-of-month array per month (1-12) — feeds MonthGrid. */
+export async function getAcceptedDaysByMonth(year: number): Promise<Map<number, number[]>> {
+	const res = await query<{ month: number; day: number }>(
+		`SELECT EXTRACT(MONTH FROM entry_date)::int AS month,
+		        EXTRACT(DAY FROM entry_date)::int AS day
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted' AND EXTRACT(YEAR FROM entry_date)::int = $1
+		  ORDER BY entry_date`,
+		[year]
+	);
+	const byMonth = new Map<number, number[]>();
+	for (const row of res.rows) {
+		const list = byMonth.get(row.month);
+		if (list) list.push(row.day);
+		else byMonth.set(row.month, [row.day]);
+	}
+	return byMonth;
+}
+
+export interface TagOption {
+	slug: string;
+	label: string;
+}
+
+/**
+ * Distinct tags that appear on at least one accepted day, ordered by label —
+ * feeds the /app/search tag dropdown. A tag that only exists on a
+ * pending/in-progress day never appears here (predicate applied directly in
+ * this query, per the file header).
+ */
+export async function getAcceptedTagOptions(): Promise<TagOption[]> {
+	const res = await query<{ tag_slug: string; tag_label: string }>(`
+		SELECT DISTINCT ON (dt.tag_slug) dt.tag_slug, dt.tag_label
+		  FROM day_tags dt
+		  JOIN calendar_days cd ON cd.id = dt.day_id
+		 WHERE cd.correction_status = 'accepted'
+		 ORDER BY dt.tag_slug, dt.tag_label
+	`);
+	return res.rows
+		.map((r) => ({ slug: r.tag_slug, label: r.tag_label }))
+		.sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** First ~N sentences of a text block, for card previews. Falls back to a char cap if no sentence boundary is found. */
 export function firstSentences(text: string, count = 2, maxChars = 220): string {
 	const trimmed = text.trim();

@@ -72,6 +72,7 @@
 		background: var(--color-cream);
 		color: var(--color-ink);
 		font-family: var(--font-sans);
+		overflow-x: hidden; /* belt-and-suspenders: no horizontal scroll at phone widths */
 	}
 
 	.app-content {
@@ -119,5 +120,10 @@
 	.nav-item.active {
 		color: var(--color-evergreen-dark);
 		font-weight: 700;
+	}
+
+	.nav-item:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: -2px;
 	}
 </style>

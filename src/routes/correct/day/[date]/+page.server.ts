@@ -1,6 +1,7 @@
-import { query } from '$lib/db';
+import { query, withTransaction } from '$lib/db';
 import { populateLexicon } from '$lib/correction-lexicon';
 import { heartbeat, completeSession } from '$lib/server/claims';
+import { isValidTagLabel, slugifyTagLabel } from '$lib/server/tags';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -95,6 +96,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!dayRes.rows[0]) error(404, 'No calendar day for this date');
 	const day = dayRes.rows[0];
 
+	const [tagsRes, tagSuggestionsRes] = await Promise.all([
+		query<{ tag_slug: string; tag_label: string; source: string }>(
+			`SELECT tag_slug, tag_label, source FROM day_tags WHERE day_id = $1 ORDER BY tag_label`,
+			[day.day_id]
+		),
+		query<{ tag_slug: string; tag_label: string }>(
+			`SELECT DISTINCT tag_slug, tag_label FROM day_tags ORDER BY tag_label`
+		)
+	]);
+
 	const latestCorrectionRes = await query<{ corrected_text: string; status_after: string }>(
 		`SELECT corrected_text, status_after FROM day_corrections
 		  WHERE day_id = $1 ORDER BY created_at DESC LIMIT 1`, [day.day_id]
@@ -124,6 +135,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		nextAny,
 		prevAny,
 		monthKey,
+		tags: tagsRes.rows,
+		tagSuggestions: tagSuggestionsRes.rows,
 		serverLoadedAt: new Date().toISOString(),
 	};
 };
@@ -249,5 +262,85 @@ export const actions = {
 
 		const nextDate = await nextUncorrectedDate(entryDate);
 		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+	},
+
+	addTag: async ({ params, request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const entryDate = params.date;
+		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
+
+		const formData = await request.formData();
+		const rawLabel = (formData.get('tagLabel') as string ?? '');
+		if (!isValidTagLabel(rawLabel)) {
+			return fail(400, { error: 'Tag must be 1-40 characters' });
+		}
+		const tagLabel = rawLabel.trim();
+		const tagSlug = slugifyTagLabel(tagLabel);
+		if (tagSlug === '') {
+			return fail(400, { error: 'Tag must contain at least one letter or number' });
+		}
+
+		const dayRes = await query<{ day_id: number }>(
+			`SELECT id AS day_id FROM calendar_days WHERE entry_date = $1`, [entryDate]
+		);
+		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id } = dayRes.rows[0];
+		const userId = Number(locals.user.id);
+
+		await withTransaction(async (client) => {
+			await client.query(
+				`INSERT INTO day_tags (day_id, tag_slug, tag_label, source)
+				 VALUES ($1, $2, $3, 'human')
+				 ON CONFLICT (day_id, tag_slug) DO NOTHING`,
+				[day_id, tagSlug, tagLabel]
+			);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[userId, 'tag_add', 'day_tags', day_id,
+				 null, JSON.stringify({ tag_slug: tagSlug, tag_label: tagLabel, source: 'human' }),
+				 `Added tag "${tagLabel}" to ${entryDate}`]
+			);
+		});
+	},
+
+	removeTag: async ({ params, request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const entryDate = params.date;
+		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
+
+		const formData = await request.formData();
+		const tagSlug = (formData.get('tagSlug') as string ?? '').trim();
+		if (tagSlug === '') return fail(400, { error: 'Missing tag' });
+
+		const dayRes = await query<{ day_id: number }>(
+			`SELECT id AS day_id FROM calendar_days WHERE entry_date = $1`, [entryDate]
+		);
+		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id } = dayRes.rows[0];
+		const userId = Number(locals.user.id);
+
+		// Allow removing both human- and AI-sourced tags — corrector judgment
+		// wins (see Phase C deliverable 3).
+		const before = await query<{ tag_label: string; source: string }>(
+			`SELECT tag_label, source FROM day_tags WHERE day_id = $1 AND tag_slug = $2`,
+			[day_id, tagSlug]
+		);
+		if (!before.rows[0]) return fail(404, { error: 'Tag not found' });
+
+		await withTransaction(async (client) => {
+			await client.query(
+				`DELETE FROM day_tags WHERE day_id = $1 AND tag_slug = $2`,
+				[day_id, tagSlug]
+			);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[userId, 'tag_remove', 'day_tags', day_id,
+				 JSON.stringify({ tag_slug: tagSlug, tag_label: before.rows[0].tag_label, source: before.rows[0].source }),
+				 null,
+				 `Removed tag "${before.rows[0].tag_label}" from ${entryDate}`]
+			);
+		});
 	}
 } satisfies Actions;
