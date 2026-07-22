@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import EntityPicker from '$lib/components/EntityPicker.svelte';
 
 	const { data } = $props();
 
@@ -190,12 +191,13 @@
 										>
 											<input type="hidden" name="id" value={e.id} />
 											<div class="edit-row">
-												<select name="targetId" bind:value={aliasTargetId}>
-													<option value="">— none (canonical) —</option>
-													{#each canonicalOptionsFor(type, e.id) as c (c.id)}
-														<option value={c.id}>{c.display_name}</option>
-													{/each}
-												</select>
+												<input type="hidden" name="targetId" value={aliasTargetId ?? ''} />
+												<EntityPicker
+													options={canonicalOptionsFor(type, e.id)}
+													bind:selectedId={aliasTargetId}
+													placeholder="Type a name to search…"
+													inputLabel="Alias target for {e.display_name}"
+												/>
 												<button type="submit" class="btn btn-sm btn-primary" disabled={!aliasTargetId}>Save</button>
 												<button type="button" class="btn btn-sm btn-secondary" onclick={cancelAlias}>Cancel</button>
 											</div>
@@ -318,15 +320,15 @@
 				Merge "{mergeTarget.label}" into another entity? All of its day mentions move to the
 				target, and it becomes an alias of the target (kept, not deleted). This cannot be undone.
 			</p>
-			<label class="merge-select-label">
+			<div class="merge-select-label">
 				Merge into:
-				<select bind:value={mergeDestination}>
-					<option value={null}>— choose a target —</option>
-					{#each canonicalOptionsFor(mergeTarget.entityType, mergeTarget.id) as c (c.id)}
-						<option value={c.id}>{c.display_name}</option>
-					{/each}
-				</select>
-			</label>
+				<EntityPicker
+					options={canonicalOptionsFor(mergeTarget.entityType, mergeTarget.id)}
+					bind:selectedId={mergeDestination}
+					placeholder="Type a name to search…"
+					inputLabel="Merge target"
+				/>
+			</div>
 			<div class="modal-actions">
 				<button class="btn-cancel" onclick={() => (mergeTarget = null)}>Cancel</button>
 				<form
