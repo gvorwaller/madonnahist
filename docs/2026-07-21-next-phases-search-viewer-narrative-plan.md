@@ -122,6 +122,7 @@ Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_dat
 - Phase 1 correction-UX gaps from V5 quick-ref: auto-save, session lifecycle, "Accept LLM" button, History button.
 - AI tag *suggestions in the correction UI* (the extractor writes `source='ai'` tags in Phase D; the UI surfacing comes later).
 - Decade + person narrative summaries; mockup B5 book pagination/swipe (Phase F v0 is a continuous reader).
+- Narrative style selector (td-09102a): tone/style/person presets at generate time, stored with the draft; first-person "as Madonna" needs her sign-off if offered; consider book-view style consistency across years.
 - Nightly `pg_dump`-to-Spaces backup automation (NAS image pull + CCC preflight exist; the Postgres-dump leg of V5 Phase 4 remains open).
 - PDF/print export (Phase H direction only).
 
