@@ -234,6 +234,17 @@ reuse those role names only inside the isolated repo-local Postgres cluster.
 Destructive image flows must use the local filesystem object store under
 `.local/object-store-test/`, never production DigitalOcean Spaces.
 
+## Browser Compatibility
+
+**All UI code must work in BOTH Safari and Chrome. Safari/WebKit is the primary browser** — Gaylon uses Safari on macOS; Madonna's correction UI runs on iPad Safari. Never assume Chrome semantics.
+
+Known WebKit traps that have caused production bugs here:
+- Safari does not focus `<button>` elements on click — `focusout`/`relatedTarget` patterns that work in Chrome silently break (fix pattern: `preventDefault` on `pointerdown`; see `src/lib/components/EntityPicker.svelte`).
+- Safari's aggressive back-forward cache restores stale component state — relative form actions (`?/action`) can resolve against the wrong URL; always use absolute action paths.
+- Touch-first surfaces (iPad correction UI, phone family viewer): no hover-dependence — `title` tooltips are invisible on touch; tap targets ≥44px.
+
+For automated Safari verification, `safaridriver` + `selenium-webdriver` is the established pattern (requires Safari → Developer → Allow remote automation).
+
 ## CSS Rules
 
 **No Tailwind. No utility frameworks.** Hand-written component-scoped CSS.
