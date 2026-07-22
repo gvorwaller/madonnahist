@@ -101,8 +101,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			`SELECT tag_slug, tag_label, source FROM day_tags WHERE day_id = $1 ORDER BY tag_label`,
 			[day.day_id]
 		),
+		// DISTINCT ON, not DISTINCT: the same slug can carry different labels
+		// across days ("Sunday school" / "Sunday School" → sunday-school), and
+		// the datalist consuming this is a keyed {#each} on tag_slug — duplicate
+		// keys crash Svelte's client-side render while SSR still succeeds
+		// (production incident 2026-07-22: day pages silently failed to mount
+		// after the AI tag backfill introduced label variants).
 		query<{ tag_slug: string; tag_label: string }>(
-			`SELECT DISTINCT tag_slug, tag_label FROM day_tags ORDER BY tag_label`
+			`SELECT DISTINCT ON (tag_slug) tag_slug, tag_label FROM day_tags ORDER BY tag_slug, tag_label`
 		)
 	]);
 
