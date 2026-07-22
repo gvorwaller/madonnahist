@@ -113,6 +113,18 @@ const ACCEPTED_ENTITY_NAME = 'Zqxplor Accepted Person';
 const PENDING_ENTITY_SLUG = 'wobblefrim-pending-place';
 const PENDING_ENTITY_NAME = 'Wobblefrim Pending Place';
 
+// Phase F book-view fixtures — a dedicated year/page/days, distinct from
+// FIXTURE_YEAR above (1899, which predates the book route's MIN_YEAR=1900
+// validation — matching src/routes/app/year/[year]/+page.server.ts's own
+// range check). One published and one unpublished narrative marker so the
+// book page can be checked the same way /app/year/[year] already is.
+const BOOK_FIXTURE_YEAR = 1902;
+const BOOK_FIXTURE_MONTH = 6;
+const BOOK_ACCEPTED_DATE = '1902-06-10';
+const BOOK_PENDING_DATE = '1902-06-11';
+const PUBLISHED_NARRATIVE_MARKER = 'ZQXPLBOOKPUBLISHED narrative text for the book-view test.';
+const UNPUBLISHED_NARRATIVE_MARKER = 'WOBBLEFRIMBOOKDRAFT narrative text that must never leak.';
+
 const FIXTURE_YEAR = 1899;
 const FIXTURE_MONTH = 1;
 const ACCEPTED_DATE = '1899-01-10';
@@ -266,6 +278,80 @@ async function provisionFixtureDays(pool) {
 	return pageId;
 }
 
+// Phase F: a dedicated page + accepted/pending day pair for BOOK_FIXTURE_YEAR
+// (see the constant comment above for why this can't reuse FIXTURE_YEAR), so
+// /app/book/year/[key] can be checked against the same accepted-only
+// predicate as the rest of /app. Idempotency follows the same
+// delete-then-insert shape as provisionFixtureDays above.
+async function provisionBookFixtureDays(pool) {
+	await pool.query(
+		`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (year, month) DO NOTHING`,
+		[BOOK_FIXTURE_YEAR, BOOK_FIXTURE_MONTH, 'fixtures/viewer-security-test/fake-book-page.jpg', FIXTURE_CAPTURE_SESSION]
+	);
+	const pageRes = await pool.query(
+		`SELECT id FROM calendar_pages WHERE year = $1 AND month = $2`,
+		[BOOK_FIXTURE_YEAR, BOOK_FIXTURE_MONTH]
+	);
+	const bookPageId = pageRes.rows[0].id;
+
+	await pool.query(`DELETE FROM calendar_days WHERE entry_date = ANY($1::date[])`, [
+		[BOOK_ACCEPTED_DATE, BOOK_PENDING_DATE]
+	]);
+
+	await pool.query(
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
+		 VALUES ($1, $2, $3, $4, 'accepted')`,
+		[bookPageId, BOOK_ACCEPTED_DATE, 'fixtures/viewer-security-test/fake-book-accepted.jpg',
+			`Distinctive book-view fixture entry: ${ACCEPTED_MARKER} happened here.`]
+	);
+	await pool.query(
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
+		 VALUES ($1, $2, $3, $4, 'pending')`,
+		[bookPageId, BOOK_PENDING_DATE, 'fixtures/viewer-security-test/fake-book-pending.jpg',
+			`Distinctive book-view fixture entry: ${PENDING_MARKER} happened here — this must never leak.`]
+	);
+
+	return bookPageId;
+}
+
+async function cleanupBookFixtureDays(pool, bookPageId) {
+	if (!bookPageId) return;
+	await pool.query(`DELETE FROM calendar_days WHERE page_id = $1`, [bookPageId]);
+	await pool.query(`DELETE FROM calendar_pages WHERE id = $1`, [bookPageId]);
+}
+
+// Phase F: an unpublished draft + a published narrative for BOOK_FIXTURE_YEAR,
+// so the book route's narrative predicate (is_published = true, same rule as
+// /app/year/[year]) can be asserted the same way test-narratives.mjs does.
+async function provisionBookNarrative(pool) {
+	await pool.query(`DELETE FROM narrative_summaries WHERE scope = 'year' AND scope_key = $1`, [
+		String(BOOK_FIXTURE_YEAR)
+	]);
+	// Starts unpublished — the first assertion is that a draft never leaks;
+	// the test then flips it to published in place and re-checks.
+	await pool.query(
+		`INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, is_published)
+		 VALUES ('year', $1, $2, '_viewer_security_test', false)`,
+		[String(BOOK_FIXTURE_YEAR), UNPUBLISHED_NARRATIVE_MARKER]
+	);
+}
+
+async function publishBookNarrative(pool) {
+	await pool.query(
+		`UPDATE narrative_summaries SET summary_text = $2, is_published = true
+		  WHERE scope = 'year' AND scope_key = $1`,
+		[String(BOOK_FIXTURE_YEAR), PUBLISHED_NARRATIVE_MARKER]
+	);
+}
+
+async function cleanupBookNarrative(pool) {
+	await pool.query(`DELETE FROM narrative_summaries WHERE scope = 'year' AND scope_key = $1`, [
+		String(FIXTURE_YEAR)
+	]);
+}
+
 async function cleanupFixtureDays(pool, pageId) {
 	if (!pageId) return;
 	await pool.query(`DELETE FROM calendar_days WHERE page_id = $1`, [pageId]);
@@ -291,6 +377,7 @@ async function main() {
 
 	let viewerId;
 	let pageId;
+	let bookPageId;
 	try {
 		try {
 			await fetch(`${BASE_URL}/api/health`);
@@ -302,6 +389,8 @@ async function main() {
 
 		viewerId = await provisionViewer(pool);
 		pageId = await provisionFixtureDays(pool);
+		bookPageId = await provisionBookFixtureDays(pool);
+		await provisionBookNarrative(pool);
 
 		const viewerCookie = await login(VIEWER_USERNAME, TEST_PASSWORD);
 
@@ -524,6 +613,65 @@ async function main() {
 				pendingPlaceLeaked ? 'PENDING-ONLY ENTITY LEAKED INTO DROPDOWN SOURCE' : 'pending entity slug/name absent, as required');
 		}
 
+		// ── Phase F: book view for the fixture year shows accepted-day text,
+		//    never pending-day text ─────────────────────────────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${BOOK_FIXTURE_YEAR}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const okStatus = res.status === 200;
+			record('GET /app/book/year/<fixture year> [viewer] status', okStatus, `expected 200, got ${res.status}`);
+			const hasAccepted = body.includes(ACCEPTED_MARKER);
+			record('GET /app/book/year/<fixture year> [viewer] shows accepted day text', hasAccepted,
+				hasAccepted ? 'marker present' : 'marker missing from body');
+			const leakedPending = body.includes(PENDING_MARKER) || body.includes(`/app/day/${BOOK_PENDING_DATE}`);
+			record('GET /app/book/year/<fixture year> [viewer] never shows pending day text', !leakedPending,
+				leakedPending ? 'PENDING MARKER/DAY LEAKED INTO BOOK VIEW' : 'pending marker/day absent, as required');
+		}
+
+		// ── Phase F: unpublished narrative absent, published narrative present ─
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${BOOK_FIXTURE_YEAR}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const leaked = body.includes(UNPUBLISHED_NARRATIVE_MARKER);
+			record('GET /app/book/year/<fixture year> [viewer] unpublished narrative absent', !leaked,
+				leaked ? 'UNPUBLISHED NARRATIVE DRAFT LEAKED INTO BOOK VIEW' : 'draft absent, as required');
+		}
+		{
+			await publishBookNarrative(pool);
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${BOOK_FIXTURE_YEAR}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const hasPublished = body.includes(PUBLISHED_NARRATIVE_MARKER);
+			const hasLabel = body.includes('AI-generated year summary');
+			record('GET /app/book/year/<fixture year> [viewer] published narrative present with AI label', hasPublished && hasLabel,
+				`text present: ${hasPublished}, label present: ${hasLabel}`);
+		}
+
+		// ── Phase F: invalid scope/key → friendly page, never a crash ──────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/month/${BOOK_FIXTURE_YEAR}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const ok = res.status === 200 && !/internal error|stack trace/i.test(body);
+			record('GET /app/book/<invalid scope>/<year> [viewer] friendly page, not a crash', ok,
+				`status ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/not-a-year`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const ok = res.status === 200 && !/internal error|stack trace/i.test(body);
+			record('GET /app/book/year/<invalid key> [viewer] friendly page, not a crash', ok,
+				`status ${res.status}`);
+		}
+
 		console.log('\nViewer security results:\n');
 		const width = Math.max(...rows.map((r) => r.label.length)) + 2;
 		for (const r of rows) {
@@ -534,6 +682,8 @@ async function main() {
 
 		if (fail > 0) process.exitCode = 1;
 	} finally {
+		await cleanupBookNarrative(pool);
+		await cleanupBookFixtureDays(pool, bookPageId);
 		await cleanupFixtureDays(pool, pageId);
 		await cleanupViewer(pool, viewerId);
 		await pool.end();

@@ -81,6 +81,38 @@ export function formatHumanDate(entryDate: string): string {
 	});
 }
 
+/**
+ * Human date label without the year, e.g. "Monday, March 1" — used by the
+ * book reader (Phase F) where the year is already the chapter/book title, so
+ * repeating it on every day entry would be redundant.
+ */
+export function formatHumanDateNoYear(entryDate: string): string {
+	return new Date(entryDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+		weekday: 'long',
+		month: 'long',
+		day: 'numeric',
+		timeZone: 'UTC'
+	});
+}
+
+/**
+ * Published narrative text for a scope/scope_key, or null if none exists /
+ * isn't published yet (Phase E). Filters `is_published = true` directly in
+ * the SQL — same "every /app query independently applies its own predicate"
+ * rule as the accepted-day predicate above: an unpublished draft must never
+ * reach a viewer route regardless of any page-level check. Shared by
+ * `/app/year/[year]` and the Phase F book reader (`/app/book/year/[key]`),
+ * which surfaces the same year narrative as its opening section.
+ */
+export async function getPublishedNarrative(scope: 'year', scopeKey: string): Promise<string | null> {
+	const res = await query<{ summary_text: string }>(
+		`SELECT summary_text FROM narrative_summaries
+		  WHERE scope = $1 AND scope_key = $2 AND is_published = true`,
+		[scope, scopeKey]
+	);
+	return res.rows[0]?.summary_text ?? null;
+}
+
 /** Distinct years that have at least one accepted day, ascending — used for search/browse year filters. */
 export async function getAcceptedYears(): Promise<number[]> {
 	const res = await query<{ year: number }>(`

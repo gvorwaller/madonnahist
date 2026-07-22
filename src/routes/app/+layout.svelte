@@ -9,13 +9,22 @@
 		if (p.startsWith('/app/browse') || p.startsWith('/app/year')) return 'browse';
 		return 'home';
 	});
+
+	// Immersive mode: the Phase F book reader (/app/book/*) suppresses the
+	// bottom nav — it has its own fixed exit control and progress bar, and the
+	// nav would just be visual noise (and eat vertical space) during a long
+	// continuous read. Segment-boundary match, same rule as
+	// src/hooks.server.ts's matchesPrefix(), so a hypothetical future
+	// /app/bookmarks route would never be wrongly swept in.
+	const immersive = $derived(page.url.pathname.startsWith('/app/book'));
 </script>
 
 <div class="app-shell">
-	<div class="app-content">
+	<div class="app-content" class:immersive>
 		{@render children()}
 	</div>
 
+	{#if !immersive}
 	<nav class="bottom-nav" aria-label="Family viewer navigation">
 		<a
 			href="/app"
@@ -45,6 +54,7 @@
 			<span class="nav-label">Search</span>
 		</a>
 	</nav>
+	{/if}
 </div>
 
 <style>
@@ -82,6 +92,10 @@
 		width: 100%;
 		margin: 0 auto;
 		box-sizing: border-box;
+	}
+	.app-content.immersive {
+		padding-bottom: 0; /* no bottom nav to clear in immersive book view */
+		max-width: none; /* book reader manages its own measure/max-width */
 	}
 
 	.bottom-nav {

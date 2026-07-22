@@ -45,6 +45,10 @@
 			{/if}
 		</nav>
 
+		{#if yearHasAcceptedDays}
+			<a href="/app/book/year/{data.year}" class="book-cta">Read {data.year} as a book &#9656;</a>
+		{/if}
+
 		{#if data.narrative}
 			<section class="year-narrative">
 				<p class="narrative-label">AI-generated year summary, reviewed by the family</p>
@@ -129,6 +133,30 @@
 	.year-chevron.disabled {
 		color: var(--color-ink-muted);
 		opacity: 0.5;
+	}
+
+	.book-cta {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 52px;
+		margin: 0 0 1.25rem;
+		padding: 0.6rem 1rem;
+		border-radius: 8px;
+		background: var(--color-evergreen);
+		color: #fff;
+		font-family: var(--font-serif);
+		font-size: 1.05rem;
+		font-weight: 700;
+		text-decoration: none;
+		text-align: center;
+	}
+	.book-cta:hover {
+		background: var(--color-evergreen-dark);
+	}
+	.book-cta:focus-visible {
+		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
 	}
 
 	.empty-hint {

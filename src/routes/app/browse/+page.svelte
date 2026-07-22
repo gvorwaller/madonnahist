@@ -19,13 +19,16 @@
 				<h2 class="decade-title">{group.decade}s</h2>
 				<ul class="year-list">
 					{#each group.years as y (y.year)}
-						<li>
+						<li class="year-item">
 							<a href="/app/year/{y.year}" class="year-row">
 								<span class="year-num">{y.year}</span>
 								<span class="year-coverage">
 									{y.accepted} of {y.total} days ({y.percent}%)
 								</span>
 							</a>
+							{#if y.accepted > 0}
+								<a href="/app/book/year/{y.year}" class="book-link">Read as book &#9656;</a>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -66,7 +69,13 @@
 		flex-direction: column;
 		gap: 0.5rem;
 	}
+	.year-item {
+		display: flex;
+		align-items: stretch;
+		gap: 0.5rem;
+	}
 	.year-row {
+		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -79,6 +88,32 @@
 		text-decoration: none;
 		color: inherit;
 		box-sizing: border-box;
+	}
+	.book-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: 0 0 auto;
+		min-height: 44px;
+		padding: 0.5rem 0.7rem;
+		background: var(--color-paper);
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+		font-family: var(--font-sans);
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+		text-decoration: none;
+		white-space: nowrap;
+		box-sizing: border-box;
+	}
+	.book-link:hover {
+		border-color: var(--color-evergreen);
+		color: var(--color-evergreen-dark);
+	}
+	.book-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.year-row:hover {
 		border-color: var(--color-evergreen);
