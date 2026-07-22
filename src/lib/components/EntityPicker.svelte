@@ -84,9 +84,15 @@
 		<ul class="picker-list" id={listId} role="listbox">
 			{#each filtered as o (o.id)}
 				<li>
+					<!-- pointerdown preventDefault: Safari doesn't focus buttons on
+					     click, so without this the input's focusout fires first with
+					     relatedTarget=null, the list unmounts, and the click never
+					     lands (reported in production 2026-07-22). Keeping focus on
+					     the input lets the click reach choose(). -->
 					<button
 						type="button"
 						class="picker-option"
+						onpointerdown={(e) => e.preventDefault()}
 						onclick={() => choose(o)}
 						role="option"
 						aria-selected={o.id === selectedId}
