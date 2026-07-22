@@ -17,12 +17,12 @@
 			<span class="status active">Active</span>
 		</a>
 
-		<div class="card disabled">
+		<a href="/app" class="card">
 			<h2>Family Viewer</h2>
 			<p class="role">Everyone</p>
-			<p class="desc">"On this day in family history," day detail, search, timeline, book view.</p>
-			<span class="status coming">Coming Soon</span>
-		</div>
+			<p class="desc">"On this day in family history," day detail, and full-text search.</p>
+			<span class="status active">Active</span>
+		</a>
 	</div>
 </div>
 
@@ -59,12 +59,8 @@
 		color: inherit;
 		transition: border-color 0.15s;
 	}
-	.card:hover:not(.disabled) {
+	.card:hover {
 		border-color: #888;
-	}
-	.card.disabled {
-		opacity: 0.55;
-		cursor: default;
 	}
 	.card h2 {
 		margin: 0 0 0.2rem;
@@ -94,9 +90,5 @@
 	.status.active {
 		background: #e6f4e6;
 		color: #1a7a1a;
-	}
-	.status.coming {
-		background: #f0f0f0;
-		color: #888;
 	}
 </style>

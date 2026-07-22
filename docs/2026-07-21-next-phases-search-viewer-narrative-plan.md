@@ -98,6 +98,10 @@ Direction only, not scheduled: headless Chromium (Playwright) renders the book r
 
 A → B → C sequential. D and E depend on B (share the worker + `lib/llm.ts` — do D before E). F needs E only for the narrative intro (could ship earlier with that slot empty). G after F. Each phase independently deployable via `./scripts/deploy-to-DO.sh`.
 
+## Timezone convention (all phases)
+
+Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_date` is a civil `DATE` and is never converted. Local time is applied only at the edges via `src/lib/server/time.ts`: `todayInAppTz()` anchors "On this day" to the family's home timezone (`MADONNAHIST_TIMEZONE`, default `America/New_York`), and `formatTimestampInAppTz()` formats system timestamps (audit rows, `corrected_at`, job times) for display in later admin/viewer surfaces. Never trust Postgres `CURRENT_DATE`/session timezone for user-facing "today".
+
 ## Verification baseline (every phase)
 
 - Local isolated test stack only: `.env.test`, `madonnahist_test` on `127.0.0.1:15434`, `MADONNAHIST_ENV=test`, `MADONNAHIST_OBJECT_STORE=local`. Never 5433/5435/production DB.

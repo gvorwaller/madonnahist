@@ -17,6 +17,7 @@
 		"test:db:migrate": "./scripts/test-db-migrate.sh",
 		"test:db:invariants": "./backend/db/tests/v4_invariants.sh",
 		"test:auth": "node scripts/test-auth-matrix.mjs",
+		"test:viewer": "node scripts/test-viewer-security.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},
