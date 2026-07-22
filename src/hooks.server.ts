@@ -18,11 +18,22 @@ function isPublic(path: string): boolean {
 	return PUBLIC_PATHS.some(p => path === p);
 }
 
+// Segment-boundary match: `/app` matches `/app` and `/app/...` but never
+// `/application` — a plain startsWith() would wrongly let the latter inherit
+// the former's rule.
+function matchesPrefix(path: string, prefix: string): boolean {
+	return path === prefix || path.startsWith(prefix + '/');
+}
+
+// Explicit allow-list. Anything not covered below is denied (403) — no more
+// default-allow fallthrough. Public paths never reach this function; see
+// the `isPublic` bypass in `handle` below.
 function roleAllowed(path: string, role: string): boolean {
-	if (path.startsWith('/admin')) return role === 'admin';
-	if (path.startsWith('/correct')) return role === 'admin' || role === 'corrector';
-	if (path.startsWith('/app')) return true;
-	return true;
+	if (matchesPrefix(path, '/admin')) return role === 'admin';
+	if (matchesPrefix(path, '/correct')) return role === 'admin' || role === 'corrector';
+	if (matchesPrefix(path, '/app')) return true; // any authenticated role
+	if (path === '/') return true; // exact landing page only
+	return false;
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -39,7 +50,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const path = event.url.pathname;
 
-	if (!isPublic(path) && !event.locals.user) {
+	if (isPublic(path)) {
+		return resolve(event);
+	}
+
+	if (!event.locals.user) {
 		if (event.request.method === 'GET') {
 			const returnTo = encodeURIComponent(path);
 			throw redirect(303, `/login?returnTo=${returnTo}`);
@@ -50,7 +65,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		});
 	}
 
-	if (event.locals.user && !roleAllowed(path, event.locals.user.role)) {
+	if (!roleAllowed(path, event.locals.user.role)) {
 		return new Response('Forbidden', { status: 403 });
 	}
 

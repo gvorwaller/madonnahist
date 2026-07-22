@@ -31,6 +31,11 @@
 			<h2>System Health</h2>
 			<p>Memory usage, job queue status, worker health, and ingestion stats.</p>
 		</a>
+
+		<a href="/admin/users" class="tool">
+			<h2>User Accounts</h2>
+			<p>Create family accounts and reset passwords. Admin-created, no self-registration.</p>
+		</a>
 	</div>
 </div>
 
