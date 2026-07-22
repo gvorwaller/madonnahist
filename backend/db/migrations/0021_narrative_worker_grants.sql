@@ -1,0 +1,33 @@
+-- 0021_narrative_worker_grants.sql
+-- Phase E of docs/2026-07-21-next-phases-search-viewer-narrative-plan.md —
+-- narrative_summary worker grants.
+--
+-- Runs as madonnahist_owner via migrate_pg.sh (owner-owned objects; grants
+-- extend the 0004_grants_rls.sql model, same as 0020_entity_enrichment.sql).
+--
+-- 0004 already granted the worker table-level INSERT on narrative_summaries
+-- (the entity-extraction era, when the table existed but no writer used it
+-- yet). Phase E's narrative_summary job type needs to *update* an existing
+-- draft row too — regenerating a year's narrative is
+-- `INSERT ... ON CONFLICT (scope, scope_key) DO UPDATE SET summary_text = ...`,
+-- not a fresh INSERT each time, since (scope, scope_key) is UNIQUE.
+--
+-- The column list below is the CRITICAL invariant of this phase: it grants
+-- UPDATE on summary_text/generated_by/generated_at only. is_published (and
+-- scope/scope_key, which should never change post-insert) are deliberately
+-- absent. This makes "the worker can never publish, and can never flip a
+-- published row back to unpublished either" true at the database layer, not
+-- just in worker code — a bug in enrichment-worker.ts that tried to UPDATE
+-- is_published would get a Postgres permission error, not silent data
+-- corruption of a family-visible narrative. Combined with the worker-side
+-- guard (processNarrativeSummary skips any scope/scope_key where
+-- is_published = true before ever calling the LLM), this is two independent
+-- lines of defense: the guard stops the write from being attempted; the
+-- grant stops it from succeeding even if the guard had a bug.
+--
+-- Publishing/unpublishing remains exclusively an app-role action from
+-- src/routes/admin/narratives/+page.server.ts, which runs with full
+-- privileges on this table already (0004's blanket
+-- "GRANT ... UPDATE ... ON ALL TABLES ... TO madonnahist_app").
+GRANT UPDATE (summary_text, generated_by, generated_at)
+  ON narrative_summaries TO madonnahist_worker;

@@ -84,11 +84,19 @@ The schema was designed up-front for all of this, so no large migrations are nee
 
 1. `src/routes/app/book/[scope]/[key]/` (start `scope='year'`): continuous reading flow, month chapter headings, generous typography, scroll progress, exit affordance, **lazy-loaded images**. Layout flag in `src/routes/app/+layout.svelte` suppresses bottom nav.
 2. Entry points from `/app/year/[year]` (and day detail).
-3. **Build with print in mind**: semantic markup + `@media print` stylesheet with page-break rules at chapters — cheap now, sets up Phase G.
+3. **Build with print in mind**: semantic markup + `@media print` stylesheet with page-break rules at chapters — cheap now, sets up Phase H.
 
 **Verify:** full accepted year measured, not eyeballed — response bytes, query time, first paint, DOM node count on a 300+-day year; AAA contrast; browser Print Preview produces something plausible.
 
-## Phase G (later — eventual hard requirement) — PDF/print export
+## Phase G — "Ask the archive": ad hoc narrative queries (td-84c7fa)
+
+**Outcome:** Gaylon (admin-only at first) can select a subset of the archive — date range, person/place entity, tag, and/or a full-text term — type a freeform question or angle ("what were the summers like when Rebekah visited?"), and get a faithful narrative generated *only from that subset*.
+
+Design principle (the reason this lives in the app rather than raw chat): the app owns all three boundaries. **Retrieval** — the subset resolves via the existing search/filter SQL with the accepted-only predicate before any AI involvement. **Framing** — the user's text is the angle, never the rules; it's wrapped in the Phase E faithfulness contract (only these entries, no invented facts, cite dates). **Output** — labeled AI-generated, ephemeral by default, saveable with provenance (the question + exact subset definition stored with the result; saving needs an `adhoc` scope or a small sibling table to `narrative_summaries` — minor migration).
+
+Build shape: one admin page (subset pickers reusing the search filters + question box + result view) and one synchronous endpoint reusing `backend/workers/lib/llm.ts` with a hard cap on days fed per query. Later, optionally, a tightly bounded cost-capped family version ("Ask the archive") — separate decision when the admin version has proven itself.
+
+## Phase H (later — eventual hard requirement) — PDF/print export
 
 Direction only, not scheduled: headless Chromium (Playwright) renders the book route with the print stylesheet → PDF, as an admin-triggered `job_runs` job (`pdf_export`); output to Spaces, linked from admin. `job_type` is unconstrained TEXT — no migration. Decisions deferred: with-images vs text-only, per-year vs full-book, front matter.
 
@@ -96,7 +104,7 @@ Direction only, not scheduled: headless Chromium (Playwright) renders the book r
 
 ## Dependency order
 
-A → B → C sequential. D and E depend on B (share the worker + `lib/llm.ts` — do D before E). F needs E only for the narrative intro (could ship earlier with that slot empty). G after F. Each phase independently deployable via `./scripts/deploy-to-DO.sh`.
+A → B → C sequential. D and E depend on B (share the worker + `lib/llm.ts` — do D before E). F needs E only for the narrative intro (could ship earlier with that slot empty). G (Ask the archive) after F, reusing D/E rails. H after F. Each phase independently deployable via `./scripts/deploy-to-DO.sh`.
 
 ## Timezone convention (all phases)
 
@@ -115,7 +123,7 @@ Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_dat
 - AI tag *suggestions in the correction UI* (the extractor writes `source='ai'` tags in Phase D; the UI surfacing comes later).
 - Decade + person narrative summaries; mockup B5 book pagination/swipe (Phase F v0 is a continuous reader).
 - Nightly `pg_dump`-to-Spaces backup automation (NAS image pull + CCC preflight exist; the Postgres-dump leg of V5 Phase 4 remains open).
-- PDF/print export (Phase G direction only).
+- PDF/print export (Phase H direction only).
 
 ## Key reference files
 

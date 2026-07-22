@@ -11,6 +11,10 @@
 	const yearHasAcceptedDays = $derived(
 		data.validYear && data.months.some((m) => m.acceptedDays.length > 0)
 	);
+
+	function narrativeParagraphs(text: string): string[] {
+		return text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
+	}
 </script>
 
 <svelte:head>
@@ -40,6 +44,15 @@
 				<span class="year-chevron disabled">&#9656;</span>
 			{/if}
 		</nav>
+
+		{#if data.narrative}
+			<section class="year-narrative">
+				<p class="narrative-label">AI-generated year summary, reviewed by the family</p>
+				{#each narrativeParagraphs(data.narrative) as para, i (i)}
+					<p class="narrative-para">{para}</p>
+				{/each}
+			</section>
+		{/if}
 
 		{#if !yearHasAcceptedDays}
 			<p class="empty-hint">
@@ -124,6 +137,34 @@
 		line-height: 1.6;
 		color: var(--color-ink-muted);
 		margin: 0 0 1rem;
+	}
+
+	.year-narrative {
+		background: var(--color-cream);
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		padding: 1.1rem 1.25rem;
+		margin: 0 0 1.25rem;
+	}
+	.narrative-label {
+		font-family: var(--font-sans);
+		font-size: 0.75rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-amber);
+		margin: 0 0 0.75rem;
+	}
+	.narrative-para {
+		font-family: var(--font-serif);
+		font-style: italic;
+		font-size: 1.05rem;
+		line-height: 1.65;
+		color: var(--color-ink);
+		margin: 0 0 0.85rem;
+	}
+	.narrative-para:last-child {
+		margin-bottom: 0;
 	}
 
 	.months {

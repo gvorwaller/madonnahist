@@ -1,5 +1,5 @@
 /**
- * Text-only Anthropic helper for the enrichment worker (Phase D of
+ * Text-only Anthropic helper for the enrichment worker (Phase D/E of
  * docs/2026-07-21-next-phases-search-viewer-narrative-plan.md).
  *
  * Model resolution: MADONNAHIST_ENRICHMENT_MODEL env var, default
@@ -17,8 +17,10 @@
  *
  * Stub mode: when MADONNAHIST_LLM_STUB=1, completeJson() never touches the
  * network. It returns MADONNAHIST_LLM_STUB_JSON parsed as JSON if set, else
- * an empty-arrays canned response. This is the only path exercised by
- * scripts/test-enrichment.mjs. Real calls need zero code changes — unset
+ * an empty-arrays canned response. completeText() likewise never touches the
+ * network and returns MADONNAHIST_LLM_STUB_TEXT if set, else a deterministic
+ * canned string. This is the only path exercised by scripts/test-enrichment.mjs
+ * and scripts/test-narratives.mjs. Real calls need zero code changes — unset
  * the stub var and a live key resolves via getApiKey() same as ocr-worker.
  */
 import Anthropic from '@anthropic-ai/sdk';
@@ -49,6 +51,10 @@ export function isStubMode(): boolean {
 
 function stubResponseText(): string {
 	return process.env.MADONNAHIST_LLM_STUB_JSON ?? JSON.stringify({ entities: [], tags: [] });
+}
+
+function stubPlainText(): string {
+	return process.env.MADONNAHIST_LLM_STUB_TEXT ?? '[stub narrative text — MADONNAHIST_LLM_STUB=1]';
 }
 
 /** Strip ```json ... ``` / ``` ... ``` fences a model may add despite instructions not to. */
@@ -112,4 +118,34 @@ export async function completeJson<T = unknown>(
 			);
 		}
 	}
+}
+
+/**
+ * Plain-text completion wrapper for narrative generation (Phase E) — no JSON
+ * shape enforced, no retry-on-parse-failure logic (there is nothing to
+ * parse). Returns the model's text response trimmed of surrounding
+ * whitespace. Callers needing a specific model id back (e.g. to record in
+ * narrative_summaries.generated_by) should read getEnrichmentModel()
+ * themselves; this function does not return the model id.
+ */
+export async function completeText(system: string, user: string, maxTokens = 2048): Promise<string> {
+	if (isStubMode()) {
+		const raw = stubPlainText();
+		log(`STUB mode — returning canned text (${raw.length} chars)`);
+		return raw;
+	}
+
+	const client = await getClient();
+	const model = getEnrichmentModel();
+	const response = await client.messages.create({
+		model,
+		max_tokens: maxTokens,
+		system,
+		messages: [{ role: 'user', content: user }]
+	});
+	return response.content
+		.filter((b): b is Anthropic.TextBlock => b.type === 'text')
+		.map((b) => b.text)
+		.join('\n')
+		.trim();
 }

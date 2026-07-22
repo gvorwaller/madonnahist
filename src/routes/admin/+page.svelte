@@ -41,6 +41,11 @@
 			<h2>Entities &amp; Aliases</h2>
 			<p>Review AI-extracted people/places/events, merge duplicates, and manage aliases.</p>
 		</a>
+
+		<a href="/admin/narratives" class="tool">
+			<h2>Year Narratives</h2>
+			<p>Generate, edit, and publish AI-drafted year summaries for the family viewer.</p>
+		</a>
 	</div>
 </div>
 

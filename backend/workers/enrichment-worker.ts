@@ -3,15 +3,31 @@
  * docs/2026-07-21-next-phases-search-viewer-narrative-plan.md.
  *
  * Job types:
- *   entity_extract    — implemented here: reads an accepted day's corrected
- *                        text + day_narrative, asks Claude for mentioned
+ *   entity_extract    — reads an accepted day's corrected text +
+ *                        day_narrative, asks Claude for mentioned
  *                        people/places/events and suggested topical tags,
  *                        and replaces that day's AI-sourced day_entities /
  *                        day_tags rows in one transaction.
- *   narrative_summary — NOT implemented until Phase E. Claimed jobs are
- *                        immediately marked 'failed' with an explanatory
- *                        note so a stray enqueue can't wedge the queue
- *                        (endless pending/in_progress churn).
+ *   narrative_summary — Phase E of the plan. Payload {scope, scope_key};
+ *                        only scope='year' is implemented (decade/person are
+ *                        deferred, tracked under td-e25bd4 per Phase E item
+ *                        5). Gathers the year's accepted days, asks Claude
+ *                        for a faithful narrative, and upserts an
+ *                        unpublished draft row in narrative_summaries.
+ *
+ *                        CRITICAL invariant: the worker never writes to a
+ *                        published row, and can never publish one — no force
+ *                        override. Enforced twice, independently: (a) this
+ *                        file's guard checks is_published BEFORE calling the
+ *                        LLM and no-ops (job marked done, LLM never called)
+ *                        if the row is already published; (b) at the DB
+ *                        layer, migration 0021 grants madonnahist_worker
+ *                        UPDATE on summary_text/generated_by/generated_at
+ *                        only — is_published is not in that column list, so
+ *                        even a buggy worker cannot flip it. Regenerating a
+ *                        published year requires an admin to unpublish first
+ *                        (src/routes/admin/narratives/+page.server.ts's
+ *                        unpublishAndRegenerate action).
  *
  * Cloned from backend/workers/ocr-worker.ts's skeleton (claimJobs via
  * SELECT ... FOR UPDATE SKIP LOCKED, --daemon poll loop, heartbeat via
@@ -39,7 +55,7 @@
  *                 that lacks a pending/in_progress job, then exit
  */
 import { query, withClient, withTransaction, shutdown } from './lib/db.js';
-import { completeJson } from './lib/llm.js';
+import { completeJson, completeText, getEnrichmentModel } from './lib/llm.js';
 import { slugifyTagLabel, isValidTagLabel, MAX_TAG_LABEL_LENGTH } from '../../src/lib/server/tags.js';
 
 const MAX_ATTEMPTS = 3;
@@ -316,14 +332,155 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 	}
 }
 
-// ─── narrative_summary (not implemented until Phase E) ───
+// ─── narrative_summary ───
+
+const YEAR_NARRATIVE_SYSTEM = `You are writing a warm, faithful year-summary narrative for a private family history archive spanning roughly the 1960s to the present. The source material is a set of daily calendar-entry transcriptions for one year, each written by a family member at the time.
+
+You will be given every accepted day's transcribed text for one calendar year, grouped by month.
+
+Write a single flowing narrative (roughly 400-800 words) that:
+- Reads in a warm, personal, family-history voice — as if written for the family, not a stranger.
+- References months and seasons to give the reader a sense of the year's shape and passage of time.
+- Draws out recurring people, places, and themes that actually appear in the entries.
+- Is strictly faithful to the source material: never invent a fact, event, name, date, or detail that is not present in the entries. If the entries are sparse or repetitive, say so plainly rather than embellishing.
+- Is plain prose — no markdown headings, no bullet lists, no code fences.
+
+Respond with ONLY the narrative text itself — no preamble, no title, no commentary about the task.`;
+
+const MONTH_NAMES = [
+	'January', 'February', 'March', 'April', 'May', 'June',
+	'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+interface AcceptedDayRow {
+	entry_date: string;
+	corrected_text: string | null;
+	day_narrative: string | null;
+}
+
+function isValidYearScopeKey(s: unknown): s is string {
+	return typeof s === 'string' && /^\d{4}$/.test(s);
+}
+
+/** Builds the per-month-grouped prompt body fed to the year-narrative system prompt. */
+function buildYearNarrativePrompt(scopeKey: string, days: AcceptedDayRow[]): string {
+	const byMonth = new Map<number, AcceptedDayRow[]>();
+	for (const d of days) {
+		const month = Number(d.entry_date.slice(5, 7));
+		const list = byMonth.get(month);
+		if (list) list.push(d);
+		else byMonth.set(month, [d]);
+	}
+
+	const sections: string[] = [];
+	for (const [month, rows] of [...byMonth.entries()].sort((a, b) => a[0] - b[0])) {
+		sections.push(`## ${MONTH_NAMES[month - 1]}`);
+		for (const r of rows) {
+			const text = [r.corrected_text ?? '', r.day_narrative ?? ''].filter((s) => s.trim() !== '').join(' — ');
+			if (text.trim() !== '') sections.push(`${r.entry_date}: ${text}`);
+		}
+	}
+	return `YEAR: ${scopeKey}\n\n${sections.join('\n')}`;
+}
 
 async function processNarrativeSummary(job: ClaimedJob): Promise<void> {
-	await query(
-		`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
-		[job.id, 'narrative_summary not implemented until Phase E']
-	);
-	log(`  job ${job.id}: narrative_summary not implemented until Phase E — marked failed`);
+	const scope = job.payload.scope;
+	const scopeKey = job.payload.scope_key;
+
+	if (scope !== 'year') {
+		await query(
+			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `scope not implemented: ${JSON.stringify(scope)} (only 'year' is implemented in Phase E; decade/person are deferred, td-e25bd4)`]
+		);
+		log(`  job ${job.id}: FAILED (scope not implemented: ${JSON.stringify(scope)})`);
+		return;
+	}
+
+	if (!isValidYearScopeKey(scopeKey)) {
+		await query(
+			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `invalid scope_key for scope='year': ${JSON.stringify(scopeKey)} (expected a 4-digit year string)`]
+		);
+		log(`  job ${job.id}: FAILED (invalid scope_key: ${JSON.stringify(scopeKey)})`);
+		return;
+	}
+
+	try {
+		// CRITICAL guard, checked FIRST, before anything else including the
+		// dry-run branch: a published row is never touched and the LLM is
+		// never called for one. This is the worker-side half of the
+		// "no force override" invariant; migration 0021's column-scoped grant
+		// (UPDATE on summary_text/generated_by/generated_at only, excluding
+		// is_published) is the DB-layer half that holds even if this guard
+		// had a bug.
+		const existingRes = await query<{ is_published: boolean }>(
+			`SELECT is_published FROM narrative_summaries WHERE scope = $1 AND scope_key = $2`,
+			[scope, scopeKey]
+		);
+		if (existingRes.rows[0]?.is_published) {
+			await query(
+				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
+				[job.id, 'skipped: published — unpublish first']
+			);
+			log(`  scope=year scope_key=${scopeKey}: SKIPPED (already published)`);
+			return;
+		}
+
+		if (DRY_RUN) {
+			log(`  [DRY] scope=year scope_key=${scopeKey} would generate narrative`);
+			await query(`UPDATE job_runs SET status='pending', started_at=NULL WHERE id=$1`, [job.id]);
+			return;
+		}
+
+		const daysRes = await query<AcceptedDayRow>(
+			`SELECT entry_date::text AS entry_date, corrected_text, day_narrative
+			   FROM calendar_days
+			  WHERE correction_status = 'accepted' AND EXTRACT(YEAR FROM entry_date)::int = $1
+			  ORDER BY entry_date`,
+			[Number(scopeKey)]
+		);
+		const days = daysRes.rows;
+
+		if (days.length === 0) {
+			await query(
+				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
+				[job.id, `skipped: no accepted days for ${scopeKey}`]
+			);
+			log(`  scope=year scope_key=${scopeKey}: SKIPPED (no accepted days)`);
+			return;
+		}
+
+		const user = buildYearNarrativePrompt(scopeKey, days);
+		const summaryText = await completeText(YEAR_NARRATIVE_SYSTEM, user, 2048);
+		const model = getEnrichmentModel();
+
+		// Upsert draft: (scope, scope_key) is UNIQUE, so a regenerate is
+		// ON CONFLICT DO UPDATE. is_published is set explicitly FALSE only on
+		// the INSERT branch (a brand-new row always starts as an unpublished
+		// draft) and is absent from the DO UPDATE SET list — matching
+		// migration 0021's column-scoped grant exactly, so this statement
+		// succeeds under the worker role's actual privileges rather than
+		// merely under app-role testing.
+		await query(
+			`INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, generated_at, is_published)
+			 VALUES ($1, $2, $3, $4, NOW(), FALSE)
+			 ON CONFLICT (scope, scope_key) DO UPDATE
+			   SET summary_text = EXCLUDED.summary_text,
+			       generated_by = EXCLUDED.generated_by,
+			       generated_at = NOW()`,
+			[scope, scopeKey, summaryText, model]
+		);
+
+		await query(
+			`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `generated from ${days.length} accepted day(s)`]
+		);
+		log(`  scope=year scope_key=${scopeKey}: generated from ${days.length} accepted day(s)`);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		log(`  scope=year scope_key=${scopeKey} FAILED: ${msg}`);
+		await query(`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`, [job.id, msg.slice(0, 500)]);
+	}
 }
 
 // ─── --backfill ───
@@ -438,7 +595,7 @@ async function runDaemon(): Promise<void> {
 }
 
 async function main() {
-	log('Enrichment Worker — entity_extract (narrative_summary stubbed until Phase E)');
+	log('Enrichment Worker — entity_extract + narrative_summary');
 
 	if (BACKFILL) {
 		await runBackfill();
