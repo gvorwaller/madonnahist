@@ -47,6 +47,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 		`SELECT value::text, updated_at::text FROM app_state WHERE key = 'worker_heartbeat'`
 	);
 
+	const enrichmentHeartbeatRes = await query<{ value: string; updated_at: string }>(
+		`SELECT value::text, updated_at::text FROM app_state WHERE key = 'enrichment_worker_heartbeat'`
+	);
+
 	const pageStatsRes = await query<{
 		total_pages: number;
 		total_days: number;
@@ -86,6 +90,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 				const updatedAt = new Date(heartbeatRes.rows[0].updated_at).getTime();
 				const ageSec = Math.round((Date.now() - updatedAt) / 1000);
 				return { ...parsed, updated_at: heartbeatRes.rows[0].updated_at, age_seconds: ageSec };
+			} catch { return null; }
+		})(),
+		enrichmentWorker: (() => {
+			if (!enrichmentHeartbeatRes.rows[0]) return null;
+			try {
+				const parsed = JSON.parse(enrichmentHeartbeatRes.rows[0].value);
+				const updatedAt = new Date(enrichmentHeartbeatRes.rows[0].updated_at).getTime();
+				const ageSec = Math.round((Date.now() - updatedAt) / 1000);
+				return { ...parsed, updated_at: enrichmentHeartbeatRes.rows[0].updated_at, age_seconds: ageSec };
 			} catch { return null; }
 		})(),
 		ingestion: pageStatsRes.rows[0] ?? { total_pages: 0, total_days: 0, days_with_ocr: 0, days_with_corrections: 0, days_with_crops: 0 }

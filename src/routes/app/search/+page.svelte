@@ -6,6 +6,8 @@
 		if (data.q) params.set('q', data.q);
 		if (data.year) params.set('year', String(data.year));
 		if (data.tag) params.set('tag', data.tag);
+		if (data.person) params.set('person', data.person);
+		if (data.place) params.set('place', data.place);
 		if (targetPage > 1) params.set('page', String(targetPage));
 		const qs = params.toString();
 		return qs ? `/app/search?${qs}` : '/app/search';
@@ -13,6 +15,12 @@
 
 	const selectedTagLabel = $derived(
 		data.tag ? (data.tagOptions.find((t) => t.slug === data.tag)?.label ?? data.tag) : null
+	);
+	const selectedPersonLabel = $derived(
+		data.person ? (data.personOptions.find((p) => p.slug === data.person)?.label ?? data.person) : null
+	);
+	const selectedPlaceLabel = $derived(
+		data.place ? (data.placeOptions.find((p) => p.slug === data.place)?.label ?? data.place) : null
 	);
 </script>
 
@@ -56,6 +64,24 @@
 				{/each}
 			</select>
 		</label>
+		<label class="year-filter">
+			<span class="year-label">Person:</span>
+			<select name="person" value={data.person ?? ''}>
+				<option value="">anyone</option>
+				{#each data.personOptions as p (p.slug)}
+					<option value={p.slug}>{p.label}</option>
+				{/each}
+			</select>
+		</label>
+		<label class="year-filter">
+			<span class="year-label">Place:</span>
+			<select name="place" value={data.place ?? ''}>
+				<option value="">anywhere</option>
+				{#each data.placeOptions as p (p.slug)}
+					<option value={p.slug}>{p.label}</option>
+				{/each}
+			</select>
+		</label>
 		<button type="submit" class="search-btn">Search</button>
 	</form>
 
@@ -63,17 +89,15 @@
 		<p class="hint">Search sixty years of transcribed calendar entries — try a name, place, or activity.</p>
 	{:else if data.results.length === 0}
 		<p class="hint">
-			{#if data.q && selectedTagLabel}
-				No results for "{data.q}" tagged "{selectedTagLabel}". Try a different word or tag.
-			{:else if selectedTagLabel}
-				No accepted days tagged "{selectedTagLabel}" yet.
+			{#if data.q}
+				No results for "{data.q}"{#if selectedTagLabel} tagged "{selectedTagLabel}"{/if}{#if selectedPersonLabel} mentioning {selectedPersonLabel}{/if}{#if selectedPlaceLabel} at {selectedPlaceLabel}{/if}. Try different filters.
 			{:else}
-				No results for "{data.q}". Try a different word or phrase.
+				No accepted days match{#if selectedTagLabel} tag "{selectedTagLabel}"{/if}{#if selectedPersonLabel} person "{selectedPersonLabel}"{/if}{#if selectedPlaceLabel} place "{selectedPlaceLabel}"{/if} yet.
 			{/if}
 		</p>
 	{:else}
 		<p class="result-count">
-			{data.total} result{data.total === 1 ? '' : 's'}{#if selectedTagLabel} tagged "{selectedTagLabel}"{/if}
+			{data.total} result{data.total === 1 ? '' : 's'}{#if selectedTagLabel} tagged "{selectedTagLabel}"{/if}{#if selectedPersonLabel} mentioning {selectedPersonLabel}{/if}{#if selectedPlaceLabel} at {selectedPlaceLabel}{/if}
 		</p>
 
 		<ul class="results">

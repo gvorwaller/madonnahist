@@ -53,6 +53,17 @@
 
 		<div class="corrected-text">{data.correctedText}</div>
 
+		{#if data.entities.length > 0}
+			<div class="tags-block">
+				<p class="tags-heading">People &amp; places</p>
+				<div class="tag-chips">
+					{#each data.entities as ent (ent.entityType + ':' + ent.slug)}
+						<a href="/app/{ent.entityType}/{ent.slug}" class="tag-chip entity-chip">{ent.displayName}</a>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		{#if data.tags.length > 0}
 			<div class="tags-block">
 				<p class="tags-heading">Tags</p>
@@ -224,6 +235,16 @@
 	.tag-chip:focus-visible {
 		outline: 2px solid var(--color-evergreen-dark);
 		outline-offset: 2px;
+	}
+	.entity-chip {
+		background: var(--color-cream);
+		border: 1px solid var(--color-evergreen);
+		color: var(--color-evergreen-dark);
+		font-weight: 700;
+	}
+	.entity-chip:hover {
+		background: var(--color-evergreen);
+		color: #fff;
 	}
 
 	.narrative {

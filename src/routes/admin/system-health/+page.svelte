@@ -28,6 +28,9 @@
 	const workerOnline = $derived(
 		data.worker?.age_seconds !== undefined ? data.worker.age_seconds < 420 : false
 	);
+	const enrichmentWorkerOnline = $derived(
+		data.enrichmentWorker?.age_seconds !== undefined ? data.enrichmentWorker.age_seconds < 420 : false
+	);
 </script>
 
 <div class="page">
@@ -75,6 +78,24 @@
 					<dt>PID</dt><dd>{data.worker.pid}</dd>
 					<dt>RSS</dt><dd>{data.worker.rss_mb} MB</dd>
 					<dt>Last Poll</dt><dd>{formatAge(data.worker.age_seconds)}</dd>
+				</dl>
+			{:else}
+				<p class="empty">No heartbeat received yet</p>
+			{/if}
+		</section>
+
+		<section class="card">
+			<h2>Enrichment Worker</h2>
+			{#if data.enrichmentWorker}
+				<dl>
+					<dt>Status</dt>
+					<dd>
+						<span class="status-dot" class:online={enrichmentWorkerOnline} class:offline={!enrichmentWorkerOnline}></span>
+						{enrichmentWorkerOnline ? 'Online' : 'Offline'}
+					</dd>
+					<dt>PID</dt><dd>{data.enrichmentWorker.pid}</dd>
+					<dt>RSS</dt><dd>{data.enrichmentWorker.rss_mb} MB</dd>
+					<dt>Last Poll</dt><dd>{formatAge(data.enrichmentWorker.age_seconds)}</dd>
 				</dl>
 			{:else}
 				<p class="empty">No heartbeat received yet</p>

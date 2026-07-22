@@ -16,8 +16,10 @@
 		"test:db:reset": "./scripts/test-db-reset.sh",
 		"test:db:migrate": "./scripts/test-db-migrate.sh",
 		"test:db:invariants": "./backend/db/tests/v4_invariants.sh",
+		"test:db:enrichment": "./backend/db/tests/enrichment_invariants.sh",
 		"test:auth": "node scripts/test-auth-matrix.mjs",
 		"test:viewer": "node scripts/test-viewer-security.mjs",
+		"test:enrichment": "node scripts/test-enrichment.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

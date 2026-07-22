@@ -1,5 +1,6 @@
 import { query } from '$lib/db';
 import { formatHumanDate, getAdjacentAcceptedDates, isValidEntryDate } from '$lib/server/viewer';
+import { getDayEntityChips } from '$lib/server/entities';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
@@ -34,7 +35,7 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	// Predicate re-applied independently here too (rather than trusting the
 	// row lookup above) — see src/lib/server/viewer.ts file header.
-	const [{ prev, next }, tagsRes] = await Promise.all([
+	const [{ prev, next }, tagsRes, entities] = await Promise.all([
 		getAdjacentAcceptedDates(entryDate),
 		query<{ tag_slug: string; tag_label: string }>(
 			`SELECT dt.tag_slug, dt.tag_label
@@ -43,7 +44,8 @@ export const load: PageServerLoad = async ({ params }) => {
 			  WHERE cd.entry_date = $1 AND cd.correction_status = 'accepted'
 			  ORDER BY dt.tag_label`,
 			[entryDate]
-		)
+		),
+		getDayEntityChips(entryDate)
 	]);
 
 	return {
@@ -54,6 +56,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		dayNarrative: row.day_narrative,
 		hasImage: row.has_image,
 		tags: tagsRes.rows,
+		entities,
 		prevDate: prev,
 		nextDate: next
 	};

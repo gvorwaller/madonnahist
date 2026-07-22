@@ -1,0 +1,7 @@
+import { loadEntityProfile } from '$lib/server/entities';
+import type { PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ params }) => {
+	const profile = await loadEntityProfile('place', params.slug);
+	return { profile };
+};

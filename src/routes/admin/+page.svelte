@@ -36,6 +36,11 @@
 			<h2>User Accounts</h2>
 			<p>Create family accounts and reset passwords. Admin-created, no self-registration.</p>
 		</a>
+
+		<a href="/admin/entities" class="tool">
+			<h2>Entities &amp; Aliases</h2>
+			<p>Review AI-extracted people/places/events, merge duplicates, and manage aliases.</p>
+		</a>
 	</div>
 </div>
 

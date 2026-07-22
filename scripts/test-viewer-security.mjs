@@ -103,6 +103,16 @@ const ACCEPTED_TAG_LABEL = 'Zqxplor Accepted Tag';
 const PENDING_TAG_SLUG = 'wobblefrim-pending-tag';
 const PENDING_TAG_LABEL = 'Wobblefrim Pending Tag';
 
+// Phase D entity fixtures — one person mentioned on the accepted day, one
+// place mentioned ONLY on the pending day, so tests can assert
+// /app/person/[slug] and /app/place/[slug] (and the day-detail entity
+// chips, and the /app/search person/place filters) all honor the same
+// accepted-only predicate as everything else in src/lib/server/entities.ts.
+const ACCEPTED_ENTITY_SLUG = 'zqxplor-accepted-person';
+const ACCEPTED_ENTITY_NAME = 'Zqxplor Accepted Person';
+const PENDING_ENTITY_SLUG = 'wobblefrim-pending-place';
+const PENDING_ENTITY_NAME = 'Wobblefrim Pending Place';
+
 const FIXTURE_YEAR = 1899;
 const FIXTURE_MONTH = 1;
 const ACCEPTED_DATE = '1899-01-10';
@@ -229,6 +239,30 @@ async function provisionFixtureDays(pool) {
 		[pendingDayId, PENDING_TAG_SLUG, PENDING_TAG_LABEL]
 	);
 
+	// Phase D entity fixtures. Cleaned up (and re-created idempotently) the
+	// same way as the day rows above — delete any leftover fixture entities
+	// by slug first, then insert fresh ones and link them via day_entities.
+	await pool.query(`DELETE FROM entities WHERE slug = ANY($1)`, [[ACCEPTED_ENTITY_SLUG, PENDING_ENTITY_SLUG]]);
+	const acceptedEntityRes = await pool.query(
+		`INSERT INTO entities (slug, display_name, entity_type) VALUES ($1, $2, 'person') RETURNING id`,
+		[ACCEPTED_ENTITY_SLUG, ACCEPTED_ENTITY_NAME]
+	);
+	const acceptedEntityId = acceptedEntityRes.rows[0].id;
+	const pendingEntityRes = await pool.query(
+		`INSERT INTO entities (slug, display_name, entity_type) VALUES ($1, $2, 'place') RETURNING id`,
+		[PENDING_ENTITY_SLUG, PENDING_ENTITY_NAME]
+	);
+	const pendingEntityId = pendingEntityRes.rows[0].id;
+
+	await pool.query(
+		`INSERT INTO day_entities (day_id, entity_id, source) VALUES ($1, $2, 'human')`,
+		[acceptedDayId, acceptedEntityId]
+	);
+	await pool.query(
+		`INSERT INTO day_entities (day_id, entity_id, source) VALUES ($1, $2, 'human')`,
+		[pendingDayId, pendingEntityId]
+	);
+
 	return pageId;
 }
 
@@ -236,6 +270,7 @@ async function cleanupFixtureDays(pool, pageId) {
 	if (!pageId) return;
 	await pool.query(`DELETE FROM calendar_days WHERE page_id = $1`, [pageId]);
 	await pool.query(`DELETE FROM calendar_pages WHERE id = $1`, [pageId]);
+	await pool.query(`DELETE FROM entities WHERE slug = ANY($1)`, [[ACCEPTED_ENTITY_SLUG, PENDING_ENTITY_SLUG]]);
 }
 
 async function main() {
@@ -414,6 +449,79 @@ async function main() {
 			});
 			const ok = res.status === 403;
 			record('POST /correct/day/<date>?/removeTag [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+
+		// ── Phase D: entity chip on accepted day links to its person page ──
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATE}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const hasChip = body.includes(`/app/person/${ACCEPTED_ENTITY_SLUG}`) && body.includes(ACCEPTED_ENTITY_NAME);
+			record('GET /app/day/<accepted> [viewer] shows its entity chip linking to /app/person/…', hasChip,
+				hasChip ? 'entity chip link + name present' : 'entity chip missing from body');
+		}
+
+		// ── Phase D: entity chip absent on the pending day's page ──────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${PENDING_DATE}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const leaked = body.includes(`/app/place/${PENDING_ENTITY_SLUG}`) || body.includes(PENDING_ENTITY_NAME);
+			record('GET /app/day/<pending> [viewer] never shows an entity chip', !leaked,
+				leaked ? 'PENDING-DAY ENTITY CHIP LEAKED INTO RESPONSE BODY' : 'no entity chip, as required');
+		}
+
+		// ── Phase D: person page for an entity mentioned on an accepted day ─
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/person/${ACCEPTED_ENTITY_SLUG}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const rendersProfile = res.status === 200 && body.includes(ACCEPTED_ENTITY_NAME) && body.includes(`/app/day/${ACCEPTED_DATE}`);
+			record('GET /app/person/<accepted entity slug> [viewer] renders with its accepted day linked', rendersProfile,
+				rendersProfile ? 'profile rendered with day link' : `status ${res.status}, name present: ${body.includes(ACCEPTED_ENTITY_NAME)}, day link present: ${body.includes(`/app/day/${ACCEPTED_DATE}`)}`);
+		}
+
+		// ── Phase D: entity mentioned ONLY on a pending day → its profile
+		//    page shows zero accepted days and never leaks the pending day ──
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/place/${PENDING_ENTITY_SLUG}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const leaked = body.includes(`/app/day/${PENDING_DATE}`) || body.includes(PENDING_MARKER);
+			record('GET /app/place/<pending-only entity slug> [viewer] never shows the pending day', !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO ENTITY PROFILE PAGE' : 'no pending-day content, as required');
+		}
+
+		// ── Phase D: person/place filter on /app/search ─────────────────────
+		{
+			const url = `${BASE_URL}/app/search?${new URLSearchParams({ person: ACCEPTED_ENTITY_SLUG })}`;
+			const res = await fetchNoRedirect(url, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const found = res.status === 200 && body.includes(`/app/day/${ACCEPTED_DATE}`);
+			record('GET /app/search?person=<accepted entity slug> [viewer] finds the accepted day', found,
+				found ? 'result card links to the accepted day' : `status ${res.status}, day-link present: ${body.includes(`/app/day/${ACCEPTED_DATE}`)}`);
+		}
+		{
+			const url = `${BASE_URL}/app/search?${new URLSearchParams({ place: PENDING_ENTITY_SLUG })}`;
+			const res = await fetchNoRedirect(url, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const leaked = body.includes(`/app/day/${PENDING_DATE}`);
+			record('GET /app/search?place=<pending-only entity slug> [viewer] never finds the pending day', !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO ENTITY-FILTERED SEARCH RESULTS' : 'no result card for the pending day, as required');
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/search`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const acceptedPersonPresent = body.includes(ACCEPTED_ENTITY_SLUG);
+			const pendingPlaceLeaked = body.includes(PENDING_ENTITY_SLUG) || body.includes(PENDING_ENTITY_NAME);
+			record('GET /app/search [viewer] person dropdown includes the accepted-day person', acceptedPersonPresent,
+				acceptedPersonPresent ? 'accepted entity slug present in dropdown source' : 'accepted entity slug missing');
+			record('GET /app/search [viewer] place dropdown never includes the pending-only place', !pendingPlaceLeaked,
+				pendingPlaceLeaked ? 'PENDING-ONLY ENTITY LEAKED INTO DROPDOWN SOURCE' : 'pending entity slug/name absent, as required');
 		}
 
 		console.log('\nViewer security results:\n');
