@@ -5,6 +5,7 @@
 	const monthNames = ['', 'January', 'February', 'March', 'April', 'May', 'June',
 		'July', 'August', 'September', 'October', 'November', 'December'];
 
+	const monthKey = $derived(`${data.year}-${String(data.month).padStart(2, '0')}`);
 	const correctedCount = $derived(data.days.filter(d => d.correction_status === 'accepted').length);
 	const pendingWithDraft = $derived(data.days.filter(d => d.correction_status === 'pending' && d.has_draft).length);
 
@@ -46,7 +47,10 @@
 			{/if}
 			{#if data.hasClaim}
 				<span class="sep">&middot;</span>
-				<form method="POST" action="?/release" use:enhance class="release-form">
+				<!-- Absolute action: a relative "?/release" resolves against whatever
+				     URL the browser is on, and after back/forward navigation that can
+				     be a day page (no release action there → 404, seen 2026-07-22). -->
+				<form method="POST" action="/correct/month/{monthKey}?/release" use:enhance class="release-form">
 					<button type="submit" class="release-link">Release claim</button>
 				</form>
 			{/if}
@@ -58,15 +62,17 @@
 			<p class="claim-banner-text">
 				<strong>{data.otherClaim.displayName}</strong> is working on this month
 				(active {relativeTime(data.otherClaim.lastActivity)}).
-				It's safer to pick a different month.
+				Nothing is locked — you can still open and edit any day with
+				<em>Continue Anyway</em>; this is just a heads-up so you don't both
+				work the same days at once.
 			</p>
 			<div class="claim-banner-actions">
 				<a href="/correct" class="btn-back">Go Back</a>
-				<form method="POST" action="?/takeover" use:enhance>
+				<form method="POST" action="/correct/month/{monthKey}?/takeover" use:enhance>
 					<button type="submit" class="btn-takeover">Continue Anyway</button>
 				</form>
 				{#if data.isAdmin}
-					<form method="POST" action="?/release" use:enhance>
+					<form method="POST" action="/correct/month/{monthKey}?/release" use:enhance>
 						<button type="submit" class="btn-release">Release Claim</button>
 					</form>
 				{/if}
