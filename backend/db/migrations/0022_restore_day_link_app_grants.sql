@@ -1,0 +1,15 @@
+-- 0022_restore_day_link_app_grants.sql
+-- Hotfix for production grant drift found 2026-07-22 (same class as the
+-- 0019 calendar_days crop-grant drift): madonnahist_app lacks DELETE on
+-- day_entities and day_tags in production, while a fresh migration run
+-- produces it. Symptoms: /admin/entities "Merge into…" 500s on its
+-- `DELETE FROM day_entities WHERE entity_id = $1` step, and the correction
+-- editor's removeTag action (`DELETE FROM day_tags ...`, Phase C) would
+-- 500 the same way.
+--
+-- Re-granting is idempotent — this is a no-op on any box whose grants
+-- already match the migration-produced state.
+--
+-- RLS note: the *_app_full policies from 0004 already cover DELETE for the
+-- app role (they are FOR ALL); only the table-level privilege had drifted.
+GRANT DELETE ON day_entities, day_tags TO madonnahist_app;

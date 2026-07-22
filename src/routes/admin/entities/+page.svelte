@@ -169,14 +169,21 @@
 												</button>
 											{/if}
 										{/if}
-										<button
-											class="btn btn-sm btn-danger"
-											disabled={e.mention_count > 0}
-											title={e.mention_count > 0 ? 'Cannot delete: entity has mentions' : ''}
-											onclick={() => (deleteTarget = { id: e.id, label: e.display_name })}
-										>
-											Delete
-										</button>
+										{#if e.mention_count === 0}
+											<button
+												class="btn btn-sm btn-danger"
+												onclick={() => (deleteTarget = { id: e.id, label: e.display_name })}
+											>
+												Delete
+											</button>
+										{:else}
+											<span
+												class="delete-na"
+												title="Only zero-mention entities can be deleted — use Merge into… to combine duplicates"
+											>
+												in&nbsp;use
+											</span>
+										{/if}
 									{/if}
 								</td>
 							</tr>
@@ -364,6 +371,14 @@
 	.btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
+	}
+	/* Rendered instead of a Delete button for entities that cannot be
+	   deleted (they have mentions) — a disabled-but-red button read as
+	   clickable-and-broken. #555 keeps 7:1 AAA contrast on white. */
+	.delete-na {
+		color: #555;
+		font-size: 0.85rem;
+		font-style: italic;
 	}
 	.error-banner {
 		background: #fdecea;
