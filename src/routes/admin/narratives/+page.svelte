@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 
 	const { data } = $props();
 
@@ -29,6 +30,16 @@
 	let regenerateTarget = $state<number | null>(null);
 
 	const statusLabels: Record<string, string> = { none: 'None', draft: 'Draft', published: 'Published' };
+
+	// Auto-refresh every 30s (same idea as the OCR review screen's polling)
+	// so a finished generation shows up without a manual reload. Paused while
+	// a draft is being edited so a refresh never races the textarea.
+	$effect(() => {
+		const timer = setInterval(() => {
+			if (editingYear === null) invalidateAll();
+		}, 30_000);
+		return () => clearInterval(timer);
+	});
 
 	function toggleExpand(year: number) {
 		expandedYear = expandedYear === year ? null : year;
