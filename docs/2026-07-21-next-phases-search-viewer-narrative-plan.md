@@ -123,6 +123,7 @@ Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_dat
 - AI tag *suggestions in the correction UI* (the extractor writes `source='ai'` tags in Phase D; the UI surfacing comes later).
 - Decade + person narrative summaries; mockup B5 book pagination/swipe (Phase F v0 is a continuous reader).
 - Narrative style selector (td-09102a): tone/style/person presets at generate time, stored with the draft; first-person "as Madonna" needs her sign-off if offered; consider book-view style consistency across years.
+- Historical context layer (td-15e231): world/era context around an event or timeframe — deliberately uses model world knowledge, so it must render as a separate clearly-labeled section (never blended into the family-record voice), admin-gated before any family-visible placement; natural surfaces are an Ask-the-archive toggle and mockup B2's "In context" day paragraph.
 - Nightly `pg_dump`-to-Spaces backup automation (NAS image pull + CCC preflight exist; the Postgres-dump leg of V5 Phase 4 remains open).
 - PDF/print export (Phase H direction only).
 
