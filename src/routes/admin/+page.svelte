@@ -51,6 +51,11 @@
 			<h2>Ask the Archive</h2>
 			<p>Freeform questions over a chosen subset — date range, person/place, tag, or search term.</p>
 		</a>
+
+		<a href="/admin/exports" class="tool">
+			<h2>PDF Exports</h2>
+			<p>Generate downloadable, printable per-year PDF books, with images, for printing or sharing.</p>
+		</a>
 	</div>
 </div>
 

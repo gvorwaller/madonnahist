@@ -2,7 +2,9 @@ import '$lib/server/monitoring';
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE_NAME, validateSession, type SessionUser } from '$server/session';
+import { RENDER_TOKEN_COOKIE_NAME, verifyRenderToken, matchesRenderScopePath } from '$server/render-token';
 import { dev } from '$app/environment';
+import { env } from '$env/dynamic/private';
 
 export const SESSION_COOKIE_OPTS = {
 	path: '/',
@@ -52,6 +54,29 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (isPublic(path)) {
 		return resolve(event);
+	}
+
+	// Scoped render-token auth (Phase H of
+	// docs/2026-07-21-next-phases-search-viewer-narrative-plan.md) — a
+	// deliberately narrow addition, checked only when there's no real
+	// session. A real logged-in user's session always wins; this path exists
+	// solely so the enrichment worker's headless Chromium can fetch one
+	// specific book page (plus day images, already gated by the viewer
+	// accepted-only predicate at the query level) without minting a real
+	// session. GET-only and exact-path-matched: see
+	// src/lib/server/render-token.ts's matchesRenderScopePath() for exactly
+	// what this can and cannot reach. `id: '0'` is deliberately not a real
+	// user id (users.id is SERIAL starting at 1) — unmistakably synthetic if
+	// it ever surfaced anywhere it shouldn't (it shouldn't: nothing in the
+	// app writes a row keyed on this locals.user).
+	if (!event.locals.user && event.request.method === 'GET') {
+		const renderToken = event.cookies.get(RENDER_TOKEN_COOKIE_NAME);
+		if (renderToken) {
+			const verified = verifyRenderToken(renderToken, env.AUTH_SECRET);
+			if (verified && matchesRenderScopePath(path, verified.scope, verified.key)) {
+				event.locals.user = { id: '0', username: 'pdf-renderer', role: 'viewer', display_name: null };
+			}
+		}
 	}
 
 	if (!event.locals.user) {

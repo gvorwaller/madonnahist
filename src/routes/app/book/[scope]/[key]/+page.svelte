@@ -41,6 +41,11 @@
 	}
 
 	onMount(() => {
+		// Phase H render mode omits the progress bar entirely (see the
+		// template below) — nothing here is visible, and a headless Chromium
+		// print pass has no real scroll/viewport events to drive it anyway, so
+		// skip attaching the listener rather than run it for no observer.
+		if (data.available && data.renderMode) return;
 		window.addEventListener('scroll', onScroll, { passive: true });
 		updateProgress();
 		return () => window.removeEventListener('scroll', onScroll);
@@ -72,24 +77,26 @@
 	</div>
 {:else}
 	<div class="reader">
-		<div class="progress-track" aria-hidden="true">
-			<div class="progress-fill" style="width: {(progress * 100).toFixed(1)}%"></div>
-		</div>
-
-		<div class="reader-chrome">
-			<a href="/app/year/{data.year}" class="exit-btn" aria-label="Exit book view, back to {data.year} overview">
-				&times;
-			</a>
-			<div class="chapter-indicator" aria-live="polite">
-				{#if data.chapters.length > 0}
-					{data.chapters[Math.min(currentChapterIndex, data.chapters.length - 1)].monthName}
-					<span class="chapter-count">
-						&middot; {Math.min(currentChapterIndex + 1, data.chapters.length)} of {data.chapters.length}
-					</span>
-				{/if}
-				<span class="progress-percent">{Math.round(progress * 100)}%</span>
+		{#if !data.renderMode}
+			<div class="progress-track" aria-hidden="true">
+				<div class="progress-fill" style="width: {(progress * 100).toFixed(1)}%"></div>
 			</div>
-		</div>
+
+			<div class="reader-chrome">
+				<a href="/app/year/{data.year}" class="exit-btn" aria-label="Exit book view, back to {data.year} overview">
+					&times;
+				</a>
+				<div class="chapter-indicator" aria-live="polite">
+					{#if data.chapters.length > 0}
+						{data.chapters[Math.min(currentChapterIndex, data.chapters.length - 1)].monthName}
+						<span class="chapter-count">
+							&middot; {Math.min(currentChapterIndex + 1, data.chapters.length)} of {data.chapters.length}
+						</span>
+					{/if}
+					<span class="progress-percent">{Math.round(progress * 100)}%</span>
+				</div>
+			</div>
+		{/if}
 
 		<article class="book">
 			<header class="book-header">
@@ -126,7 +133,7 @@
 										class="day-thumb"
 										src="/app/day/{day.entryDate}/image"
 										alt="Calendar entry for {day.dateLabel}"
-										loading="lazy"
+										loading={data.renderMode ? 'eager' : 'lazy'}
 									/>
 								</a>
 							{/if}
@@ -142,7 +149,7 @@
 				</section>
 			{/each}
 
-			{#if data.nextYear}
+			{#if data.nextYear && !data.renderMode}
 				<footer class="book-continue">
 					<a href="/app/book/year/{data.nextYear}" class="btn-primary">Continue to {data.nextYear} &#9656;</a>
 				</footer>

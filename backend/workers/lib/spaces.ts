@@ -1,7 +1,7 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { query } from './db.js';
-import { readFile } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 
 interface SpacesConfig {
 	client: S3Client;
@@ -87,4 +87,31 @@ export async function getObject(key: string): Promise<Buffer> {
 		chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
 	}
 	return Buffer.concat(chunks);
+}
+
+/**
+ * Upload `body` to `key` (always writes — no HEAD-then-skip idempotency
+ * check, unlike src/lib/ingest/spaces-upload.ts's uploadIfAbsent(); every
+ * pdf_export job produces a freshly-content-addressed key that includes its
+ * own job_runs id, so there is never a legitimate "already there" case to
+ * skip). Mirrors getObject()'s local/Spaces branching exactly.
+ */
+export async function putObject(key: string, body: Buffer, contentType = 'application/octet-stream'): Promise<void> {
+	if (useLocalObjectStore()) {
+		const path = localObjectPath(key);
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, body);
+		return;
+	}
+
+	const { client, bucket } = await getSpaces();
+	await client.send(
+		new PutObjectCommand({
+			Bucket: bucket,
+			Key: key,
+			Body: body,
+			ContentType: contentType,
+			ACL: 'private'
+		})
+	);
 }

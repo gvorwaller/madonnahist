@@ -46,7 +46,7 @@ const MONTH_NAMES = [
 	'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, url }) => {
 	if (params.scope !== 'year') {
 		return { available: false as const, reason: 'scope' as const };
 	}
@@ -54,6 +54,17 @@ export const load: PageServerLoad = async ({ params }) => {
 	if (!isValidYearKey(params.key)) {
 		return { available: false as const, reason: 'key' as const };
 	}
+
+	// Phase H: `?render=pdf` is a server-read-only rendering mode for the
+	// enrichment worker's headless Chromium (backend/workers/enrichment-worker.ts's
+	// processPdfExport). It never changes what data loads — only what the
+	// page renders (see +page.svelte): images go eager (a lazy-loaded <img>
+	// below the fold is simply never fetched by a headless print pass, since
+	// there's no scroll/viewport-intersection event to trigger it), and the
+	// progress bar / exit button / "continue to next year" chrome are
+	// omitted, since none of that is meaningful in a printed PDF. A normal
+	// human visit without the query param is completely unchanged.
+	const renderMode = url.searchParams.get('render') === 'pdf';
 
 	const year = Number(params.key);
 
@@ -121,6 +132,7 @@ export const load: PageServerLoad = async ({ params }) => {
 		coverage: { accepted, total },
 		narrative,
 		chapters,
-		nextYear: adjacent.next
+		nextYear: adjacent.next,
+		renderMode
 	};
 };

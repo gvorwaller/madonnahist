@@ -15,6 +15,22 @@
  *                        for a faithful narrative, and upserts an
  *                        unpublished draft row in narrative_summaries.
  *
+ *   pdf_export        — Phase H of the plan. Payload
+ *                        {scope: 'year', scope_key, requested_by}. Admin
+ *                        (src/routes/admin/exports/+page.server.ts) enqueues
+ *                        this; the worker issues a short-lived scoped render
+ *                        token (src/lib/server/render-token.ts), launches
+ *                        headless Chromium via playwright-core, loads the
+ *                        book route (src/routes/app/book/[scope]/[key]) with
+ *                        ?render=pdf carrying that token as a cookie, prints
+ *                        to PDF, uploads it to Spaces (backend/workers/lib/spaces.ts's
+ *                        putObject), and records a pdf_exports row. Claimed
+ *                        ONE at a time regardless of --limit (see
+ *                        claimJobs()'s maxBatchOverride param) — Chromium is
+ *                        memory-heavy on the shared droplet, so this is
+ *                        stricter than CLAIM_BATCH_CAP below, not just
+ *                        subject to it.
+ *
  *                        CRITICAL invariant: the worker never writes to a
  *                        published row, and can never publish one — no force
  *                        override. Enforced twice, independently: (a) this
@@ -56,12 +72,16 @@
  */
 import { query, withClient, withTransaction, shutdown } from './lib/db.js';
 import { completeJson, completeText, getEnrichmentModel } from './lib/llm.js';
+import { putObject } from './lib/spaces.js';
 import { slugifyTagLabel, isValidTagLabel, MAX_TAG_LABEL_LENGTH } from '../../src/lib/server/tags.js';
+import { issueRenderToken, RENDER_TOKEN_COOKIE_NAME } from '../../src/lib/server/render-token.js';
+import { chromium, type Browser } from 'playwright-core';
 
 const MAX_ATTEMPTS = 3;
 const CLAIM_BATCH_CAP = 5;
 const ENTITY_EXTRACT_STALE_MINUTES = 10;
 const NARRATIVE_SUMMARY_STALE_MINUTES = 30;
+const PDF_EXPORT_STALE_MINUTES = 10;
 
 const LIMIT = Number(process.argv.find((a) => a.startsWith('--limit='))?.split('=')[1] ?? 0);
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -81,8 +101,15 @@ interface ClaimedJob {
 
 // ─── Job claiming ───
 
-async function claimJobs(jobType: string, staleMinutes: number): Promise<ClaimedJob[]> {
-	const batchSize = LIMIT > 0 ? Math.min(LIMIT, CLAIM_BATCH_CAP) : CLAIM_BATCH_CAP;
+/**
+ * `maxBatchOverride`, when given, replaces the normal --limit/CLAIM_BATCH_CAP
+ * calculation entirely rather than merely capping it — used by pdf_export
+ * (passed 1) so a claim is always exactly one job regardless of --limit,
+ * independent of and stricter than CLAIM_BATCH_CAP's existing role for the
+ * other two job types.
+ */
+async function claimJobs(jobType: string, staleMinutes: number, maxBatchOverride?: number): Promise<ClaimedJob[]> {
+	const batchSize = maxBatchOverride ?? (LIMIT > 0 ? Math.min(LIMIT, CLAIM_BATCH_CAP) : CLAIM_BATCH_CAP);
 
 	return withClient(async (client) => {
 		await client.query('BEGIN');
@@ -483,6 +510,145 @@ async function processNarrativeSummary(job: ClaimedJob): Promise<void> {
 	}
 }
 
+// ─── pdf_export ───
+
+// Under render-token.ts's hard 15-min ceiling — generous for a large year's
+// render (page load + waiting for every image to finish + PDF generation +
+// upload) while leaving headroom so a token can never be minted right at the
+// module's own max.
+const RENDER_TOKEN_TTL_MS = 10 * 60 * 1000;
+
+function isValidYearScopeKeyForExport(s: unknown): s is string {
+	return typeof s === 'string' && /^\d{4}$/.test(s);
+}
+
+function internalBaseUrl(): string {
+	return process.env.MADONNAHIST_INTERNAL_URL ?? 'http://127.0.0.1:3002';
+}
+
+async function processPdfExport(job: ClaimedJob): Promise<void> {
+	const scope = job.payload.scope;
+	const scopeKey = job.payload.scope_key;
+	const requestedByRaw = job.payload.requested_by;
+	const requestedBy =
+		typeof requestedByRaw === 'number' && Number.isFinite(requestedByRaw)
+			? requestedByRaw
+			: typeof requestedByRaw === 'string' && requestedByRaw !== '' && Number.isFinite(Number(requestedByRaw))
+				? Number(requestedByRaw)
+				: null;
+
+	if (scope !== 'year') {
+		await query(
+			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `scope not implemented: ${JSON.stringify(scope)} (only 'year' is implemented in Phase H v1)`]
+		);
+		log(`  job ${job.id}: FAILED (scope not implemented: ${JSON.stringify(scope)})`);
+		return;
+	}
+	if (!isValidYearScopeKeyForExport(scopeKey)) {
+		await query(
+			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `invalid scope_key for scope='year': ${JSON.stringify(scopeKey)} (expected a 4-digit year string)`]
+		);
+		log(`  job ${job.id}: FAILED (invalid scope_key: ${JSON.stringify(scopeKey)})`);
+		return;
+	}
+
+	if (DRY_RUN) {
+		log(`  [DRY] scope=year scope_key=${scopeKey} would render PDF`);
+		await query(`UPDATE job_runs SET status='pending', started_at=NULL WHERE id=$1`, [job.id]);
+		return;
+	}
+
+	let browser: Browser | undefined;
+	try {
+		const countRes = await query<{ total: number }>(
+			`SELECT COUNT(*)::int AS total FROM calendar_days
+			  WHERE correction_status = 'accepted' AND EXTRACT(YEAR FROM entry_date)::int = $1`,
+			[Number(scopeKey)]
+		);
+		const dayCount = countRes.rows[0]?.total ?? 0;
+
+		const token = issueRenderToken('year', scopeKey, process.env.AUTH_SECRET, RENDER_TOKEN_TTL_MS);
+		const baseUrl = internalBaseUrl();
+		const bookUrl = `${baseUrl}/app/book/year/${scopeKey}?render=pdf`;
+		const parsedBase = new URL(baseUrl);
+
+		browser = await chromium.launch({
+			executablePath: process.env.MADONNAHIST_CHROMIUM_PATH || undefined
+		});
+		const context = await browser.newContext();
+		// Set via the Playwright API directly on this context, never through a
+		// real Set-Cookie response from the app — the app only ever READS this
+		// cookie (src/hooks.server.ts). secure:false is deliberate for a plain
+		// http:// internal base URL (the default MADONNAHIST_INTERNAL_URL);
+		// Chromium would otherwise silently drop a Secure-flagged cookie sent
+		// over http to a non-"localhost" host like 127.0.0.1.
+		await context.addCookies([
+			{
+				name: RENDER_TOKEN_COOKIE_NAME,
+				value: token,
+				domain: parsedBase.hostname,
+				path: '/',
+				httpOnly: true,
+				secure: parsedBase.protocol === 'https:',
+				sameSite: 'Strict'
+			}
+		]);
+
+		const page = await context.newPage();
+		await page.goto(bookUrl, { waitUntil: 'networkidle', timeout: 120_000 });
+		// Explicit wait for every <img> to finish loading — ?render=pdf already
+		// makes every image eager (src/routes/app/book/[scope]/[key]/+page.svelte),
+		// but 'networkidle' can resolve before a same-origin image response has
+		// actually finished decoding into the DOM; this is the belt to that
+		// suspenders.
+		await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), undefined, {
+			timeout: 60_000
+		});
+
+		const pdfBuffer = await page.pdf({
+			format: 'Letter',
+			margin: { top: '0.75in', bottom: '0.75in', left: '0.75in', right: '0.75in' },
+			printBackground: true,
+			displayHeaderFooter: true,
+			headerTemplate: '<div></div>',
+			footerTemplate:
+				'<div style="width:100%; font-size:9px; text-align:center; color:#555; font-family: sans-serif;">' +
+				`${scopeKey} &mdash; page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`
+		});
+
+		await browser.close();
+		browser = undefined;
+
+		const objectKey = `exports/book-year-${scopeKey}-${job.id}.pdf`;
+		await putObject(objectKey, pdfBuffer, 'application/pdf');
+
+		await query(
+			`INSERT INTO pdf_exports (scope, scope_key, object_key, byte_size, day_count, requested_by)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			[scope, scopeKey, objectKey, pdfBuffer.length, dayCount, requestedBy]
+		);
+
+		await query(`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`, [
+			job.id,
+			`rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s))`
+		]);
+		log(`  scope=year scope_key=${scopeKey}: rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s))`);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		log(`  scope=year scope_key=${scopeKey} FAILED: ${msg}`);
+		await query(`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`, [job.id, msg.slice(0, 500)]);
+	} finally {
+		// Always close, success or failure — a leaked Chromium process is
+		// exactly the memory risk this job type's single-claim serialization
+		// (claimJobs' maxBatchOverride=1 above) exists to avoid.
+		if (browser) {
+			await browser.close().catch(() => {});
+		}
+	}
+}
+
 // ─── --backfill ───
 
 async function runBackfill(): Promise<void> {
@@ -543,6 +709,15 @@ async function runOnce(): Promise<number> {
 		processed++;
 	}
 
+	// maxBatchOverride=1: never more than one pdf_export in flight per poll,
+	// regardless of --limit — see claimJobs()'s doc comment.
+	const pdfJobs = await claimJobs('pdf_export', PDF_EXPORT_STALE_MINUTES, 1);
+	if (pdfJobs.length > 0) log(`Claimed ${pdfJobs.length} pdf_export job(s)`);
+	for (const job of pdfJobs) {
+		await processPdfExport(job);
+		processed++;
+	}
+
 	return processed;
 }
 
@@ -595,7 +770,7 @@ async function runDaemon(): Promise<void> {
 }
 
 async function main() {
-	log('Enrichment Worker — entity_extract + narrative_summary');
+	log('Enrichment Worker — entity_extract + narrative_summary + pdf_export');
 
 	if (BACKFILL) {
 		await runBackfill();
