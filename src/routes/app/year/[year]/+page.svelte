@@ -15,6 +15,22 @@
 	function narrativeParagraphs(text: string): string[] {
 		return text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
 	}
+
+	// Matches src/routes/admin/exports/+page.svelte's formatBytes exactly —
+	// duplicated rather than shared, same small-per-route-helper precedent as
+	// the pdfExportFilename() duplication between the two download endpoints.
+	function formatBytes(n: number): string {
+		if (!Number.isFinite(n) || n < 0) return '—';
+		if (n < 1024) return `${n} B`;
+		const units = ['KB', 'MB', 'GB'];
+		let value = n / 1024;
+		let unitIndex = 0;
+		while (value >= 1024 && unitIndex < units.length - 1) {
+			value /= 1024;
+			unitIndex++;
+		}
+		return `${value.toFixed(1)} ${units[unitIndex]}`;
+	}
 </script>
 
 <svelte:head>
@@ -47,6 +63,12 @@
 
 		{#if yearHasAcceptedDays}
 			<a href="/app/book/year/{data.year}" class="book-cta">Read {data.year} as a book &#9656;</a>
+		{/if}
+
+		{#if data.pdfExport}
+			<a href="/app/year/{data.year}/pdf" class="pdf-link">
+				Download PDF ({formatBytes(data.pdfExport.byteSize)})
+			</a>
 		{/if}
 
 		{#if data.narrative}
@@ -156,6 +178,26 @@
 	}
 	.book-cta:focus-visible {
 		outline: 2px solid var(--color-ink);
+		outline-offset: 2px;
+	}
+
+	.pdf-link {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 44px;
+		margin: -0.5rem 0 1.25rem;
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+		text-decoration: underline;
+	}
+	.pdf-link:hover {
+		color: var(--color-evergreen-dark);
+	}
+	.pdf-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
 		outline-offset: 2px;
 	}
 

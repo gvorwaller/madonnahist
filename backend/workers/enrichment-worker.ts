@@ -522,6 +522,17 @@ function isValidYearScopeKeyForExport(s: unknown): s is string {
 	return typeof s === 'string' && /^\d{4}$/.test(s);
 }
 
+// Phase H content modes (Gaylon, 2026-07-23): matches
+// src/routes/app/book/[scope]/[key]/+page.server.ts's BookContentMode
+// exactly. Defaults to 'full' when the payload omits it (every job enqueued
+// before this feature shipped never set content_mode, and 'full' is the
+// original — and only — behavior those old payloads ever meant).
+type PdfContentMode = 'full' | 'narrative' | 'days';
+
+function isValidContentMode(s: unknown): s is PdfContentMode {
+	return s === 'full' || s === 'narrative' || s === 'days';
+}
+
 function internalBaseUrl(): string {
 	return process.env.MADONNAHIST_INTERNAL_URL ?? 'http://127.0.0.1:3002';
 }
@@ -554,8 +565,20 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		return;
 	}
 
+	const contentModeRaw = job.payload.content_mode;
+	const contentModeCandidate = contentModeRaw === undefined ? 'full' : contentModeRaw;
+	if (!isValidContentMode(contentModeCandidate)) {
+		await query(
+			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+			[job.id, `invalid content_mode: ${JSON.stringify(contentModeRaw)} (expected 'full', 'narrative', or 'days')`]
+		);
+		log(`  job ${job.id}: FAILED (invalid content_mode: ${JSON.stringify(contentModeRaw)})`);
+		return;
+	}
+	const contentMode = contentModeCandidate;
+
 	if (DRY_RUN) {
-		log(`  [DRY] scope=year scope_key=${scopeKey} would render PDF`);
+		log(`  [DRY] scope=year scope_key=${scopeKey} mode=${contentMode} would render PDF`);
 		await query(`UPDATE job_runs SET status='pending', started_at=NULL WHERE id=$1`, [job.id]);
 		return;
 	}
@@ -571,7 +594,7 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 
 		const token = issueRenderToken('year', scopeKey, process.env.AUTH_SECRET, RENDER_TOKEN_TTL_MS);
 		const baseUrl = internalBaseUrl();
-		const bookUrl = `${baseUrl}/app/book/year/${scopeKey}?render=pdf`;
+		const bookUrl = `${baseUrl}/app/book/year/${scopeKey}?render=pdf&content=${contentMode}`;
 		const parsedBase = new URL(baseUrl);
 
 		browser = await chromium.launch({
@@ -621,20 +644,25 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		await browser.close();
 		browser = undefined;
 
-		const objectKey = `exports/book-year-${scopeKey}-${job.id}.pdf`;
+		// Mode is folded into the object key so 'full' keeps the original,
+		// pre-Phase-H-content-modes naming (exports already on disk/Spaces
+		// from before this feature match the same pattern) while 'narrative'/
+		// 'days' are visually distinct at a glance in the Spaces console.
+		const objectKeyModeSuffix = contentMode === 'full' ? '' : `-${contentMode}`;
+		const objectKey = `exports/book-year-${scopeKey}${objectKeyModeSuffix}-${job.id}.pdf`;
 		await putObject(objectKey, pdfBuffer, 'application/pdf');
 
 		await query(
-			`INSERT INTO pdf_exports (scope, scope_key, object_key, byte_size, day_count, requested_by)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			[scope, scopeKey, objectKey, pdfBuffer.length, dayCount, requestedBy]
+			`INSERT INTO pdf_exports (scope, scope_key, object_key, byte_size, day_count, requested_by, content_mode)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			[scope, scopeKey, objectKey, pdfBuffer.length, dayCount, requestedBy, contentMode]
 		);
 
 		await query(`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`, [
 			job.id,
-			`rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s))`
+			`rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s), mode=${contentMode})`
 		]);
-		log(`  scope=year scope_key=${scopeKey}: rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s))`);
+		log(`  scope=year scope_key=${scopeKey}: rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s), mode=${contentMode})`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
 		log(`  scope=year scope_key=${scopeKey} FAILED: ${msg}`);

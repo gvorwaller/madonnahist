@@ -128,6 +128,9 @@ const ARGON2_OPTS = {
 // Distinctive, never-elsewhere-occurring markers.
 const MARKER = 'ZQXPLPDFEXPORT';
 const PENDING_MARKER = 'WOBBLEFRIMPDFPENDING';
+// Content-mode fixture (Gaylon, 2026-07-23): a published narrative for
+// FIXTURE_YEAR so ?content=narrative has something real to render.
+const NARRATIVE_MARKER = 'ZQXPLPDFNARRATIVE published narrative text for the content-mode test.';
 
 const FIXTURE_YEAR = 1911;
 const OTHER_YEAR = 1912; // exists only as an out-of-scope render-token target, never given fixture data
@@ -325,6 +328,22 @@ async function cleanupFixture(pool) {
 	await rm(path.join(localObjectStoreRoot(), 'fixtures/pdf-export-test'), { recursive: true, force: true });
 }
 
+// Content-mode fixture (Gaylon, 2026-07-23): a published narrative for
+// FIXTURE_YEAR, same idempotent delete-then-insert shape as
+// scripts/test-viewer-security.mjs's provisionBookNarrative().
+async function provisionNarrative(pool) {
+	await pool.query(`DELETE FROM narrative_summaries WHERE scope = 'year' AND scope_key = $1`, [String(FIXTURE_YEAR)]);
+	await pool.query(
+		`INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, is_published)
+		 VALUES ('year', $1, $2, '_pdf_export_test', true)`,
+		[String(FIXTURE_YEAR), NARRATIVE_MARKER]
+	);
+}
+
+async function cleanupNarrative(pool) {
+	await pool.query(`DELETE FROM narrative_summaries WHERE scope = 'year' AND scope_key = $1`, [String(FIXTURE_YEAR)]);
+}
+
 function runWorkerOnce() {
 	const result = spawnSync('npx', ['tsx', 'backend/workers/enrichment-worker.ts', '--limit=1'], {
 		cwd: REPO_ROOT,
@@ -362,6 +381,11 @@ async function main() {
 	let ids = {};
 	let fixtureProvisioned = false;
 	let exportId = null;
+	// Content-mode exports (Gaylon, 2026-07-23) — narrative-only and days-only
+	// pdf_exports rows created and deleted inline in the content-mode block
+	// below; tracked here too so an assertion failure mid-block still gets
+	// them cleaned up in the finally block rather than leaking a row/object.
+	const extraExportIds = [];
 
 	try {
 		try {
@@ -375,6 +399,7 @@ async function main() {
 		ids = await provisionUsers(pool);
 		await provisionFixture(pool);
 		fixtureProvisioned = true;
+		await provisionNarrative(pool);
 
 		const adminCookie = await login(ADMIN_USERNAME, TEST_PASSWORD);
 		const viewerCookie = await login(VIEWER_USERNAME, TEST_PASSWORD);
@@ -481,6 +506,50 @@ async function main() {
 			record('valid render token: images render eager, not lazy', body.includes('loading="eager"') && !body.includes('loading="lazy"'), 'checked');
 		}
 
+		// ── content modes (Gaylon, 2026-07-23): cheap page-level checks via the
+		//    same render token — matchesRenderScopePath() only cares about the
+		//    path, not the query string, so ?content=... works with the token
+		//    already minted above. Confirms the book route's own content-mode
+		//    branching (src/routes/app/book/[scope]/[key]/+page.server.ts and
+		//    +page.svelte) before the slower worker-driven checks further down
+		//    prove the whole export pipeline honors it too. ──
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${FIXTURE_YEAR}?render=pdf&content=narrative`, {
+				headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
+			});
+			const body = await res.text();
+			record('content=narrative: renders 200', res.status === 200, `status ${res.status}`);
+			record('content=narrative: published narrative text present', body.includes(NARRATIVE_MARKER), 'checked');
+			const anyDayMarkerPresent = ACCEPTED_DATES.some((_, i) => body.includes(`${MARKER}_DAY_${i + 1}`));
+			record('content=narrative: day chapter text excluded', !anyDayMarkerPresent, 'checked');
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${FIXTURE_YEAR}?render=pdf&content=days`, {
+				headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
+			});
+			const body = await res.text();
+			const allMarkersPresent = ACCEPTED_DATES.every((_, i) => body.includes(`${MARKER}_DAY_${i + 1}`));
+			record('content=days: renders 200', res.status === 200, `status ${res.status}`);
+			record('content=days: all 3 accepted day markers present', allMarkersPresent, 'checked');
+			record('content=days: published narrative text excluded', !body.includes(NARRATIVE_MARKER), 'checked');
+		}
+		{
+			// A normal human visit (no render=pdf) ignores ?content= entirely —
+			// per the spec, content-mode filtering is only ever honored in
+			// render=pdf mode. Using the admin session here since a plain human
+			// GET has no render token at all.
+			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${FIXTURE_YEAR}?content=narrative`, {
+				headers: { Cookie: adminCookie }
+			});
+			const body = await res.text();
+			const anyDayMarkerPresent = ACCEPTED_DATES.some((_, i) => body.includes(`${MARKER}_DAY_${i + 1}`));
+			record(
+				'content=narrative WITHOUT render=pdf: ignored — day chapters still render for a normal visit',
+				res.status === 200 && anyDayMarkerPresent,
+				`status ${res.status}, day marker present: ${anyDayMarkerPresent}`
+			);
+		}
+
 		// ── render-token security matrix ─────────────────────────────────────
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${FIXTURE_YEAR}`, {
@@ -565,6 +634,37 @@ async function main() {
 			}
 		}
 
+		// ── viewer-facing PDF download (src/routes/app/year/[year]/pdf,
+		//    Gaylon, 2026-07-23): any authenticated role, streamed the same
+		//    way as the admin endpoint but reachable from /app. Checked here
+		//    while the 'full' export from above still exists, before it's
+		//    deleted below. ─────────────────────────────────────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}/pdf`, { headers: { Cookie: viewerCookie } });
+			const contentType = res.headers.get('content-type') ?? '';
+			const buf = Buffer.from(await res.arrayBuffer());
+			record('viewer PDF download [viewer] is 200', res.status === 200, `expected 200, got ${res.status}`);
+			record('viewer PDF download [viewer] content-type is application/pdf', contentType.includes('application/pdf'), `got ${contentType}`);
+			record('viewer PDF download [viewer] body starts with %PDF-', buf.subarray(0, 5).toString('latin1') === '%PDF-', 'checked');
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}/pdf`);
+			record('viewer PDF download [unauthenticated] redirects to login', res.status === 303, `expected 303, got ${res.status}`);
+		}
+		{
+			// A year with zero pdf_exports rows at all — OTHER_YEAR is never
+			// given fixture data or an export anywhere in this script.
+			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${OTHER_YEAR}/pdf`, { headers: { Cookie: viewerCookie } });
+			record('viewer PDF download [viewer, no export for this year] is a friendly 404', res.status === 404, `expected 404, got ${res.status}`);
+		}
+		{
+			// admin's own /admin/exports/download/[id] stays admin-only — the
+			// new viewer-facing endpoint is a separate, additive route, not a
+			// relaxation of the existing admin download's authorization.
+			const res = await fetchNoRedirect(`${BASE_URL}/admin/exports/download/${exportId}`, { headers: { Cookie: viewerCookie } });
+			record('admin download endpoint [viewer] is still 403 (unaffected by the new viewer route)', res.status === 403, `expected 403, got ${res.status}`);
+		}
+
 		// ── delete ────────────────────────────────────────────────────────────
 		if (exportId && exportRow) {
 			const { status, envelope } = await postAction('/admin/exports?/delete', { id: exportId }, adminCookie);
@@ -581,6 +681,92 @@ async function main() {
 			exportId = null;
 		}
 
+		// ── content-mode end-to-end: run the REAL worker (real Chromium) once
+		//    for 'narrative' mode and once for 'days' mode, proving the whole
+		//    pipeline (job payload → rendered PDF → pdf_exports.content_mode →
+		//    object key → viewer download endpoint) honors the mode, not just
+		//    the book route in isolation (already checked above). Two more
+		//    Chromium launches, same as the 'full' mode run earlier — kept to
+		//    exactly one run per mode to bound runtime. ──────────────────────
+		for (const mode of ['narrative', 'days']) {
+			const { status: genStatus, envelope: genEnvelope } = await postAction(
+				'/admin/exports?/generate',
+				{ year: FIXTURE_YEAR, contentMode: mode },
+				adminCookie
+			);
+			record(`content=${mode}: generate enqueues a pdf_export job`, genStatus === 200 && genEnvelope?.type === 'success', `status ${genStatus}, ${JSON.stringify(genEnvelope)}`);
+
+			const jobRow = await pool.query(
+				`SELECT id FROM job_runs WHERE job_type = 'pdf_export' AND payload->>'scope_key' = $1 AND payload->>'content_mode' = $2 ORDER BY enqueued_at DESC LIMIT 1`,
+				[String(FIXTURE_YEAR), mode]
+			);
+			const jobId = jobRow.rows[0]?.id ?? null;
+			record(`content=${mode}: job_runs row enqueued with the right content_mode`, jobId !== null, `rows: ${JSON.stringify(jobRow.rows)}`);
+
+			let modeWorkerStdout = '';
+			try {
+				modeWorkerStdout = runWorkerOnce();
+				record(`content=${mode}: enrichment worker ran to completion`, true, 'exit 0');
+			} catch (err) {
+				record(`content=${mode}: enrichment worker ran to completion`, false, `${err instanceof Error ? err.message : err}`);
+			}
+
+			const jobAfter = jobId ? await pool.query(`SELECT status FROM job_runs WHERE id = $1`, [jobId]) : { rows: [] };
+			record(`content=${mode}: job_runs row is status=done`, jobAfter.rows[0]?.status === 'done', `got ${JSON.stringify(jobAfter.rows[0])}; worker stdout: ${modeWorkerStdout.slice(-500)}`);
+
+			const modeExportRes = await pool.query(
+				`SELECT id, object_key, byte_size, content_mode FROM pdf_exports
+				  WHERE scope = 'year' AND scope_key = $1 AND content_mode = $2
+				  ORDER BY created_at DESC LIMIT 1`,
+				[String(FIXTURE_YEAR), mode]
+			);
+			const modeExportRow = modeExportRes.rows[0];
+			if (modeExportRow) extraExportIds.push(modeExportRow.id);
+			record(`content=${mode}: a pdf_exports row was written with content_mode=${mode}`, modeExportRow?.content_mode === mode, `got ${JSON.stringify(modeExportRow)}`);
+			record(`content=${mode}: object_key includes the mode segment`, !!modeExportRow?.object_key?.includes(`-${mode}-`), `got ${modeExportRow?.object_key}`);
+
+			if (modeExportRow) {
+				const objectPath = path.join(localObjectStoreRoot(), modeExportRow.object_key);
+				const objectExists = existsSync(objectPath);
+				record(`content=${mode}: object file exists in .local/object-store-test`, objectExists, objectPath);
+				if (objectExists) {
+					const { readFile } = await import('node:fs/promises');
+					const buf = await readFile(objectPath);
+					record(`content=${mode}: object file starts with the %PDF- magic bytes`, buf.subarray(0, 5).toString('latin1') === '%PDF-', buf.subarray(0, 8).toString('latin1'));
+					record(`content=${mode}: object file is a real, non-trivial PDF (>500 bytes)`, buf.length > 500, `got ${buf.length} bytes`);
+				}
+
+				// Viewer download of this mode via the new endpoint's ?mode= param.
+				const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}/pdf?mode=${mode}`, {
+					headers: { Cookie: viewerCookie }
+				});
+				const buf = Buffer.from(await res.arrayBuffer());
+				record(`content=${mode}: viewer download via ?mode=${mode} is 200`, res.status === 200, `expected 200, got ${res.status}`);
+				record(`content=${mode}: viewer download body starts with %PDF-`, buf.subarray(0, 5).toString('latin1') === '%PDF-', 'checked');
+				const disposition = res.headers.get('content-disposition') ?? '';
+				record(
+					`content=${mode}: viewer download Content-Disposition names the file with a mode suffix`,
+					disposition.includes(`madonnahist-${FIXTURE_YEAR}-${mode}.pdf`),
+					`got ${disposition}`
+				);
+
+				// Clean up this mode's export immediately — same delete-and-verify
+				// shape as the 'full' mode flow above.
+				const { status: delStatus, envelope: delEnvelope } = await postAction('/admin/exports?/delete', { id: modeExportRow.id }, adminCookie);
+				record(`content=${mode}: delete action succeeds`, delStatus === 200 && delEnvelope?.type === 'success', `status ${delStatus}, ${JSON.stringify(delEnvelope)}`);
+				const rowAfter = await pool.query(`SELECT id FROM pdf_exports WHERE id = $1`, [modeExportRow.id]);
+				record(`content=${mode}: deleted row is gone from pdf_exports`, rowAfter.rows.length === 0, `rows left: ${rowAfter.rows.length}`);
+				if (rowAfter.rows.length === 0) {
+					extraExportIds.splice(extraExportIds.indexOf(modeExportRow.id), 1);
+				}
+			}
+
+			await pool.query(`DELETE FROM job_runs WHERE job_type = 'pdf_export' AND payload->>'scope_key' = $1 AND payload->>'content_mode' = $2`, [
+				String(FIXTURE_YEAR),
+				mode
+			]);
+		}
+
 		console.log('\nPDF export results:\n');
 		const width = Math.max(...rows.map((r) => r.label.length)) + 2;
 		for (const r of rows) {
@@ -591,15 +777,17 @@ async function main() {
 
 		if (fail > 0) process.exitCode = 1;
 	} finally {
-		if (exportId) {
-			const row = await pool.query(`SELECT object_key FROM pdf_exports WHERE id = $1`, [exportId]).catch(() => ({ rows: [] }));
+		const idsToClean = [exportId, ...extraExportIds].filter(Boolean);
+		for (const id of idsToClean) {
+			const row = await pool.query(`SELECT object_key FROM pdf_exports WHERE id = $1`, [id]).catch(() => ({ rows: [] }));
 			if (row.rows[0]) {
 				const { rm } = await import('node:fs/promises');
 				await rm(path.join(localObjectStoreRoot(), row.rows[0].object_key), { force: true }).catch(() => {});
 			}
-			await pool.query(`DELETE FROM pdf_exports WHERE id = $1`, [exportId]).catch(() => {});
+			await pool.query(`DELETE FROM pdf_exports WHERE id = $1`, [id]).catch(() => {});
 		}
 		await pool.query(`DELETE FROM job_runs WHERE job_type = 'pdf_export' AND payload->>'scope_key' = $1`, [String(FIXTURE_YEAR)]).catch(() => {});
+		await cleanupNarrative(pool).catch(() => {});
 		if (fixtureProvisioned) await cleanupFixture(pool);
 		await cleanupUsers(pool, ids);
 		await pool.end();

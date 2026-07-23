@@ -21,14 +21,28 @@ function requireAdmin(locals: App.Locals) {
 	}
 }
 
+// Phase H content modes (Gaylon, 2026-07-23): 'full' keeps the original
+// filename (existing exports from before this feature never had a mode
+// segment); 'narrative'/'days' get an explicit suffix so a family member
+// downloading multiple PDFs for the same year can tell them apart at a
+// glance in their downloads folder. Mirrors
+// src/routes/app/year/[year]/pdf/+server.ts's identical helper — duplicated
+// rather than shared, matching this codebase's existing precedent of small
+// per-route helpers (see e.g. each route's own requireAdmin()) over a
+// cross-cutting utility module for a five-line function.
+function pdfExportFilename(scopeKey: string, contentMode: string): string {
+	const suffix = contentMode === 'full' ? '' : `-${contentMode}`;
+	return `madonnahist-${scopeKey}${suffix}.pdf`;
+}
+
 export const GET: RequestHandler = async ({ params, locals }) => {
 	requireAdmin(locals);
 
 	const id = Number(params.id);
 	if (!Number.isInteger(id) || id <= 0) error(404, 'Not found');
 
-	const res = await query<{ object_key: string; scope_key: string }>(
-		`SELECT object_key, scope_key FROM pdf_exports WHERE id = $1`,
+	const res = await query<{ object_key: string; scope_key: string; content_mode: string }>(
+		`SELECT object_key, scope_key, content_mode FROM pdf_exports WHERE id = $1`,
 		[id]
 	);
 	const row = res.rows[0];
@@ -41,7 +55,7 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		error(404, 'Not found');
 	}
 
-	const filename = `madonnahist-${row.scope_key}.pdf`;
+	const filename = pdfExportFilename(row.scope_key, row.content_mode);
 	return new Response(buffer as unknown as BodyInit, {
 		headers: {
 			'Content-Type': 'application/pdf',

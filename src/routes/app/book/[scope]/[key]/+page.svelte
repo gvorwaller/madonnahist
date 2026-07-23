@@ -108,46 +108,59 @@
 				</p>
 			</header>
 
-			{#if data.narrative}
-				<section class="book-intro">
-					<p class="intro-label">AI-generated year summary, reviewed by the family</p>
-					{#each narrativeParagraphs(data.narrative) as para, i (i)}
-						<p class="intro-para">{para}</p>
-					{/each}
-				</section>
+			<!-- Phase H content modes (Gaylon, 2026-07-23): 'days' never shows
+			     the narrative section below; 'narrative' never shows the
+			     chapters section further down. A normal human visit is always
+			     'full' (data.contentMode defaults to 'full' unless
+			     ?render=pdf&content=... is both present — see +page.server.ts) —
+			     this only changes what the enrichment worker's headless
+			     Chromium prints. -->
+			{#if data.contentMode !== 'days'}
+				{#if data.narrative}
+					<section class="book-intro">
+						<p class="intro-label">AI-generated year summary, reviewed by the family</p>
+						{#each narrativeParagraphs(data.narrative) as para, i (i)}
+							<p class="intro-para">{para}</p>
+						{/each}
+					</section>
+				{:else if data.contentMode === 'narrative'}
+					<p class="book-empty">No published narrative for {data.year} yet.</p>
+				{/if}
 			{/if}
 
-			{#if data.chapters.length === 0}
-				<p class="book-empty">No transcribed days for {data.year} yet — check back as correction continues.</p>
-			{/if}
+			{#if data.contentMode !== 'narrative'}
+				{#if data.chapters.length === 0}
+					<p class="book-empty">No transcribed days for {data.year} yet — check back as correction continues.</p>
+				{/if}
 
-			{#each data.chapters as chapter, ci (chapter.month)}
-				<section class="chapter" class:first-chapter={ci === 0}>
-					<h2 class="chapter-title" bind:this={chapterEls[ci]}>{chapter.monthName}</h2>
-					{#each chapter.days as day (day.entryDate)}
-						<div class="day-entry">
-							<p class="day-label">{day.dateLabel}</p>
-							{#if day.hasImage}
-								<a href="/app/day/{day.entryDate}?from={encodeURIComponent(`/app/book/year/${data.year}`)}" class="day-thumb-link">
-									<img
-										class="day-thumb"
-										src="/app/day/{day.entryDate}/image"
-										alt="Calendar entry for {day.dateLabel}"
-										loading={data.renderMode ? 'eager' : 'lazy'}
-									/>
-								</a>
-							{/if}
-							<p class="day-text">{day.correctedText}</p>
-							{#if day.dayNarrative}
-								<p class="day-narrative">
-									<span class="generated-tag">In context &mdash; generated.</span>
-									{day.dayNarrative}
-								</p>
-							{/if}
-						</div>
-					{/each}
-				</section>
-			{/each}
+				{#each data.chapters as chapter, ci (chapter.month)}
+					<section class="chapter" class:first-chapter={ci === 0}>
+						<h2 class="chapter-title" bind:this={chapterEls[ci]}>{chapter.monthName}</h2>
+						{#each chapter.days as day (day.entryDate)}
+							<div class="day-entry">
+								<p class="day-label">{day.dateLabel}</p>
+								{#if day.hasImage}
+									<a href="/app/day/{day.entryDate}?from={encodeURIComponent(`/app/book/year/${data.year}`)}" class="day-thumb-link">
+										<img
+											class="day-thumb"
+											src="/app/day/{day.entryDate}/image"
+											alt="Calendar entry for {day.dateLabel}"
+											loading={data.renderMode ? 'eager' : 'lazy'}
+										/>
+									</a>
+								{/if}
+								<p class="day-text">{day.correctedText}</p>
+								{#if day.dayNarrative}
+									<p class="day-narrative">
+										<span class="generated-tag">In context &mdash; generated.</span>
+										{day.dayNarrative}
+									</p>
+								{/if}
+							</div>
+						{/each}
+					</section>
+				{/each}
+			{/if}
 
 			{#if data.nextYear && !data.renderMode}
 				<footer class="book-continue">

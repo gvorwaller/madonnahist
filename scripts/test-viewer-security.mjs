@@ -394,6 +394,22 @@ async function main() {
 
 		const viewerCookie = await login(VIEWER_USERNAME, TEST_PASSWORD);
 
+		// ── Landing page cards filtered by role (Gaylon, 2026-07-23) ────────
+		// src/routes/+page.svelte only renders the cards a role can actually
+		// reach (mirrors src/hooks.server.ts's roleAllowed()) — a viewer's
+		// landing page must never link to /admin (they'd just get a 403 on
+		// click), but must still show the Family Viewer card.
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const hasAdminLink = body.includes('href="/admin"');
+			const hasAppLink = body.includes('href="/app"');
+			record('GET / [viewer] landing page does NOT link to /admin', !hasAdminLink,
+				hasAdminLink ? 'ADMIN CARD LEAKED INTO VIEWER LANDING PAGE' : 'no /admin link, as required');
+			record('GET / [viewer] landing page links to /app', hasAppLink,
+				hasAppLink ? '/app link present' : '/app link missing');
+		}
+
 		// ── Day detail: accepted ────────────────────────────────────────────
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATE}`, {

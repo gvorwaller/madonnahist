@@ -1,28 +1,52 @@
+<script lang="ts">
+	const { data } = $props();
+
+	// Mirrors src/hooks.server.ts's roleAllowed(): admin reaches all three
+	// surfaces, corrector reaches Corrections + Family Viewer, viewer reaches
+	// Family Viewer only. Showing a card the user's role can't actually open
+	// just leads to a Forbidden click, so this page only renders what
+	// roleAllowed() would actually let through. hooks.server.ts's own
+	// handle() already requires a session before '/' resolves at all (see
+	// PUBLIC_PATHS there), so data.user is always set here in practice — the
+	// `role === ...` checks below still fail closed (show nothing) rather
+	// than guess if that ever weren't true.
+	const role = $derived(data.user?.role);
+	const showCorrections = $derived(role === 'admin' || role === 'corrector');
+	const showAdmin = $derived(role === 'admin');
+	const showFamilyViewer = $derived(role === 'admin' || role === 'corrector' || role === 'viewer');
+</script>
+
 <div class="landing">
 	<h1>madonnahist</h1>
 	<p class="tagline">Sixty years of handwritten family history, digitized and searchable.</p>
 
 	<div class="cards">
-		<a href="/correct" class="card">
-			<h2>Corrections</h2>
-			<p class="role">Madonna</p>
-			<p class="desc">Transcribe and correct calendar entries from OCR drafts.</p>
-			<span class="status active">Active</span>
-		</a>
+		{#if showCorrections}
+			<a href="/correct" class="card">
+				<h2>Corrections</h2>
+				<p class="role">Madonna</p>
+				<p class="desc">Transcribe and correct calendar entries from OCR drafts.</p>
+				<span class="status active">Active</span>
+			</a>
+		{/if}
 
-		<a href="/admin" class="card">
-			<h2>Admin</h2>
-			<p class="role">Gaylon</p>
-			<p class="desc">Capture intake, grid alignment, OCR review, vocabulary management.</p>
-			<span class="status active">Active</span>
-		</a>
+		{#if showAdmin}
+			<a href="/admin" class="card">
+				<h2>Admin</h2>
+				<p class="role">Gaylon</p>
+				<p class="desc">Capture intake, grid alignment, OCR review, vocabulary management.</p>
+				<span class="status active">Active</span>
+			</a>
+		{/if}
 
-		<a href="/app" class="card">
-			<h2>Family Viewer</h2>
-			<p class="role">Everyone</p>
-			<p class="desc">"On this day in family history," day detail, and full-text search.</p>
-			<span class="status active">Active</span>
-		</a>
+		{#if showFamilyViewer}
+			<a href="/app" class="card">
+				<h2>Family Viewer</h2>
+				<p class="role">Everyone</p>
+				<p class="desc">"On this day in family history," day detail, and full-text search.</p>
+				<span class="status active">Active</span>
+			</a>
+		{/if}
 	</div>
 </div>
 

@@ -1,5 +1,66 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
+
 	const { data } = $props();
+
+	const STORAGE_KEY = 'madonnahist.browse.openDecades';
+
+	// Per-decade open state, keyed by decade year (e.g. 1970). All decades
+	// still start collapsed by default (per Gaylon, 2026-07-22) — this record
+	// drives each <details>'s `open` attribute directly (rather than raw DOM
+	// manipulation) so the session-remembered state restored in onMount below
+	// can override the default without a flash: the record starts empty
+	// (everything collapsed), onMount overwrites it synchronously before the
+	// user can interact, and Svelte re-renders from that single source of
+	// truth either way.
+	let openDecades = $state<Record<number, boolean>>({});
+
+	onMount(() => {
+		if (!browser) return;
+		try {
+			const raw = sessionStorage.getItem(STORAGE_KEY);
+			if (!raw) return;
+			const openList: unknown = JSON.parse(raw);
+			if (!Array.isArray(openList)) return;
+			const restored: Record<number, boolean> = {};
+			for (const decade of openList) {
+				if (typeof decade === 'number') restored[decade] = true;
+			}
+			openDecades = restored;
+		} catch {
+			// Corrupt/foreign sessionStorage value — ignore, keep the default
+			// (all collapsed) rather than throw.
+		}
+	});
+
+	function persist() {
+		if (!browser) return;
+		const openList = Object.entries(openDecades)
+			.filter(([, isOpen]) => isOpen)
+			.map(([decade]) => Number(decade));
+		sessionStorage.setItem(STORAGE_KEY, JSON.stringify(openList));
+	}
+
+	function handleToggle(decade: number, e: Event) {
+		const el = e.currentTarget as HTMLDetailsElement;
+		openDecades = { ...openDecades, [decade]: el.open };
+		persist();
+	}
+
+	function expandAll() {
+		const all: Record<number, boolean> = {};
+		for (const g of data.decades) all[g.decade] = true;
+		openDecades = all;
+		persist();
+	}
+
+	function collapseAll() {
+		const all: Record<number, boolean> = {};
+		for (const g of data.decades) all[g.decade] = false;
+		openDecades = all;
+		persist();
+	}
 </script>
 
 <svelte:head>
@@ -14,12 +75,25 @@
 			<p>No calendar pages have been ingested yet — check back once capture work begins.</p>
 		</div>
 	{:else}
+		<div class="list-tools">
+			<button type="button" class="linkbtn" onclick={expandAll}>Expand all</button>
+			<span class="tools-sep" aria-hidden="true">&middot;</span>
+			<button type="button" class="linkbtn" onclick={collapseAll}>Collapse all</button>
+		</div>
+
 		{#each data.decades as group (group.decade)}
 			<!-- Native details/summary: collapsible with no JS, keyboard- and
 			     Safari-native. All decades start collapsed (per Gaylon,
 			     2026-07-22) — the summary rows carry coverage, so the closed
-			     list is a clean decade index. -->
-			<details class="decade-section">
+			     list is a clean decade index. `open` is driven from the
+			     openDecades $state record (never toggled via raw DOM writes)
+			     so Expand/Collapse-all and session restore all funnel through
+			     one source of truth. -->
+			<details
+				class="decade-section"
+				open={openDecades[group.decade] ?? false}
+				ontoggle={(e) => handleToggle(group.decade, e)}
+			>
 				<summary class="decade-title">
 					<span class="decade-name">{group.decade}s</span>
 					<span class="decade-coverage">{group.accepted} of {group.total} days</span>
@@ -54,6 +128,33 @@
 		font-size: 1.25rem;
 		margin: 0 0 1rem;
 		color: var(--color-ink);
+	}
+	.list-tools {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0 0 0.75rem;
+	}
+	.tools-sep {
+		color: var(--color-ink-muted);
+	}
+	.linkbtn {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		padding: 0 0.4rem;
+		background: none;
+		border: none;
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-evergreen-dark);
+		text-decoration: underline;
+		cursor: pointer;
+	}
+	.linkbtn:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.decade-section {
 		margin-bottom: 1.5rem;

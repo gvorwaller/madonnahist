@@ -4,12 +4,15 @@
 
 	const { data } = $props();
 
+	type ContentMode = 'full' | 'narrative' | 'days';
+
 	interface ExportYearRow {
 		year: number;
 		accepted: number;
 		total: number;
 		percent: number;
 		pending: boolean;
+		hasPublishedNarrative: boolean;
 	}
 	interface ExportListRow {
 		id: number;
@@ -17,7 +20,14 @@
 		byteSize: number;
 		dayCount: number;
 		createdAt: string;
+		contentMode: ContentMode;
 	}
+
+	const CONTENT_MODE_LABELS: Record<ContentMode, string> = {
+		full: 'Full history (days + narrative)',
+		narrative: 'Narrative only',
+		days: 'Days only'
+	};
 
 	let actionError = $state('');
 	let deleteTarget = $state<ExportListRow | null>(null);
@@ -76,7 +86,7 @@
 					<tr>
 						<th>Year</th>
 						<th class="col-num">Accepted</th>
-						<th class="col-actions">Actions</th>
+						<th class="col-actions">Content &amp; actions</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -98,6 +108,13 @@
 									}}
 								>
 									<input type="hidden" name="year" value={row.year} />
+									<select name="contentMode" class="mode-select">
+										<option value="full">{CONTENT_MODE_LABELS.full}</option>
+										<option value="narrative" disabled={!row.hasPublishedNarrative}>
+											{CONTENT_MODE_LABELS.narrative}{row.hasPublishedNarrative ? '' : ' (no published narrative)'}
+										</option>
+										<option value="days">{CONTENT_MODE_LABELS.days}</option>
+									</select>
 									<button type="submit" class="btn btn-sm btn-primary" disabled={row.pending}>
 										{row.pending ? 'Generating…' : 'Generate PDF'}
 									</button>
@@ -119,6 +136,7 @@
 				<thead>
 					<tr>
 						<th>Year</th>
+						<th>Content</th>
 						<th class="col-num">Size</th>
 						<th class="col-num">Days</th>
 						<th>Created</th>
@@ -129,6 +147,7 @@
 					{#each data.exports as row (row.id)}
 						<tr>
 							<td>{row.year}</td>
+							<td>{CONTENT_MODE_LABELS[row.contentMode]}</td>
 							<td class="col-num">{formatBytes(row.byteSize)}</td>
 							<td class="col-num">{row.dayCount}</td>
 							<td class="col-meta">{new Date(row.createdAt).toLocaleString()}</td>
@@ -149,8 +168,9 @@
 		<div class="modal-content">
 			<h3>Delete PDF export</h3>
 			<p>
-				Delete the {deleteTarget.year} PDF ({formatBytes(deleteTarget.byteSize)})? This removes the
-				file from storage and cannot be undone. You can generate a new one later.
+				Delete the {deleteTarget.year} {CONTENT_MODE_LABELS[deleteTarget.contentMode]} PDF
+				({formatBytes(deleteTarget.byteSize)})? This removes the file from storage and cannot be
+				undone. You can generate a new one later.
 			</p>
 			<div class="modal-actions">
 				<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
@@ -239,7 +259,17 @@
 		white-space: nowrap;
 	}
 	.col-actions form {
-		display: inline;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.mode-select {
+		font-size: 0.8rem;
+		padding: 0.3rem 0.4rem;
+		border: 1px solid #ccc;
+		border-radius: 5px;
+		background: #fff;
+		color: #333;
 	}
 	.btn {
 		border: none;
