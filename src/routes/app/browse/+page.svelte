@@ -16,10 +16,10 @@
 	{:else}
 		{#each data.decades as group (group.decade)}
 			<!-- Native details/summary: collapsible with no JS, keyboard- and
-			     Safari-native. Decades with transcribed days start open; empty
-			     decades start collapsed — with ~6 decades ingested (eventually
-			     50 years) the list stays scannable. -->
-			<details class="decade-section" open={group.accepted > 0}>
+			     Safari-native. All decades start collapsed (per Gaylon,
+			     2026-07-22) — the summary rows carry coverage, so the closed
+			     list is a clean decade index. -->
+			<details class="decade-section">
 				<summary class="decade-title">
 					<span class="decade-name">{group.decade}s</span>
 					<span class="decade-coverage">{group.accepted} of {group.total} days</span>
