@@ -15,8 +15,16 @@
 		</div>
 	{:else}
 		{#each data.decades as group (group.decade)}
-			<section class="decade-section">
-				<h2 class="decade-title">{group.decade}s</h2>
+			<!-- Native details/summary: collapsible with no JS, keyboard- and
+			     Safari-native. Decades with transcribed days start open; empty
+			     decades start collapsed — with ~6 decades ingested (eventually
+			     50 years) the list stays scannable. -->
+			<details class="decade-section" open={group.accepted > 0}>
+				<summary class="decade-title">
+					<span class="decade-name">{group.decade}s</span>
+					<span class="decade-coverage">{group.accepted} of {group.total} days</span>
+					<span class="decade-chevron" aria-hidden="true">&#9656;</span>
+				</summary>
 				<ul class="year-list">
 					{#each group.years as y (y.year)}
 						<li class="year-item">
@@ -32,7 +40,7 @@
 						</li>
 					{/each}
 				</ul>
-			</section>
+			</details>
 		{/each}
 	{/if}
 </div>
@@ -51,15 +59,40 @@
 		margin-bottom: 1.5rem;
 	}
 	.decade-title {
+		display: flex;
+		align-items: baseline;
+		gap: 0.6rem;
 		font-family: var(--font-sans);
 		font-size: 1rem;
 		font-weight: 700;
 		color: var(--color-amber);
-		text-transform: uppercase;
+		/* no text-transform: "1980s", not "1980S" */
 		letter-spacing: 0.04em;
 		margin: 0 0 0.5rem;
-		padding-bottom: 0.3rem;
+		padding: 0.5rem 0 0.4rem; /* >=44px tap target with line height */
 		border-bottom: 1px solid var(--color-border);
+		cursor: pointer;
+		list-style: none; /* hide the native marker; we render our own chevron */
+	}
+	.decade-title::-webkit-details-marker {
+		display: none; /* Safari's native marker */
+	}
+	.decade-title:focus-visible {
+		outline: 2px solid var(--color-evergreen);
+		outline-offset: 2px;
+	}
+	.decade-coverage {
+		margin-left: auto;
+		font-weight: 400;
+		font-size: 0.85rem;
+		color: var(--color-ink-muted);
+	}
+	.decade-chevron {
+		font-size: 0.8rem;
+		transition: transform 0.15s ease;
+	}
+	details[open] > .decade-title .decade-chevron {
+		transform: rotate(90deg);
 	}
 	.year-list {
 		list-style: none;
