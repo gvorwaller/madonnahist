@@ -65,10 +65,23 @@
 			<a href="/app/book/year/{data.year}" class="book-cta">Read {data.year} as a book &#9656;</a>
 		{/if}
 
-		{#if data.pdfExport}
-			<a href="/app/year/{data.year}/pdf" class="pdf-link">
-				Download PDF ({formatBytes(data.pdfExport.byteSize)})
-			</a>
+		{#if data.pdfExports.length > 0}
+			<section class="downloads-block" aria-label="Print and download">
+				<p class="downloads-heading">Print &amp; download</p>
+				<ul class="downloads-list">
+					{#each data.pdfExports as ex (ex.mode)}
+						<li>
+							<a href="/app/year/{data.year}/pdf?mode={ex.mode}" class="pdf-link">
+								{ex.mode === 'full'
+									? `Full year PDF (${formatBytes(ex.byteSize)})`
+									: ex.mode === 'narrative'
+										? `Year summary only (${formatBytes(ex.byteSize)})`
+										: `Days only (${formatBytes(ex.byteSize)})`}
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</section>
 		{/if}
 
 		{#if data.narrative}
@@ -181,6 +194,30 @@
 		outline-offset: 2px;
 	}
 
+	.downloads-block {
+		margin: 0.75rem 0 1rem;
+		padding: 0.75rem 0.9rem;
+		background: var(--color-paper);
+		border: 1px solid var(--color-border);
+		border-radius: 8px;
+	}
+	.downloads-heading {
+		font-family: var(--font-sans);
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--color-ink-muted);
+		margin: 0 0 0.4rem;
+	}
+	.downloads-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
 	.pdf-link {
 		display: flex;
 		align-items: center;

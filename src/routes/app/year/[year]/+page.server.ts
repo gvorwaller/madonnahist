@@ -28,7 +28,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			nextYear: null,
 			coverage: await getCoverage(),
 			narrative: null as string | null,
-			pdfExport: null as { byteSize: number } | null
+			pdfExports: [] as Array<{ mode: string; byteSize: number }>
 		};
 	}
 
@@ -39,15 +39,14 @@ export const load: PageServerLoad = async ({ params }) => {
 		getAdjacentAcceptedYears(year),
 		getCoverage(),
 		getPublishedNarrative('year', String(year)),
-		// Most recent full-book export for this year, if any — feeds the
-		// "Download PDF (N MB)" link (Gaylon, 2026-07-23). Only the 'full'
-		// mode is surfaced here; narrative-only/days-only exports (if any)
-		// are reachable directly via /app/year/[year]/pdf?mode=... but aren't
-		// worth a second link on this page per the request's scope.
-		query<{ byte_size: string }>(
-			`SELECT byte_size FROM pdf_exports
-			  WHERE scope = 'year' AND scope_key = $1 AND content_mode = 'full'
-			  ORDER BY created_at DESC LIMIT 1`,
+		// Latest export per content mode for this year — feeds the
+		// "Print & download" block (Gaylon, 2026-07-23) listing every
+		// available variant (full / narrative-only / days-only).
+		query<{ content_mode: string; byte_size: string }>(
+			`SELECT DISTINCT ON (content_mode) content_mode, byte_size
+			   FROM pdf_exports
+			  WHERE scope = 'year' AND scope_key = $1
+			  ORDER BY content_mode, created_at DESC`,
 			[String(year)]
 		)
 	]);
@@ -59,7 +58,10 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	// BIGINT comes back from node-pg as a string — Number() here only for
 	// display (human-readable size), never fed back into a query.
-	const pdfExport = pdfExportRes.rows[0] ? { byteSize: Number(pdfExportRes.rows[0].byte_size) } : null;
+	const modeOrder: Record<string, number> = { full: 0, narrative: 1, days: 2 };
+	const pdfExports = pdfExportRes.rows
+		.map((r) => ({ mode: r.content_mode, byteSize: Number(r.byte_size) }))
+		.sort((a, b) => (modeOrder[a.mode] ?? 9) - (modeOrder[b.mode] ?? 9));
 
 	return {
 		validYear: true as const,
@@ -69,6 +71,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		nextYear: adjacent.next,
 		coverage,
 		narrative,
-		pdfExport
+		pdfExports
 	};
 };

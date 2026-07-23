@@ -27,7 +27,7 @@
 //
 // Self-provisions an admin user, a viewer user, fixture calendar_pages/days
 // (accepted + pending/in_progress/flagged, an entity alias pair, a tag),
-// and a bulk over-365-day fixture range for the hard-cap test — all
+// and a bulk over-1800-day fixture range for the hard-cap test — all
 // against madonnahist_test (127.0.0.1:15434) — and cleans up in a finally
 // block. Never touches port 5433/5435 or PGDATABASE=madonnahist — see
 // requireTestSafety() below.
@@ -38,7 +38,7 @@
 //   - the entity filter is alias-resolved (a day linked to an alias entity
 //     appears when the canonical entity is selected)
 //   - a tag filter narrows the subset correctly
-//   - an over-365-day subset returns the narrow-please failure WITHOUT
+//   - an over-1800-day subset returns the narrow-please failure WITHOUT
 //     calling the LLM (no adhoc_ask audit row is written for that request —
 //     audit only happens after a successful generation)
 //   - a 0-day subset returns a friendly failure
@@ -141,12 +141,13 @@ const ALIAS_TAG_MONTH = 6;
 const D_ALIAS = '1906-06-15';
 const D_TAG = '1906-06-20';
 
-// Over-cap fixture: all of 1907 (365 days, non-leap) + the first 6 days of
-// 1908 = 371 accepted days, well over the 365-day hard cap.
-const CAP_YEAR_FROM = 1907;
-const CAP_YEAR_TO = 1908;
-const CAP_RANGE_START = '1907-01-01';
-const CAP_RANGE_END = '1908-01-06';
+// Over-cap fixture: 1912-01-01 through 1916-12-31 = 1,827 accepted days
+// (two leap years), over the 1800-day hard cap raised on 2026-07-23
+// (td-352051 part 1). Deliberately clear of ZERO_YEAR (1909).
+const CAP_YEAR_FROM = 1912;
+const CAP_YEAR_TO = 1916;
+const CAP_RANGE_START = '1912-01-01';
+const CAP_RANGE_END = '1916-12-31';
 
 // Zero-day fixture: a year with no fixture data at all.
 const ZERO_YEAR = 1909;

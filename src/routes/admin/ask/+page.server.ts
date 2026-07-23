@@ -46,7 +46,13 @@ import type { Actions, PageServerLoad } from './$types';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_SEARCH_TERM_LENGTH = 200;
-const MAX_SUBSET_DAYS = 365;
+// Raised from 365 (Gaylon, 2026-07-23; td-352051 part 1): ~5 years of
+// days fits the model context comfortably at typical entry lengths. The
+// MAX_PROMPT_CHARS budget below is the real guard — 1800 unusually long
+// (400-char-capped) days could still brush the context limit, so the
+// built prompt is measured before any API call.
+const MAX_SUBSET_DAYS = 1800;
+const MAX_PROMPT_CHARS = 500_000;
 const MAX_DAY_TEXT_CHARS = 400;
 const MAX_OUTPUT_TOKENS = 1200;
 const MIN_YEAR = 1900;
@@ -296,6 +302,12 @@ export const actions: Actions = {
 			`READER'S QUESTION / ANGLE: ${question}\n\n` +
 			`SUBSET: ${subsetSummary} (${rows.length} accepted day(s))\n\n` +
 			`ENTRIES:\n${entryLines}`;
+
+		if (userPrompt.length > MAX_PROMPT_CHARS) {
+			return fail(413, {
+				error: `That subset's text is too large for one question (${rows.length} days, ${Math.round(userPrompt.length / 1000)}k characters) — narrow the filters and try again.`
+			});
+		}
 
 		const narrativeText = await completeText(ASK_SYSTEM_PROMPT, userPrompt, MAX_OUTPUT_TOKENS);
 		const modelName = getAskModel();

@@ -31,6 +31,7 @@
 
 <div class="search-page">
 	<h1>Search</h1>
+	<a href="/app/stories" class="stories-link">Saved family stories &#9656;</a>
 
 	<p class="coverage-banner">
 		Searching {data.coverage.accepted} of {data.coverage.total} transcribed days ({data.coverage.percent}%)
@@ -142,6 +143,21 @@
 		font-family: var(--font-sans);
 		font-size: 1.25rem;
 		margin: 0.5rem 0 0.75rem;
+	}
+	.stories-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-family: var(--font-sans);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-evergreen-dark);
+		text-decoration: underline;
+		margin-bottom: 0.25rem;
+	}
+	.stories-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.coverage-banner {
 		font-family: var(--font-sans);
