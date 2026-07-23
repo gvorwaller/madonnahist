@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import type { EntityProfile } from '$lib/server/entities';
 
 	const { profile }: { profile: EntityProfile | null } = $props();
@@ -7,6 +8,8 @@
 	const mostRecent = $derived(
 		profile && profile.days.length > 0 ? profile.days[profile.days.length - 1] : null
 	);
+	// Back-navigation memory for day links (see /app/day back handling).
+	const fromSuffix = $derived(`?from=${encodeURIComponent(page.url.pathname)}`);
 </script>
 
 <div class="entity-page">
@@ -35,7 +38,7 @@
 				{#if earliest}
 					<div class="highlight-block">
 						<p class="label">Earliest</p>
-						<a class="day-card" href="/app/day/{earliest.entryDate}">
+						<a class="day-card" href="/app/day/{earliest.entryDate}{fromSuffix}">
 							<div class="date">{earliest.dateLabel}</div>
 							<p class="snippet">{earliest.snippet}</p>
 						</a>
@@ -44,7 +47,7 @@
 				{#if mostRecent && mostRecent !== earliest}
 					<div class="highlight-block">
 						<p class="label">Most recent</p>
-						<a class="day-card" href="/app/day/{mostRecent.entryDate}">
+						<a class="day-card" href="/app/day/{mostRecent.entryDate}{fromSuffix}">
 							<div class="date">{mostRecent.dateLabel}</div>
 							<p class="snippet">{mostRecent.snippet}</p>
 						</a>
@@ -70,7 +73,7 @@
 				<p class="label">All days</p>
 				<ul class="day-list">
 					{#each profile.days as d (d.entryDate)}
-						<li><a href="/app/day/{d.entryDate}">{d.dateLabel}</a></li>
+						<li><a href="/app/day/{d.entryDate}{fromSuffix}">{d.dateLabel}</a></li>
 					{/each}
 				</ul>
 			</section>

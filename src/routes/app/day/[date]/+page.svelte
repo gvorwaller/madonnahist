@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { page } from '$app/state';
+
 	const { data } = $props();
 
 	let zoomOpen = $state(false);
@@ -6,6 +8,28 @@
 	function closeZoom() {
 		zoomOpen = false;
 	}
+
+	// Path memory: pages linking here append ?from=<encoded /app path> so
+	// Back returns to where the reader actually left off (Browse, a year
+	// grid, search results, the book, a person page) instead of always
+	// landing on On this day. Strictly validated to in-app /app paths so a
+	// crafted URL can't turn Back into an off-site or javascript: link.
+	const fromParam = $derived(page.url.searchParams.get('from'));
+	const backHref = $derived(
+		fromParam && /^\/app(\/|\?|$)/.test(fromParam) ? fromParam : '/app'
+	);
+	const backLabel = $derived.by(() => {
+		if (backHref.startsWith('/app/year/')) return `Back to ${backHref.slice('/app/year/'.length, '/app/year/'.length + 4)}`;
+		if (backHref.startsWith('/app/browse')) return 'Back to Browse';
+		if (backHref.startsWith('/app/search')) return 'Back to search results';
+		if (backHref.startsWith('/app/book/')) return 'Back to the book';
+		if (backHref.startsWith('/app/person/') || backHref.startsWith('/app/place/')) return 'Back';
+		return 'Back to On this day';
+	});
+	// Prev/next keep the same origin so the memory survives day-to-day browsing.
+	const fromSuffix = $derived(
+		fromParam && /^\/app(\/|\?|$)/.test(fromParam) ? `?from=${encodeURIComponent(fromParam)}` : ''
+	);
 </script>
 
 <svelte:head>
@@ -20,7 +44,7 @@
 
 {#if !data.found}
 	<div class="day-page">
-		<a href="/app" class="back-link">&larr; Back to On this day</a>
+		<a href={backHref} class="back-link">&larr; {backLabel}</a>
 		<div class="not-transcribed">
 			<h1>Not transcribed yet</h1>
 			<p>
@@ -31,12 +55,12 @@
 					This day isn't transcribed yet.
 				{/if}
 			</p>
-			<a href="/app" class="btn-primary">Back to On this day</a>
+			<a href={backHref} class="btn-primary">{backLabel}</a>
 		</div>
 	</div>
 {:else}
 	<div class="day-page">
-		<a href="/app" class="back-link">&larr; Back</a>
+		<a href={backHref} class="back-link">&larr; {backLabel}</a>
 
 		<h1>{data.dateLabel}</h1>
 
@@ -84,12 +108,12 @@
 
 		<div class="day-nav">
 			{#if data.prevDate}
-				<a href="/app/day/{data.prevDate}" class="nav-btn">&#9666; Previous day</a>
+				<a href="/app/day/{data.prevDate}{fromSuffix}" class="nav-btn">&#9666; Previous day</a>
 			{:else}
 				<span class="nav-btn disabled">&#9666; Previous day</span>
 			{/if}
 			{#if data.nextDate}
-				<a href="/app/day/{data.nextDate}" class="nav-btn">Next day &#9656;</a>
+				<a href="/app/day/{data.nextDate}{fromSuffix}" class="nav-btn">Next day &#9656;</a>
 			{:else}
 				<span class="nav-btn disabled">Next day &#9656;</span>
 			{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	const { data } = $props();
 
 	function pageHref(targetPage: number): string {
@@ -103,7 +104,7 @@
 		<ul class="results">
 			{#each data.results as result (result.entryDate)}
 				<li>
-					<a class="result-card" href="/app/day/{result.entryDate}">
+					<a class="result-card" href="/app/day/{result.entryDate}?from={encodeURIComponent(page.url.pathname + page.url.search)}">
 						<div class="result-date">{result.dateLabel}</div>
 						<p class="result-snippet">
 							{#each result.segments as seg, i (i)}

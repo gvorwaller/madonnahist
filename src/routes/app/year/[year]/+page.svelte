@@ -67,7 +67,7 @@
 
 		<div class="months">
 			{#each data.months as m (m.month)}
-				<MonthGrid year={data.year} month={m.month} acceptedDays={m.acceptedDays} />
+				<MonthGrid year={data.year} month={m.month} acceptedDays={m.acceptedDays} linkSuffix={`?from=${encodeURIComponent(`/app/year/${data.year}`)}`} />
 				{#if m.acceptedDays.length === 0}
 					<p class="month-empty">No transcribed days in {monthNames[m.month - 1]} {data.year} yet.</p>
 				{/if}

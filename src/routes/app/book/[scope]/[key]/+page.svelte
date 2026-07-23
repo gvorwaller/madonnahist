@@ -121,7 +121,7 @@
 						<div class="day-entry">
 							<p class="day-label">{day.dateLabel}</p>
 							{#if day.hasImage}
-								<a href="/app/day/{day.entryDate}" class="day-thumb-link">
+								<a href="/app/day/{day.entryDate}?from={encodeURIComponent(`/app/book/year/${data.year}`)}" class="day-thumb-link">
 									<img
 										class="day-thumb"
 										src="/app/day/{day.entryDate}/image"

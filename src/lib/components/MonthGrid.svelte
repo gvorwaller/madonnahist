@@ -19,9 +19,11 @@
 		acceptedDays: number[];
 		/** Link target prefix; day gets appended as /YYYY-MM-DD. */
 		hrefBase?: string;
+		/** Optional query suffix appended to day links (e.g. ?from=<path> for back-navigation memory). */
+		linkSuffix?: string;
 	}
 
-	const { year, month, acceptedDays, hrefBase = '/app/day' }: Props = $props();
+	const { year, month, acceptedDays, hrefBase = '/app/day', linkSuffix = '' }: Props = $props();
 
 	const monthNames = [
 		'January', 'February', 'March', 'April', 'May', 'June',
@@ -82,7 +84,7 @@
 			{#if cell.day === null}
 				<span class="cell empty"></span>
 			{:else if cell.accepted}
-				<a href="{hrefBase}/{cell.date}" class="cell day-cell accepted">{cell.day}</a>
+				<a href="{hrefBase}/{cell.date}{linkSuffix}" class="cell day-cell accepted">{cell.day}</a>
 			{:else}
 				<span class="cell day-cell pending">{cell.day}</span>
 			{/if}
