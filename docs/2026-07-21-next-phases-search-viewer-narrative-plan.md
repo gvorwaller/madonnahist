@@ -2,6 +2,8 @@
 
 *Plan drafted 2026-07-21. Revised same day after adversarial review by CODEX1 (11 findings, all verified against code; the material ones are folded into the phases below).*
 
+**STATUS 2026-07-23: Phases A–H are all implemented and deployed to production**, plus post-plan follow-ups (PDF content modes, family stories with auto-generated PDFs, back-navigation memory, collapsible decades, viewer PDF access, role-filtered landing). The "Explicitly deferred" list below is the live remainder; every item is tracked in td under epic td-e25bd4 (or td-e3923c for backup automation).
+
 ## Context
 
 Phase 1 (capture → OCR → LLM cleanup → correction) is complete and Madonna is making good progress (272 accepted / 1,581 ingested days at last measure, ~17%). Gaylon is ready to begin the next phases: Madonna should be able to find what happened across any timeframe (by date, person, activity, and more), see interesting narrative summaries, and family members should get login access. Document production starts with an on-screen book view; PDF export is a later hard requirement.
@@ -119,13 +121,13 @@ Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_dat
 
 ## Explicitly deferred (tracked in td, not silently dropped)
 
-- Phase 1 correction-UX gaps from V5 quick-ref: auto-save, session lifecycle, "Accept LLM" button, History button.
-- AI tag *suggestions in the correction UI* (the extractor writes `source='ai'` tags in Phase D; the UI surfacing comes later).
-- Decade + person narrative summaries; mockup B5 book pagination/swipe (Phase F v0 is a continuous reader).
+- Phase 1 correction-UX gaps from V5 quick-ref: auto-save, session lifecycle, "Accept LLM" button, History button (td-b52a49).
+- AI tag *suggestions in the correction UI* (td-c51cdb) — the extractor writes `source='ai'` tags in Phase D; the UI surfacing comes later.
+- Decade (td-441e27) + person (td-7b0ada) narrative summaries; mockup B5 book pagination/swipe (td-ae212d; Phase F v0 is a continuous reader).
 - Narrative style selector (td-09102a): tone/style/person presets at generate time, stored with the draft; first-person "as Madonna" needs her sign-off if offered; consider book-view style consistency across years.
 - Historical context layer (td-15e231): world/era context around an event or timeframe — deliberately uses model world knowledge, so it must render as a separate clearly-labeled section (never blended into the family-record voice), admin-gated before any family-visible placement; natural surfaces are an Ask-the-archive toggle and mockup B2's "In context" day paragraph.
-- Nightly `pg_dump`-to-Spaces backup automation (NAS image pull + CCC preflight exist; the Postgres-dump leg of V5 Phase 4 remains open).
-- PDF/print export (Phase H direction only).
+- Nightly `pg_dump`-to-Spaces backup automation (td-ff8a42; NAS image pull + CCC preflight exist; the Postgres-dump leg of V5 Phase 4 remains open).
+- ~~PDF/print export~~ — **implemented 2026-07-23** (Phase H shipped: per-year full/narrative/days PDFs + auto-generated story PDFs).
 
 ## Key reference files
 
