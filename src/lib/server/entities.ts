@@ -188,3 +188,39 @@ export async function getAcceptedEntityOptions(entityType: EntityType): Promise<
 		.map((r) => ({ slug: r.slug, label: r.display_name }))
 		.sort((a, b) => a.label.localeCompare(b.label));
 }
+
+export interface EntityPickerOption {
+	id: number;
+	display_name: string;
+	entityType: EntityType;
+}
+
+/**
+ * Canonical person/place entities with at least one accepted-day mention,
+ * as {id, display_name} pairs feeding src/lib/components/EntityPicker.svelte
+ * on /admin/ask (Phase G of
+ * docs/2026-07-21-next-phases-search-viewer-narrative-plan.md). Same
+ * accepted-only, alias-resolved shape as getAcceptedEntityOptions() above,
+ * but keyed by the canonical numeric id (not a (entity_type, slug) pair) —
+ * Ask's subset query filters directly on that id via the alias-resolution
+ * EXISTS clause in src/routes/admin/ask/+page.server.ts, so there is no
+ * need to round-trip through a slug lookup the way /app/search's two
+ * separate person/place query params do. Event-type entities are omitted:
+ * Phase G's outcome is scoped to "date range and/or entity/tag/FTS filter"
+ * where "entity" means person/place, matching /app/search's precedent.
+ */
+export async function getAcceptedEntityPickerOptions(): Promise<EntityPickerOption[]> {
+	const res = await query<{ id: number; display_name: string; entity_type: EntityType }>(
+		`SELECT DISTINCT canon.id, canon.display_name, canon.entity_type
+		   FROM day_entities de
+		   JOIN calendar_days cd ON cd.id = de.day_id
+		   JOIN entities e ON e.id = de.entity_id
+		   JOIN entities canon ON canon.id = COALESCE(e.alias_of_entity_id, e.id)
+		  WHERE cd.correction_status = 'accepted'
+		    AND canon.entity_type IN ('person', 'place')
+		  ORDER BY canon.display_name`
+	);
+	return res.rows
+		.map((r) => ({ id: r.id, display_name: r.display_name, entityType: r.entity_type }))
+		.sort((a, b) => a.display_name.localeCompare(b.display_name));
+}

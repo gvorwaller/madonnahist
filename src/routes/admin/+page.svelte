@@ -46,6 +46,11 @@
 			<h2>Year Narratives</h2>
 			<p>Generate, edit, and publish AI-drafted year summaries for the family viewer.</p>
 		</a>
+
+		<a href="/admin/ask" class="tool">
+			<h2>Ask the Archive</h2>
+			<p>Freeform questions over a chosen subset — date range, person/place, tag, or search term.</p>
+		</a>
 	</div>
 </div>
 
