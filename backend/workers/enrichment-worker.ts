@@ -16,20 +16,28 @@
  *                        unpublished draft row in narrative_summaries.
  *
  *   pdf_export        — Phase H of the plan. Payload
- *                        {scope: 'year', scope_key, requested_by}. Admin
- *                        (src/routes/admin/exports/+page.server.ts) enqueues
- *                        this; the worker issues a short-lived scoped render
- *                        token (src/lib/server/render-token.ts), launches
- *                        headless Chromium via playwright-core, loads the
- *                        book route (src/routes/app/book/[scope]/[key]) with
- *                        ?render=pdf carrying that token as a cookie, prints
- *                        to PDF, uploads it to Spaces (backend/workers/lib/spaces.ts's
- *                        putObject), and records a pdf_exports row. Claimed
- *                        ONE at a time regardless of --limit (see
- *                        claimJobs()'s maxBatchOverride param) — Chromium is
- *                        memory-heavy on the shared droplet, so this is
- *                        stricter than CLAIM_BATCH_CAP below, not just
- *                        subject to it.
+ *                        {scope: 'year', scope_key, requested_by, content_mode}
+ *                        or (Gaylon, 2026-07-23) {scope: 'story', scope_key,
+ *                        requested_by, content_mode: 'full'} — scope_key is
+ *                        an adhoc_narratives id and content_mode is always
+ *                        'full' for a story (no narrative/days split to
+ *                        choose between). 'year' jobs are enqueued by admin
+ *                        (src/routes/admin/exports/+page.server.ts); 'story'
+ *                        jobs are auto-enqueued the moment an admin saves a
+ *                        story (src/routes/admin/ask/+page.server.ts's save
+ *                        action). Either way the worker issues a short-lived
+ *                        scoped render token (src/lib/server/render-token.ts),
+ *                        launches headless Chromium via playwright-core,
+ *                        loads the book route (src/routes/app/book/[scope]/[key])
+ *                        or the story route (src/routes/app/stories/[id])
+ *                        with ?render=pdf carrying that token as a cookie,
+ *                        prints to PDF, uploads it to Spaces
+ *                        (backend/workers/lib/spaces.ts's putObject), and
+ *                        records a pdf_exports row. Claimed ONE at a time
+ *                        regardless of --limit (see claimJobs()'s
+ *                        maxBatchOverride param) — Chromium is memory-heavy
+ *                        on the shared droplet, so this is stricter than
+ *                        CLAIM_BATCH_CAP below, not just subject to it.
  *
  *                        CRITICAL invariant: the worker never writes to a
  *                        published row, and can never publish one — no force
@@ -522,11 +530,24 @@ function isValidYearScopeKeyForExport(s: unknown): s is string {
 	return typeof s === 'string' && /^\d{4}$/.test(s);
 }
 
+// Story scope_key (Gaylon, 2026-07-23): the adhoc_narratives row's own
+// BIGSERIAL id, passed through as a string in the job payload (same
+// string-everywhere convention 'year' already uses for its scope_key).
+function isValidStoryScopeKeyForExport(s: unknown): s is string {
+	return typeof s === 'string' && /^\d+$/.test(s) && Number(s) > 0;
+}
+
 // Phase H content modes (Gaylon, 2026-07-23): matches
 // src/routes/app/book/[scope]/[key]/+page.server.ts's BookContentMode
 // exactly. Defaults to 'full' when the payload omits it (every job enqueued
 // before this feature shipped never set content_mode, and 'full' is the
-// original — and only — behavior those old payloads ever meant).
+// original — and only — behavior those old payloads ever meant). Only
+// meaningful for scope='year' — a scope='story' job's content_mode is
+// ALWAYS forced to 'full' below regardless of what the payload says: a
+// story PDF has no narrative/days split to choose between (it's already
+// just one written answer), so 'content modes N/A for stories' per the spec
+// is enforced here rather than merely assumed from what
+// src/routes/admin/ask/+page.server.ts's save action happens to send.
 type PdfContentMode = 'full' | 'narrative' | 'days';
 
 function isValidContentMode(s: unknown): s is PdfContentMode {
@@ -548,15 +569,15 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 				? Number(requestedByRaw)
 				: null;
 
-	if (scope !== 'year') {
+	if (scope !== 'year' && scope !== 'story') {
 		await query(
 			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
-			[job.id, `scope not implemented: ${JSON.stringify(scope)} (only 'year' is implemented in Phase H v1)`]
+			[job.id, `scope not implemented: ${JSON.stringify(scope)} (only 'year' and 'story' are implemented)`]
 		);
 		log(`  job ${job.id}: FAILED (scope not implemented: ${JSON.stringify(scope)})`);
 		return;
 	}
-	if (!isValidYearScopeKeyForExport(scopeKey)) {
+	if (scope === 'year' && !isValidYearScopeKeyForExport(scopeKey)) {
 		await query(
 			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
 			[job.id, `invalid scope_key for scope='year': ${JSON.stringify(scopeKey)} (expected a 4-digit year string)`]
@@ -564,37 +585,76 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		log(`  job ${job.id}: FAILED (invalid scope_key: ${JSON.stringify(scopeKey)})`);
 		return;
 	}
-
-	const contentModeRaw = job.payload.content_mode;
-	const contentModeCandidate = contentModeRaw === undefined ? 'full' : contentModeRaw;
-	if (!isValidContentMode(contentModeCandidate)) {
+	if (scope === 'story' && !isValidStoryScopeKeyForExport(scopeKey)) {
 		await query(
 			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
-			[job.id, `invalid content_mode: ${JSON.stringify(contentModeRaw)} (expected 'full', 'narrative', or 'days')`]
+			[job.id, `invalid scope_key for scope='story': ${JSON.stringify(scopeKey)} (expected a positive adhoc_narratives id as a string)`]
 		);
-		log(`  job ${job.id}: FAILED (invalid content_mode: ${JSON.stringify(contentModeRaw)})`);
+		log(`  job ${job.id}: FAILED (invalid scope_key: ${JSON.stringify(scopeKey)})`);
 		return;
 	}
-	const contentMode = contentModeCandidate;
+
+	let contentMode: PdfContentMode = 'full';
+	if (scope === 'year') {
+		const contentModeRaw = job.payload.content_mode;
+		const contentModeCandidate = contentModeRaw === undefined ? 'full' : contentModeRaw;
+		if (!isValidContentMode(contentModeCandidate)) {
+			await query(
+				`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
+				[job.id, `invalid content_mode: ${JSON.stringify(contentModeRaw)} (expected 'full', 'narrative', or 'days')`]
+			);
+			log(`  job ${job.id}: FAILED (invalid content_mode: ${JSON.stringify(contentModeRaw)})`);
+			return;
+		}
+		contentMode = contentModeCandidate;
+	}
 
 	if (DRY_RUN) {
-		log(`  [DRY] scope=year scope_key=${scopeKey} mode=${contentMode} would render PDF`);
+		log(`  [DRY] scope=${scope} scope_key=${scopeKey} mode=${contentMode} would render PDF`);
 		await query(`UPDATE job_runs SET status='pending', started_at=NULL WHERE id=$1`, [job.id]);
 		return;
 	}
 
 	let browser: Browser | undefined;
 	try {
-		const countRes = await query<{ total: number }>(
-			`SELECT COUNT(*)::int AS total FROM calendar_days
-			  WHERE correction_status = 'accepted' AND EXTRACT(YEAR FROM entry_date)::int = $1`,
-			[Number(scopeKey)]
-		);
-		const dayCount = countRes.rows[0]?.total ?? 0;
+		let dayCount: number;
+		if (scope === 'year') {
+			const countRes = await query<{ total: number }>(
+				`SELECT COUNT(*)::int AS total FROM calendar_days
+				  WHERE correction_status = 'accepted' AND EXTRACT(YEAR FROM entry_date)::int = $1`,
+				[Number(scopeKey)]
+			);
+			dayCount = countRes.rows[0]?.total ?? 0;
+		} else {
+			// story: day_count is the subset size the story was written from,
+			// already recorded on the adhoc_narratives row itself
+			// (src/routes/admin/ask/+page.server.ts's save action) — no separate
+			// count query needed. A missing row (deleted between enqueue and
+			// this run — e.g. an admin's delete action, which now also cleans up
+			// any in-flight pdf_export job's eventual output) fails the job
+			// cleanly rather than rendering a PDF for content that's already
+			// gone.
+			const storyRes = await query<{ day_count: number }>(
+				`SELECT day_count FROM adhoc_narratives WHERE id = $1`,
+				[Number(scopeKey)]
+			);
+			if (!storyRes.rows[0]) {
+				await query(`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`, [
+					job.id,
+					`adhoc_narratives row ${scopeKey} no longer exists (deleted before this job ran)`
+				]);
+				log(`  job ${job.id}: FAILED (story ${scopeKey} no longer exists)`);
+				return;
+			}
+			dayCount = storyRes.rows[0].day_count;
+		}
 
-		const token = issueRenderToken('year', scopeKey, process.env.AUTH_SECRET, RENDER_TOKEN_TTL_MS);
+		const token = issueRenderToken(scope, scopeKey, process.env.AUTH_SECRET, RENDER_TOKEN_TTL_MS);
 		const baseUrl = internalBaseUrl();
-		const bookUrl = `${baseUrl}/app/book/year/${scopeKey}?render=pdf&content=${contentMode}`;
+		const renderUrl =
+			scope === 'year'
+				? `${baseUrl}/app/book/year/${scopeKey}?render=pdf&content=${contentMode}`
+				: `${baseUrl}/app/stories/${scopeKey}?render=pdf`;
 		const parsedBase = new URL(baseUrl);
 
 		browser = await chromium.launch({
@@ -620,16 +680,20 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		]);
 
 		const page = await context.newPage();
-		await page.goto(bookUrl, { waitUntil: 'networkidle', timeout: 120_000 });
+		await page.goto(renderUrl, { waitUntil: 'networkidle', timeout: 120_000 });
 		// Explicit wait for every <img> to finish loading — ?render=pdf already
 		// makes every image eager (src/routes/app/book/[scope]/[key]/+page.svelte),
 		// but 'networkidle' can resolve before a same-origin image response has
 		// actually finished decoding into the DOM; this is the belt to that
-		// suspenders.
+		// suspenders. A story page embeds no images at all
+		// (src/routes/app/stories/[id]/+page.svelte), so document.images is
+		// simply empty there and .every() resolves immediately — harmless to
+		// run unconditionally for both scopes.
 		await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), undefined, {
 			timeout: 60_000
 		});
 
+		const footerLabel = scope === 'year' ? scopeKey : 'Family story';
 		const pdfBuffer = await page.pdf({
 			format: 'Letter',
 			margin: { top: '0.75in', bottom: '0.75in', left: '0.75in', right: '0.75in' },
@@ -638,7 +702,7 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 			headerTemplate: '<div></div>',
 			footerTemplate:
 				'<div style="width:100%; font-size:9px; text-align:center; color:#555; font-family: sans-serif;">' +
-				`${scopeKey} &mdash; page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`
+				`${footerLabel} &mdash; page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`
 		});
 
 		await browser.close();
@@ -647,9 +711,14 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		// Mode is folded into the object key so 'full' keeps the original,
 		// pre-Phase-H-content-modes naming (exports already on disk/Spaces
 		// from before this feature match the same pattern) while 'narrative'/
-		// 'days' are visually distinct at a glance in the Spaces console.
+		// 'days' are visually distinct at a glance in the Spaces console. A
+		// story export has no content-mode split at all, so its key never gets
+		// a mode segment.
 		const objectKeyModeSuffix = contentMode === 'full' ? '' : `-${contentMode}`;
-		const objectKey = `exports/book-year-${scopeKey}${objectKeyModeSuffix}-${job.id}.pdf`;
+		const objectKey =
+			scope === 'year'
+				? `exports/book-year-${scopeKey}${objectKeyModeSuffix}-${job.id}.pdf`
+				: `exports/story-${scopeKey}-${job.id}.pdf`;
 		await putObject(objectKey, pdfBuffer, 'application/pdf');
 
 		await query(
@@ -662,10 +731,10 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 			job.id,
 			`rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s), mode=${contentMode})`
 		]);
-		log(`  scope=year scope_key=${scopeKey}: rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s), mode=${contentMode})`);
+		log(`  scope=${scope} scope_key=${scopeKey}: rendered ${objectKey} (${pdfBuffer.length} bytes, ${dayCount} accepted day(s), mode=${contentMode})`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		log(`  scope=year scope_key=${scopeKey} FAILED: ${msg}`);
+		log(`  scope=${scope} scope_key=${scopeKey} FAILED: ${msg}`);
 		await query(`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`, [job.id, msg.slice(0, 500)]);
 	} finally {
 		// Always close, success or failure — a leaked Chromium process is

@@ -91,8 +91,8 @@ function requireTestSafety() {
 	if (process.env.PGDATABASE === 'madonnahist') {
 		problems.push('refusing production database name "madonnahist"');
 	}
-	if (!process.env.PGDATABASE || !process.env.PGPASSWORD) {
-		problems.push('PGDATABASE/PGPASSWORD must be set (copy .env.test.example to .env.test)');
+	if (!process.env.PGDATABASE || !process.env.PGPASSWORD || !process.env.WORKER_PGPASSWORD) {
+		problems.push('PGDATABASE/PGPASSWORD/WORKER_PGPASSWORD must be set (copy .env.test.example to .env.test)');
 	}
 	return problems;
 }
@@ -403,10 +403,30 @@ async function main() {
 		password: process.env.PGPASSWORD
 	});
 
+	// madonnahist_app deliberately has NO INSERT on pdf_exports (migration
+	// 0024_pdf_exports.sql — only madonnahist_worker writes a row, on a
+	// completed render). This test seeds a synthetic pdf_exports row directly
+	// (standing in for a real worker render, which is scripts/test-pdf-export.mjs's
+	// job, not this one) to exercise the delete action's cleanup — that INSERT
+	// has to go through the worker role, same as production.
+	const workerPool = new pg.Pool({
+		host: process.env.PGHOST ?? '127.0.0.1',
+		port: Number(process.env.PGPORT ?? 15434),
+		database: process.env.PGDATABASE,
+		user: process.env.WORKER_PGUSER ?? 'madonnahist_worker',
+		password: process.env.WORKER_PGPASSWORD
+	});
+
 	let ids = {};
 	let mainFx = null;
 	let capProvisioned = false;
 	let savedNarrativeId = null;
+	// Retained even after savedNarrativeId is nulled out on a successful
+	// delete — used only in the finally block below to clean up the
+	// auto-enqueued pdf_export job_runs row (the delete action does not
+	// remove job_runs rows, only pdf_exports rows — see
+	// src/routes/admin/ask/+page.server.ts's delete action).
+	let savedNarrativeIdForCleanup = null;
 	try {
 		try {
 			await fetch(`${BASE_URL}/api/health`);
@@ -598,6 +618,7 @@ async function main() {
 				`got ${JSON.stringify(dbRow.rows[0])}`
 			);
 			savedNarrativeId = dbRow.rows[0]?.id ?? null;
+			savedNarrativeIdForCleanup = savedNarrativeId;
 
 			const listRes = await fetchNoRedirect(`${BASE_URL}/admin/ask`, { headers: { Cookie: adminCookie } });
 			const listBody = await listRes.text();
@@ -606,6 +627,38 @@ async function main() {
 				listRes.status === 200 && listBody.includes(SAVE_QUESTION),
 				`status ${listRes.status}, present=${listBody.includes(SAVE_QUESTION)}`
 			);
+
+			// ── save auto-enqueues a pdf_export job for the story (Gaylon,
+			//    2026-07-23) — checked here, NOT by running the real worker/
+			//    chromium (that's scripts/test-pdf-export.mjs's job); this just
+			//    confirms the job_runs row itself, scoped correctly. ──────────
+			if (savedNarrativeId) {
+				const jobRow = await pool.query(
+					`SELECT id, status, payload FROM job_runs
+					   WHERE job_type = 'pdf_export' AND payload->>'scope' = 'story' AND payload->>'scope_key' = $1`,
+					[String(savedNarrativeId)]
+				);
+				record(
+					'save auto-enqueues exactly one pdf_export job_runs row (scope=story)',
+					jobRow.rows.length === 1 && jobRow.rows[0].status === 'pending',
+					`got ${JSON.stringify(jobRow.rows)}`
+				);
+				record(
+					'auto-enqueued pdf_export job payload has content_mode=full',
+					jobRow.rows[0]?.payload?.content_mode === 'full',
+					`got ${JSON.stringify(jobRow.rows[0]?.payload)}`
+				);
+
+				// Synthetic pdf_exports row — stands in for a real worker render
+				// (deliberately not run here) so the delete action's cleanup of
+				// scope='story' pdf_exports rows can be verified below without a
+				// real Chromium pass.
+				await workerPool.query(
+					`INSERT INTO pdf_exports (scope, scope_key, object_key, byte_size, day_count, requested_by, content_mode)
+					 VALUES ('story', $1, $2, 1234, $3, $4, 'full')`,
+					[String(savedNarrativeId), `fixtures/ask-test/story-${savedNarrativeId}.pdf`, saveFields.dayCount, ids.adminId]
+				);
+			}
 
 			if (savedNarrativeId) {
 				const { status: delStatus, envelope: delEnvelope } = await postAction(
@@ -617,6 +670,16 @@ async function main() {
 
 				const dbRowAfter = await pool.query(`SELECT id FROM adhoc_narratives WHERE id = $1`, [savedNarrativeId]);
 				record('deleted row is gone from adhoc_narratives', dbRowAfter.rows.length === 0, `rows left: ${dbRowAfter.rows.length}`);
+
+				const pdfRowsAfter = await pool.query(
+					`SELECT id FROM pdf_exports WHERE scope = 'story' AND scope_key = $1`,
+					[String(savedNarrativeId)]
+				);
+				record(
+					'delete also removes pdf_exports rows for that story',
+					pdfRowsAfter.rows.length === 0,
+					`rows left: ${pdfRowsAfter.rows.length}`
+				);
 
 				const listAfterRes = await fetchNoRedirect(`${BASE_URL}/admin/ask`, { headers: { Cookie: adminCookie } });
 				const listAfterBody = await listAfterRes.text();
@@ -643,10 +706,25 @@ async function main() {
 			await pool.query(`DELETE FROM adhoc_narratives WHERE id = $1`, [savedNarrativeId]).catch(() => {});
 		}
 		await pool.query(`DELETE FROM adhoc_narratives WHERE question = $1`, [SAVE_QUESTION]).catch(() => {});
+		if (savedNarrativeIdForCleanup) {
+			await pool
+				.query(
+					`DELETE FROM pdf_exports WHERE scope = 'story' AND scope_key = $1`,
+					[String(savedNarrativeIdForCleanup)]
+				)
+				.catch(() => {});
+			await pool
+				.query(
+					`DELETE FROM job_runs WHERE job_type = 'pdf_export' AND payload->>'scope' = 'story' AND payload->>'scope_key' = $1`,
+					[String(savedNarrativeIdForCleanup)]
+				)
+				.catch(() => {});
+		}
 		if (capProvisioned) await cleanupCapFixture(pool);
 		await cleanupMainFixture(pool, mainFx);
 		await cleanupUsers(pool, ids);
 		await pool.end();
+		await workerPool.end();
 	}
 }
 

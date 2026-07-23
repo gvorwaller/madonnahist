@@ -22,6 +22,7 @@
 		model_name: string;
 		created_at: string;
 		created_by_name: string;
+		pdfStatus: 'ready' | 'pending' | 'none';
 	}
 
 	let entityId = $state<number | null>(null);
@@ -189,6 +190,11 @@
 									{subsetSummaryOf(row)} &middot; {row.day_count}
 									{row.day_count === 1 ? 'day' : 'days'} &middot;
 									{new Date(row.created_at).toLocaleString()} &middot; {row.created_by_name}
+									{#if row.pdfStatus === 'ready'}
+										&middot; <span class="pdf-badge pdf-ready">PDF ready</span>
+									{:else if row.pdfStatus === 'pending'}
+										&middot; <span class="pdf-badge pdf-pending">PDF pending</span>
+									{/if}
 								</p>
 							</div>
 							<div class="saved-actions">
@@ -420,6 +426,17 @@
 		margin: 0;
 		font-size: 0.78rem;
 		color: #666;
+	}
+	.pdf-badge {
+		font-weight: 600;
+	}
+	.pdf-ready {
+		color: #1c5a33;
+	}
+	.pdf-pending {
+		color: #3a3a3a;
+		font-style: italic;
+		font-weight: 400;
 	}
 	.saved-actions {
 		display: flex;

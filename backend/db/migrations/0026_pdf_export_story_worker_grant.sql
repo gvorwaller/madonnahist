@@ -1,0 +1,32 @@
+-- 0026_pdf_export_story_worker_grant.sql
+-- Stories PDF upgrade (Gaylon, 2026-07-23): the enrichment worker's
+-- processPdfExport (backend/workers/enrichment-worker.ts) grew a
+-- scope='story' branch that renders a saved "Ask the archive" answer to
+-- PDF. To populate the resulting pdf_exports.day_count without a second
+-- query, it reads day_count directly off the adhoc_narratives row being
+-- rendered (that value is already recorded there by
+-- src/routes/admin/ask/+page.server.ts's `ask` action) and also uses the
+-- row's mere presence to fail the job cleanly if the story was deleted
+-- between enqueue and this job running.
+--
+-- Runs as madonnahist_owner via migrate_pg.sh (owner-owned objects; grants
+-- extend the 0004_grants_rls.sql model, same as every migration since).
+--
+-- This is a genuinely NEW worker need, not one 0023_adhoc_narratives.sql
+-- overlooked: that migration explicitly REVOKEd every privilege from
+-- madonnahist_worker on this table ("the worker gets NOTHING... no
+-- legitimate worker use case at all"), which was true for the Phase G v1
+-- synchronous, app-only "ask" feature. The pdf_export job type (Phase H,
+-- extended here to scope='story') is the first worker code path that ever
+-- touches this table.
+--
+-- Column-level SELECT on (id, day_count) only — never question or
+-- narrative_text — is deliberate, not incidental: the worker's job is to
+-- print a page the family can already read at /app/stories/[id] (fetched
+-- over HTTP via its own scoped render token, same as the 'year' book
+-- render), not to read admin-curated narrative content out of the database
+-- directly. Confirmed after adding this grant that madonnahist_worker has
+-- no broader privilege on this table than what's listed here: no INSERT,
+-- UPDATE, or DELETE, and no SELECT on question/narrative_text/
+-- subset_definition/model_name/created_by/created_at.
+GRANT SELECT (id, day_count) ON adhoc_narratives TO madonnahist_worker;

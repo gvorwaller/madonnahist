@@ -54,6 +54,20 @@
 //     viewer 403; unauthenticated redirect (no session, GET)
 //   - delete removes both the pdf_exports row and the object-store file;
 //     the download endpoint then 404s
+//   - story scope (Gaylon, 2026-07-23, stories PDF upgrade): an
+//     adhoc_narratives row + its pdf_export job_runs row are seeded
+//     directly (not via /admin/ask's HTTP save action — that enqueue is
+//     covered by scripts/test-ask.mjs), then the real worker/Chromium run
+//     produces a scope='story' pdf_exports row with content_mode='full' and
+//     an exports/story-<id>-<jobid>.pdf object key; the story list page
+//     shows the question but NEVER the narrative text; the story detail
+//     page shows the full narrative and a "Download PDF" link; the new
+//     /app/stories/[id]/pdf endpoint streams it (viewer 200, unauthenticated
+//     redirect, nonexistent id 404); the render-token security matrix for
+//     scope='story' opens ONLY that story's own page — not another story
+//     id, not a day image, not a book page — the inverse of a 'year'
+//     token's allowance, which is separately regression-checked to still
+//     reach day images unchanged
 //
 // Usage: node scripts/test-pdf-export.mjs [baseUrl] (or: npm run test:pdf)
 
@@ -386,6 +400,13 @@ async function main() {
 	// below; tracked here too so an assertion failure mid-block still gets
 	// them cleaned up in the finally block rather than leaking a row/object.
 	const extraExportIds = [];
+	// Story scope (Gaylon, 2026-07-23) — a directly-seeded adhoc_narratives
+	// row + its pdf_export job_runs row. storyExportId's pdf_exports row/
+	// object is cleaned up via extraExportIds (pushed below, same generic
+	// loop as the content-mode exports); storyId/storyJobId need their own
+	// cleanup since nothing else deletes an adhoc_narratives or job_runs row.
+	let storyId = null;
+	let storyJobId = null;
 
 	try {
 		try {
@@ -767,6 +788,204 @@ async function main() {
 			]);
 		}
 
+		// ── story scope (Gaylon, 2026-07-23): one real worker/chromium run for
+		//    a saved "Ask the archive" story's PDF export. The adhoc_narratives
+		//    row AND its pdf_export job_runs row are seeded DIRECTLY here
+		//    (not via /admin/ask's HTTP save action, which already has its own
+		//    job-enqueue assertion in scripts/test-ask.mjs) — this test's job
+		//    is the enrichment worker's scope='story' branch in isolation, plus
+		//    the story list/detail pages and the new download endpoint. ──────
+		const STORY_QUESTION = `${MARKER} STORY test question — what happened in spring?`;
+		const STORY_NARRATIVE_MARKER = `${MARKER}_STORY_NARRATIVE distinctive story narrative text.`;
+		let storyExportId = null;
+		{
+			const storyRes = await pool.query(
+				`INSERT INTO adhoc_narratives (question, subset_definition, narrative_text, day_count, model_name, created_by)
+				 VALUES ($1, $2::jsonb, $3, $4, $5, $6) RETURNING id`,
+				[
+					STORY_QUESTION,
+					JSON.stringify({ subsetSummary: String(FIXTURE_YEAR) }),
+					STORY_NARRATIVE_MARKER,
+					3,
+					'test-stub',
+					ids.adminId
+				]
+			);
+			storyId = storyRes.rows[0].id;
+
+			const jobRes = await pool.query(
+				`INSERT INTO job_runs (job_type, payload) VALUES ('pdf_export', $1::jsonb) RETURNING id`,
+				[JSON.stringify({ scope: 'story', scope_key: String(storyId), requested_by: ids.adminId, content_mode: 'full' })]
+			);
+			storyJobId = jobRes.rows[0].id;
+
+			let storyWorkerStdout = '';
+			try {
+				storyWorkerStdout = runWorkerOnce();
+				record('story: enrichment worker ran to completion', true, 'exit 0');
+			} catch (err) {
+				record('story: enrichment worker ran to completion', false, `${err instanceof Error ? err.message : err}`);
+			}
+
+			const jobAfter = await pool.query(`SELECT status FROM job_runs WHERE id = $1`, [storyJobId]);
+			record(
+				'story: job_runs row is status=done',
+				jobAfter.rows[0]?.status === 'done',
+				`got ${JSON.stringify(jobAfter.rows[0])}; worker stdout: ${storyWorkerStdout.slice(-800)}`
+			);
+
+			const storyExportRes = await pool.query(
+				`SELECT id, object_key, byte_size, day_count, content_mode FROM pdf_exports WHERE scope = 'story' AND scope_key = $1`,
+				[String(storyId)]
+			);
+			record(
+				'story: exactly one pdf_exports row was written',
+				storyExportRes.rows.length === 1,
+				`rows: ${JSON.stringify(storyExportRes.rows)}`
+			);
+			const storyExportRow = storyExportRes.rows[0];
+			storyExportId = storyExportRow?.id ?? null;
+			if (storyExportId) extraExportIds.push(storyExportId);
+			record('story: pdf_exports.content_mode is full', storyExportRow?.content_mode === 'full', `got ${storyExportRow?.content_mode}`);
+			record(
+				'story: pdf_exports.day_count matches the adhoc_narratives row (3)',
+				Number(storyExportRow?.day_count) === 3,
+				`got ${storyExportRow?.day_count}`
+			);
+			record(
+				"story: object key uses the exports/story-<id>-<jobid>.pdf convention",
+				storyExportRow?.object_key === `exports/story-${storyId}-${storyJobId}.pdf`,
+				storyExportRow?.object_key
+			);
+
+			if (storyExportRow) {
+				const objectPath = path.join(localObjectStoreRoot(), storyExportRow.object_key);
+				const objectExists = existsSync(objectPath);
+				record('story: object file exists in .local/object-store-test', objectExists, objectPath);
+				if (objectExists) {
+					const { readFile } = await import('node:fs/promises');
+					const buf = await readFile(objectPath);
+					record(
+						'story: object file starts with the %PDF- magic bytes',
+						buf.subarray(0, 5).toString('latin1') === '%PDF-',
+						buf.subarray(0, 8).toString('latin1')
+					);
+					record('story: object file is a real, non-trivial PDF (>500 bytes)', buf.length > 500, `got ${buf.length} bytes`);
+				}
+			}
+
+			// ── story list + detail pages ────────────────────────────────────
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories`, { headers: { Cookie: viewerCookie } });
+				const body = await res.text();
+				record('story list: renders 200', res.status === 200, `status ${res.status}`);
+				record('story list: shows the story question', body.includes(STORY_QUESTION), 'checked');
+				record(
+					'story list: never shows narrative text (list is title + meta only)',
+					!body.includes(STORY_NARRATIVE_MARKER),
+					'checked'
+				);
+			}
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/${storyId}`, { headers: { Cookie: viewerCookie } });
+				const body = await res.text();
+				record('story detail: renders 200', res.status === 200, `status ${res.status}`);
+				record('story detail: shows the question', body.includes(STORY_QUESTION), 'checked');
+				record('story detail: shows the full narrative text', body.includes(STORY_NARRATIVE_MARKER), 'checked');
+				record('story detail: shows a "Download PDF" link once the export exists', body.includes('Download PDF'), 'checked');
+			}
+			{
+				// Malformed/nonexistent id: the SAME friendly 200 "not found" page
+				// as a real load, never a raw 404/500 — matching the day-page
+				// precedent (src/routes/app/day/[date]/+page.server.ts's found:false).
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/not-a-number`, { headers: { Cookie: viewerCookie } });
+				const body = await res.text();
+				record(
+					'story detail: bad id gets a friendly 200 "not found" page, not a crash',
+					res.status === 200 && body.includes('Not found'),
+					`status ${res.status}`
+				);
+			}
+
+			// ── viewer PDF download for the story ────────────────────────────
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/${storyId}/pdf`, { headers: { Cookie: viewerCookie } });
+				const contentType = res.headers.get('content-type') ?? '';
+				const buf = Buffer.from(await res.arrayBuffer());
+				record('story pdf download [viewer] is 200', res.status === 200, `expected 200, got ${res.status}`);
+				record('story pdf download [viewer] content-type is application/pdf', contentType.includes('application/pdf'), `got ${contentType}`);
+				record('story pdf download [viewer] body starts with %PDF-', buf.subarray(0, 5).toString('latin1') === '%PDF-', 'checked');
+				const disposition = res.headers.get('content-disposition') ?? '';
+				record(
+					'story pdf download Content-Disposition names the file',
+					disposition.includes(`madonnahist-story-${storyId}.pdf`),
+					`got ${disposition}`
+				);
+			}
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/${storyId}/pdf`);
+				record('story pdf download [unauthenticated] redirects to login', res.status === 303, `expected 303, got ${res.status}`);
+			}
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/999999999/pdf`, { headers: { Cookie: viewerCookie } });
+				record('story pdf download [nonexistent id] is a friendly 404', res.status === 404, `expected 404, got ${res.status}`);
+			}
+
+			// ── render-token security matrix for scope='story' ───────────────
+			//    A story token must open ONLY its own story path — not another
+			//    story id, not a day image, not a book page — the exact
+			//    opposite allowance from a 'year' token (see
+			//    src/lib/server/render-token.ts's matchesRenderScopePath()).
+			const storyToken = makeValidRenderToken('story', String(storyId));
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/${storyId}?render=pdf`, {
+					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${storyToken}` }
+				});
+				record('story render token: opens its own story page (200)', res.status === 200, `expected 200, got ${res.status}`);
+			}
+			{
+				const otherStoryId = Number(storyId) + 1;
+				const res = await fetchNoRedirect(`${BASE_URL}/app/stories/${otherStoryId}?render=pdf`, {
+					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${storyToken}` }
+				});
+				record(
+					"story render token: does NOT open a different story id",
+					res.status === 303,
+					`expected 303, got ${res.status}`
+				);
+			}
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATES[0]}/image`, {
+					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${storyToken}` }
+				});
+				record(
+					'story render token: does NOT open a day image path (unlike a year/book token)',
+					res.status === 303,
+					`expected 303, got ${res.status}`
+				);
+			}
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${FIXTURE_YEAR}?render=pdf`, {
+					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${storyToken}` }
+				});
+				record('story render token: does NOT open a book page', res.status === 303, `expected 303, got ${res.status}`);
+			}
+			// Regression guard: a 'year' token — the SAME kind used throughout
+			// this script above — must still open a day-image path exactly as
+			// before, proving the matchesRenderScopePath() restructure for
+			// scope='story' didn't narrow the existing year/book allowance.
+			{
+				const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATES[0]}/image`, {
+					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
+				});
+				record(
+					"regression guard: year-scope render token still opens day images",
+					res.status === 200,
+					`expected 200, got ${res.status}`
+				);
+			}
+		}
+
 		console.log('\nPDF export results:\n');
 		const width = Math.max(...rows.map((r) => r.label.length)) + 2;
 		for (const r of rows) {
@@ -787,6 +1006,17 @@ async function main() {
 			await pool.query(`DELETE FROM pdf_exports WHERE id = $1`, [id]).catch(() => {});
 		}
 		await pool.query(`DELETE FROM job_runs WHERE job_type = 'pdf_export' AND payload->>'scope_key' = $1`, [String(FIXTURE_YEAR)]).catch(() => {});
+		// Story scope fixture cleanup (Gaylon, 2026-07-23) — the pdf_exports
+		// row/object for storyId is already handled by the idsToClean loop
+		// above (storyExportId was pushed into extraExportIds); this cleans up
+		// the two rows that loop doesn't touch: the job_runs row and the
+		// adhoc_narratives row itself.
+		if (storyJobId) {
+			await pool.query(`DELETE FROM job_runs WHERE id = $1`, [storyJobId]).catch(() => {});
+		}
+		if (storyId) {
+			await pool.query(`DELETE FROM adhoc_narratives WHERE id = $1`, [storyId]).catch(() => {});
+		}
 		await cleanupNarrative(pool).catch(() => {});
 		if (fixtureProvisioned) await cleanupFixture(pool);
 		await cleanupUsers(pool, ids);

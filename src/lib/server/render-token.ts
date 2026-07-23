@@ -5,10 +5,12 @@
  * NOT a minted session — a short-lived, narrowly-scoped credential that the
  * enrichment worker's headless Chromium presents (via a cookie it sets
  * itself through the Playwright API, never through this app's own
- * Set-Cookie response) so it can fetch exactly the one book page it needs
- * to print, plus any day image gated by the existing viewer accepted-only
- * predicate — nothing else. See src/hooks.server.ts for where this is
- * verified and turned into a synthetic, viewer-role `locals.user`.
+ * Set-Cookie response) so it can fetch exactly the one page it needs to
+ * print — a book page plus any day image gated by the existing viewer
+ * accepted-only predicate, or (for scope='story') exactly one story page and
+ * nothing else — see matchesRenderScopePath() below for the exact
+ * per-scope allowance. See src/hooks.server.ts for where this is verified
+ * and turned into a synthetic, viewer-role `locals.user`.
  *
  * HMAC-SHA256 over `scope:key:expiresAtMs`, keyed by a caller-supplied
  * secret (in practice always AUTH_SECRET), verified with a constant-time
@@ -124,20 +126,34 @@ export function verifyRenderToken(token: string, secret: string | undefined): Re
 
 /**
  * Path allow-list for a verified token's scope/key (used by
- * src/hooks.server.ts): exactly the book page for that scope/key, or any
- * /app/day/[date]/image path. The image path is intentionally NOT
- * restricted to dates within the token's own year — it doesn't need to be,
- * since that endpoint (src/routes/app/day/[date]/image/+server.ts)
- * independently re-applies the viewer accepted-only predicate regardless of
- * how the request arrived at a viewer-role locals.user. Everything else —
- * /app/search, /app/year/[year], any other /app page, all of /correct and
- * /admin, every non-GET method — is structurally unreachable with only this
- * token: matchesRenderScopePath() returning false for a path means
+ * src/hooks.server.ts). Two families of scope, each with its own allowance:
+ *
+ *   - Book scopes (currently only 'year'; decade/person are future work) —
+ *     exactly the book page for that scope/key, OR any /app/day/[date]/image
+ *     path. The image path is intentionally NOT restricted to dates within
+ *     the token's own year — it doesn't need to be, since that endpoint
+ *     (src/routes/app/day/[date]/image/+server.ts) independently re-applies
+ *     the viewer accepted-only predicate regardless of how the request
+ *     arrived at a viewer-role locals.user.
+ *   - 'story' scope (Gaylon, 2026-07-23, story PDF export) — exactly
+ *     /app/stories/<key>, and nothing else. Deliberately NO day-image
+ *     allowance: a story page never embeds a day image (see
+ *     src/routes/app/stories/[id]/+page.svelte), so widening this token's
+ *     reach to arbitrary day images would be pure unused attack surface,
+ *     not a real rendering need.
+ *
+ * Everything else — /app/search, /app/year/[year], any other /app page, a
+ * DIFFERENT scope/key's book or story page, all of /correct and /admin,
+ * every non-GET method — is structurally unreachable with only this token:
+ * matchesRenderScopePath() returning false for a path means
  * hooks.server.ts never sets locals.user for it, so the request falls
  * through to the normal unauthenticated path (redirect on GET, 401 on
  * everything else).
  */
 export function matchesRenderScopePath(path: string, scope: string, key: string): boolean {
+	if (scope === 'story') {
+		return path === `/app/stories/${key}`;
+	}
 	if (path === `/app/book/${scope}/${key}`) return true;
 	return /^\/app\/day\/\d{4}-\d{2}-\d{2}\/image$/.test(path);
 }

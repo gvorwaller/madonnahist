@@ -42,6 +42,7 @@ import { completeText, getAskModel } from '$lib/server/llm';
 import { getAcceptedEntityPickerOptions } from '$lib/server/entities';
 import { getAcceptedTagOptions } from '$lib/server/viewer';
 import { isValidTagSlug } from '$lib/server/tags';
+import { deleteObject } from '$lib/ingest/spaces-upload';
 import type { Actions, PageServerLoad } from './$types';
 
 const MAX_QUESTION_LENGTH = 500;
@@ -219,12 +220,43 @@ export const load: PageServerLoad = async ({ locals }) => {
 		)
 	]);
 
+	const savedIds = savedRes.rows.map((r) => String(r.id));
+
+	// Per-row PDF status for the "PDF ready"/"PDF pending" indicator (Gaylon,
+	// 2026-07-23) — a saved story auto-enqueues its pdf_export job (see the
+	// `save` action below), so this is display-only, no controls needed here.
+	// Two batch queries rather than N (one per row), same pattern as
+	// getYearCoverage()-adjacent load functions elsewhere in this codebase.
+	const [pdfReadyRes, pdfPendingRes] = await Promise.all([
+		savedIds.length > 0
+			? query<{ scope_key: string }>(
+					`SELECT DISTINCT scope_key FROM pdf_exports WHERE scope = 'story' AND scope_key = ANY($1::text[])`,
+					[savedIds]
+				)
+			: Promise.resolve({ rows: [] as { scope_key: string }[] }),
+		savedIds.length > 0
+			? query<{ scope_key: string }>(
+					`SELECT DISTINCT payload->>'scope_key' AS scope_key FROM job_runs
+					  WHERE job_type = 'pdf_export' AND status IN ('pending', 'in_progress')
+					    AND payload->>'scope' = 'story' AND payload->>'scope_key' = ANY($1::text[])`,
+					[savedIds]
+				)
+			: Promise.resolve({ rows: [] as { scope_key: string }[] })
+	]);
+	const pdfReadyIds = new Set(pdfReadyRes.rows.map((r) => r.scope_key));
+	const pdfPendingIds = new Set(pdfPendingRes.rows.map((r) => r.scope_key));
+
 	const saved = savedRes.rows.map((r) => ({
 		...r,
 		// JSONB comes back as an object already from node-pg; guard anyway per
 		// cs.md's "never JSON.parse a JSONB result without checking type first".
 		subset_definition:
-			typeof r.subset_definition === 'string' ? JSON.parse(r.subset_definition) : r.subset_definition
+			typeof r.subset_definition === 'string' ? JSON.parse(r.subset_definition) : r.subset_definition,
+		pdfStatus: pdfReadyIds.has(String(r.id))
+			? ('ready' as const)
+			: pdfPendingIds.has(String(r.id))
+				? ('pending' as const)
+				: ('none' as const)
 	}));
 
 	return { entityOptions, tagOptions, saved };
@@ -388,6 +420,34 @@ export const actions: Actions = {
 				[question, JSON.stringify(subsetDefinition), narrativeText, dayCount, modelName, Number(locals.user!.id)]
 			);
 			const id = inserted.rows[0].id;
+
+			// Auto-enqueue a pdf_export job for this story (Gaylon, 2026-07-23) —
+			// saving IS the family-visible curation act (see
+			// src/routes/app/stories/+page.server.ts's header comment), so the
+			// download link should already have something rendering by the time
+			// the family looks. Deduped against a pending/in_progress job for the
+			// same scope_key, same "don't double-enqueue" rule as
+			// src/routes/admin/exports/+page.server.ts's generate action — in
+			// practice this id is brand new and can never already have a job, but
+			// the check costs nothing and keeps the two auto/manual enqueue paths
+			// structurally identical.
+			const pending = await client.query(
+				`SELECT 1 FROM job_runs WHERE job_type = 'pdf_export' AND status IN ('pending', 'in_progress')
+				   AND payload->>'scope' = 'story' AND payload->>'scope_key' = $1`,
+				[String(id)]
+			);
+			const pdfEnqueued = pending.rows.length === 0;
+			if (pdfEnqueued) {
+				await client.query(`INSERT INTO job_runs (job_type, payload) VALUES ('pdf_export', $1::jsonb)`, [
+					JSON.stringify({
+						scope: 'story',
+						scope_key: String(id),
+						requested_by: Number(locals.user!.id),
+						content_mode: 'full'
+					})
+				]);
+			}
+
 			await client.query(
 				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
 				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
@@ -398,7 +458,10 @@ export const actions: Actions = {
 					id,
 					null,
 					JSON.stringify({ question, dayCount }),
-					`Saved ad hoc narrative: "${question.slice(0, 120)}" (${dayCount} days)`
+					`Saved ad hoc narrative: "${question.slice(0, 120)}" (${dayCount} days)` +
+						(pdfEnqueued
+							? ' — pdf_export job auto-enqueued'
+							: ' — pdf_export already pending/in_progress, not re-enqueued')
 				]
 			);
 			return id;
@@ -419,8 +482,19 @@ export const actions: Actions = {
 		);
 		if (!before.rows[0]) return fail(404, { error: 'Not found' });
 
+		// Look up this story's pdf_exports rows BEFORE the transaction — needed
+		// both to delete them inside it and to know which Spaces objects to
+		// clean up afterward.
+		const pdfRows = await query<{ object_key: string }>(
+			`SELECT object_key FROM pdf_exports WHERE scope = 'story' AND scope_key = $1`,
+			[String(id)]
+		);
+
 		await withTransaction(async (client) => {
 			await client.query(`DELETE FROM adhoc_narratives WHERE id = $1`, [id]);
+			if (pdfRows.rows.length > 0) {
+				await client.query(`DELETE FROM pdf_exports WHERE scope = 'story' AND scope_key = $1`, [String(id)]);
+			}
 			await client.query(
 				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
 				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
@@ -429,11 +503,28 @@ export const actions: Actions = {
 					'adhoc_narrative_delete',
 					'adhoc_narratives',
 					id,
-					JSON.stringify(before.rows[0]),
+					JSON.stringify({ ...before.rows[0], pdfExportsDeleted: pdfRows.rows.length }),
 					null,
-					`Deleted ad hoc narrative: "${before.rows[0].question.slice(0, 120)}"`
+					`Deleted ad hoc narrative: "${before.rows[0].question.slice(0, 120)}"` +
+						(pdfRows.rows.length > 0 ? ` (and ${pdfRows.rows.length} pdf export(s))` : '')
 				]
 			);
 		});
+
+		// Object deletion is best-effort and deliberately happens AFTER the DB
+		// transaction, not before (the reverse of
+		// src/routes/admin/exports/+page.server.ts's single-object delete
+		// action, which calls deleteObject() first). There, one object and one
+		// row are the entire delete; here, the primary intent is removing the
+		// family-visible story text itself, and that must not be held hostage
+		// by a Spaces network hiccup. deleteObject() already never throws (see
+		// src/lib/ingest/spaces-upload.ts — it catches internally and returns a
+		// boolean), so this can't fail the request; worst case, a Spaces
+		// outage leaves an orphaned object with no DB pointer to it, which is
+		// harmless and cleanable later, rather than blocking the story delete
+		// a family member is waiting on.
+		for (const row of pdfRows.rows) {
+			await deleteObject(row.object_key);
+		}
 	}
 };

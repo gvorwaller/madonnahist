@@ -2,11 +2,18 @@ import { query } from '$lib/db';
 import type { PageServerLoad } from './$types';
 
 /**
- * Family-visible list of saved "Ask the archive" answers (Gaylon,
- * 2026-07-23). Saving on /admin/ask is the curation act — an admin has
- * read the answer and chosen to keep it — so every saved row is
- * family-visible here, with its provenance (question + subset + day
- * count). Deleting on /admin/ask is how one is withdrawn.
+ * Family-visible LIST of saved "Ask the archive" answers (Gaylon,
+ * 2026-07-23) — split from the original single-page /app/stories into a
+ * list (this page) and a detail page (./[id]/+page.server.ts) so the list
+ * stays a fast, scannable index. Deliberately does NOT select
+ * narrative_text at all — the list is title + meta only, never narrative
+ * text, so there is nothing to accidentally leak into the list markup even
+ * before considering what the template renders.
+ *
+ * Saving on /admin/ask is the curation act — an admin has read the answer
+ * and chosen to keep it — so every saved row is family-visible here, with
+ * its provenance (question + subset + day count). Deleting on /admin/ask is
+ * how one is withdrawn.
  *
  * Route gating: /app requires any authenticated role; no extra check
  * needed. Reads only adhoc_narratives, which contains exclusively
@@ -17,11 +24,10 @@ export const load: PageServerLoad = async () => {
 		id: number;
 		question: string;
 		subset_definition: unknown;
-		narrative_text: string;
 		day_count: number;
 		created_at: string;
 	}>(
-		`SELECT id, question, subset_definition, narrative_text, day_count, created_at::text
+		`SELECT id, question, subset_definition, day_count, created_at::text
 		   FROM adhoc_narratives
 		  ORDER BY created_at DESC`
 	);
@@ -33,7 +39,6 @@ export const load: PageServerLoad = async () => {
 		return {
 			id: r.id,
 			question: r.question,
-			narrativeText: r.narrative_text,
 			dayCount: r.day_count,
 			subsetSummary: sd?.subsetSummary ?? 'the transcribed archive',
 			createdAt: r.created_at
