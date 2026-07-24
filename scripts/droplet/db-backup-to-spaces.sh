@@ -73,6 +73,11 @@ export RCLONE_CONFIG_SPACES_ACCESS_KEY_ID="$(psql_get SPACES_KEY)"
 export RCLONE_CONFIG_SPACES_SECRET_ACCESS_KEY="$(psql_get SPACES_SECRET)"
 export RCLONE_CONFIG_SPACES_ENDPOINT="$ENDPOINT"
 export RCLONE_CONFIG_SPACES_REGION="$REGION"
+# DO Spaces denies rclone's bucket-existence/create probe for this key and
+# reports it as the copy failing (403 AccessDenied on every write; found
+# 2026-07-24 during first-run debugging). The bucket always exists — skip
+# the check for all rclone calls in this script.
+export RCLONE_S3_NO_CHECK_BUCKET=true
 [[ -n "$BUCKET" && -n "$RCLONE_CONFIG_SPACES_ACCESS_KEY_ID" ]] || fail "missing Spaces credentials"
 
 log "starting backup of $DB (stamp $STAMP)"
