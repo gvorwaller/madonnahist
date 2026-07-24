@@ -119,6 +119,25 @@ Storage is UTC (`timestamptz`), matching the BTC-dashboard precedent; `entry_dat
 - Manual phone-width walkthrough of new viewer surfaces with a viewer-role account.
 - **Automated security/grant tests, not manual checks** (review finding): route-level auth matrix (Phase A); non-accepted content excluded from every viewer surface — day pages, images, search results (Phase B); worker RLS — can only INSERT/DELETE `source='ai'` rows, cannot touch `corrected_text` or `is_published`, published-narrative regeneration is a no-op (Phases D/E). Extend `backend/db/tests/` alongside `v4_invariants.sh`.
 
+## Next steps (reviewed with Gaylon, 2026-07-23)
+
+Current working queue, in order:
+
+| Priority | td | Item | Notes |
+|---|---|---|---|
+| **Now** | td-b52a49 (P1) | Correction polish: auto-save, session lifecycle, Accept-LLM, History | Highest daily value — Madonna's editor |
+| **Now** | td-c51cdb (P1) | AI tag suggestions in the correction UI | 5,674 AI tags already exist; one-tap accept/dismiss |
+| **Next** | td-852d99 (P2) | Viewer month page: full calendar-page image + day grid | The physical artifact adds story interest; pending days' handwriting deliberately visible (transcriptions stay gated) |
+| **Next** | td-310bf7 (P2) | /admin/audit viewer (filter logins/edits/actions) | Logging exists; add login events + filterable UI |
+| Soon | td-ff8a42 | Nightly pg_dump→Spaces + restore drill | The one risk-reduction item open |
+| Soon | td-441e27 | Decade narratives | Cheap once 1970s years fill in |
+| Triggered | td-7b0ada | Person narratives | After alias curation matures |
+| Triggered | td-09102a | Narrative style selector | On family voice feedback |
+| Triggered | td-15e231 | Historical context layer | When era context is wanted |
+| Triggered | td-352051 pt2 | Hierarchical whole-archive asking | On family-facing Ask demand |
+| Triggered | td-ae212d | Book pagination/swipe (B5) | If continuous reader feels insufficient |
+| Future | td-ef00c8 / td-d00bb8 / td-dda364 | Multi-corpus groundwork trio | Pre-roadmap direction, unchanged |
+
 ## Explicitly deferred (tracked in td, not silently dropped)
 
 - Phase 1 correction-UX gaps from V5 quick-ref: auto-save, session lifecycle, "Accept LLM" button, History button (td-b52a49).
