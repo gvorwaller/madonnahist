@@ -216,7 +216,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			        an.model_name, an.created_at::text AS created_at, u.display_name AS created_by_name
 			   FROM adhoc_narratives an
 			   JOIN users u ON u.id = an.created_by
-			  ORDER BY an.created_at DESC`
+			  ORDER BY an.created_at DESC
+		  LIMIT 25`
 		)
 	]);
 
@@ -438,7 +439,15 @@ export const actions: Actions = {
 			);
 			const pdfEnqueued = pending.rows.length === 0;
 			if (pdfEnqueued) {
-				await client.query(`INSERT INTO job_runs (job_type, payload) VALUES ('pdf_export', $1::jsonb)`, [
+				await client.query(`INSERT INTO job_runs (job_type, payload)
+			 SELECT 'pdf_export', $1::jsonb
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM job_runs
+			    WHERE job_type = 'pdf_export'
+			      AND status IN ('pending', 'in_progress')
+			      AND payload->>'scope_key' = $1::jsonb->>'scope_key'
+			      AND payload->>'scope' = $1::jsonb->>'scope'
+			      AND COALESCE(payload->>'content_mode','full') = COALESCE($1::jsonb->>'content_mode','full'))`, [
 					JSON.stringify({
 						scope: 'story',
 						scope_key: String(id),

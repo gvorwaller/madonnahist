@@ -42,8 +42,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		// Latest export per content mode for this year — feeds the
 		// "Print & download" block (Gaylon, 2026-07-23) listing every
 		// available variant (full / narrative-only / days-only).
-		query<{ content_mode: string; byte_size: string }>(
-			`SELECT DISTINCT ON (content_mode) content_mode, byte_size
+		query<{ content_mode: string; byte_size: string; created_at: string }>(
+			`SELECT DISTINCT ON (content_mode) content_mode, byte_size, created_at::text AS created_at
 			   FROM pdf_exports
 			  WHERE scope = 'year' AND scope_key = $1
 			  ORDER BY content_mode, created_at DESC`,
@@ -60,7 +60,12 @@ export const load: PageServerLoad = async ({ params }) => {
 	// display (human-readable size), never fed back into a query.
 	const modeOrder: Record<string, number> = { full: 0, narrative: 1, days: 2 };
 	const pdfExports = pdfExportRes.rows
-		.map((r) => ({ mode: r.content_mode, byteSize: Number(r.byte_size) }))
+		// Deliberate snapshot semantics (CODEX1 finding 10, decided
+		// 2026-07-24): a generated PDF is an EDITION — it reflects the archive
+		// as of its generation date, shown to the reader below, and is not
+		// invalidated by later corrections. Regenerating on /admin/exports
+		// supersedes it.
+		.map((r) => ({ mode: r.content_mode, byteSize: Number(r.byte_size), createdAt: r.created_at }))
 		.sort((a, b) => (modeOrder[a.mode] ?? 9) - (modeOrder[b.mode] ?? 9));
 
 	return {

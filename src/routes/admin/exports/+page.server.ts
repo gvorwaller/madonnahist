@@ -157,7 +157,15 @@ export const actions: Actions = {
 
 		const userId = Number(locals.user!.id);
 		await withTransaction(async (client) => {
-			await client.query(`INSERT INTO job_runs (job_type, payload) VALUES ('pdf_export', $1::jsonb)`, [
+			await client.query(`INSERT INTO job_runs (job_type, payload)
+			 SELECT 'pdf_export', $1::jsonb
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM job_runs
+			    WHERE job_type = 'pdf_export'
+			      AND status IN ('pending', 'in_progress')
+			      AND payload->>'scope_key' = $1::jsonb->>'scope_key'
+			      AND payload->>'scope' = $1::jsonb->>'scope'
+			      AND COALESCE(payload->>'content_mode','full') = COALESCE($1::jsonb->>'content_mode','full'))`, [
 				JSON.stringify({ scope: 'year', scope_key: yearKey, requested_by: userId, content_mode: contentMode })
 			]);
 			await auditExport(
@@ -186,7 +194,7 @@ export const actions: Actions = {
 		if (!before.rows[0]) return fail(404, { error: 'Export not found' });
 		const row = before.rows[0];
 
-		await deleteObject(row.object_key);
+		const objectDeleted = await deleteObject(row.object_key);
 
 		const userId = Number(locals.user!.id);
 		await withTransaction(async (client) => {
@@ -198,7 +206,7 @@ export const actions: Actions = {
 				id,
 				{ scope_key: row.scope_key, object_key: row.object_key },
 				null,
-				`Deleted PDF export for year ${row.scope_key}`
+				`Deleted PDF export for ${row.scope_key}` + (objectDeleted ? '' : ' — WARNING: Spaces object deletion failed; orphaned object needs manual cleanup')
 			);
 		});
 	}

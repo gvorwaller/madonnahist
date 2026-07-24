@@ -23,6 +23,12 @@
 # /admin/system-health).
 set -euo pipefail
 
+# CODEX1 review finding 9 (2026-07-24): any failure path that escaped fail()
+# (set -e on credential substitutions, preflight exits, the retention count
+# pipeline) left the previous OK status in app_state forever — a dead backup
+# that looks green. The ERR trap guarantees a failure status lands for ANY
+# unexpected exit; flock prevents overlapping runs sharing the date-stamped
+# temp files.
 PGPORT=5434
 DB=madonnahist
 WORKDIR=/var/backups/madonnahist
@@ -48,6 +54,7 @@ set_app_state() { # key, json-value
 }
 
 fail() {
+  trap - ERR
   local msg="$1"
   log "FAILED: $msg"
   set_app_state db_backup_last_status "{\"status\":\"failed\",\"at\":\"$(date -u +'%FT%TZ')\",\"error\":\"${msg//\"/}\"}"
@@ -59,9 +66,17 @@ fail() {
   exit 1
 }
 
+trap 'fail "unexpected error at line $LINENO"' ERR
+
+exec 9>/var/lock/madonnahist-db-backup.lock
+flock -n 9 || { log "another backup run is active — exiting"; exit 0; }
+
 mkdir -p "$WORKDIR"
+chown postgres:postgres "$WORKDIR"
 chmod 700 "$WORKDIR"
-[[ -f "$PASSFILE" ]] || { log "FATAL: passphrase file $PASSFILE missing"; exit 1; }
+if [[ ! -f "$PASSFILE" ]]; then fail "passphrase file $PASSFILE missing"; fi
+PERMS=$(stat -c '%a %U' "$PASSFILE")
+if [[ "$PERMS" != "600 root" ]]; then fail "passphrase file has unsafe perms/owner: $PERMS (need 600 root)"; fi
 
 # ── Credentials → rclone env config (no on-disk rclone.conf) ─────────────
 BUCKET="$(psql_get SPACES_BUCKET)"
@@ -106,7 +121,7 @@ rclone delete --min-age 30d  "spaces:$BUCKET/backups/db/nightly/" || log "WARN: 
 rclone delete --min-age 366d "spaces:$BUCKET/backups/db/weekly/"  || log "WARN: weekly retention sweep failed"
 
 # ── Health artifacts ─────────────────────────────────────────────────────
-NIGHTLY_COUNT=$(rclone lsf "spaces:$BUCKET/backups/db/nightly/" | wc -l)
+NIGHTLY_COUNT=$( (rclone lsf "spaces:$BUCKET/backups/db/nightly/" || true) | wc -l )
 STATUS="{\"status\":\"ok\",\"at\":\"$(date -u +'%FT%TZ')\",\"dump_bytes\":$SIZE,\"nightly_count\":$NIGHTLY_COUNT,\"weekly\":$([[ "$DOW" == "7" ]] && echo true || echo false)}"
 echo "$STATUS" | rclone rcat "spaces:$BUCKET/backups/db/LAST_RUN_STATUS.json" || log "WARN: status upload failed"
 set_app_state db_backup_last_status "$STATUS"

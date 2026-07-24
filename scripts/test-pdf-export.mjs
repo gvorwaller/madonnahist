@@ -45,7 +45,7 @@
 //     verifying the same subset and rendering mode the worker's Chromium
 //     actually saw — separately from confirming a real PDF was produced
 //   - render-token security matrix: the token opens ONLY its own book page
-//     (GET) and any /app/day/[date]/image path; a POST to its own book page
+//     (GET) and same-year /app/day/[date]/image paths; a POST to its own book page
 //     is 401; another year's book page is a redirect-to-login (never the
 //     content); /correct and /admin both redirect (GET, unauthenticated);
 //     an expired token and a tampered-signature token both fail identically
@@ -619,14 +619,23 @@ async function main() {
 			record('tampered-signature render token: redirects to login, not the content', res.status === 303, `expected 303, got ${res.status}`);
 		}
 		{
-			// The day-image path IS in the token's allow-list regardless of year
-			// (see src/lib/server/render-token.ts's matchesRenderScopePath doc
-			// comment) — the image endpoint re-applies the accepted-only
-			// predicate itself, so this is expected to succeed.
+			// SAME-YEAR day images only (tightened per CODEX1 review finding 4,
+			// 2026-07-24): a year token opens day-image paths whose date falls
+			// in that year — the endpoint still re-applies accepted-only.
 			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATES[0]}/image`, {
 				headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
 			});
-			record('valid render token: day image endpoint is reachable (200)', res.status === 200, `expected 200, got ${res.status}`);
+			record('valid render token: same-year day image is reachable (200)', res.status === 200, `expected 200, got ${res.status}`);
+		}
+		{
+			// Cross-year images must fail closed — token for FIXTURE_YEAR must
+			// NOT open another year's image path (hooks rejects before the
+			// endpoint ever runs, so no fixture data is needed for that year).
+			const otherYearDate = `${Number(FIXTURE_YEAR) + 1}${ACCEPTED_DATES[0].slice(4)}`;
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${otherYearDate}/image`, {
+				headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
+			});
+			record("year render token: another YEAR's day image fails closed (redirect)", res.status === 303, `expected 303, got ${res.status}`);
 		}
 
 		// ── download endpoint ─────────────────────────────────────────────────
@@ -970,16 +979,14 @@ async function main() {
 				});
 				record('story render token: does NOT open a book page', res.status === 303, `expected 303, got ${res.status}`);
 			}
-			// Regression guard: a 'year' token — the SAME kind used throughout
-			// this script above — must still open a day-image path exactly as
-			// before, proving the matchesRenderScopePath() restructure for
-			// scope='story' didn't narrow the existing year/book allowance.
+			// Regression guard: a 'year' token must still open SAME-YEAR day
+			// images (scope tightened to same-year by CODEX1 finding 4).
 			{
 				const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATES[0]}/image`, {
 					headers: { Cookie: `${RENDER_TOKEN_COOKIE_NAME}=${validToken}` }
 				});
 				record(
-					"regression guard: year-scope render token still opens day images",
+					"regression guard: year-scope render token still opens same-year day images",
 					res.status === 200,
 					`expected 200, got ${res.status}`
 				);

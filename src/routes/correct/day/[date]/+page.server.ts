@@ -260,13 +260,24 @@ export const actions = {
 		let textSaved = false;
 		const alreadyAccepted = correction_status === 'accepted';
 
-		if (hasCorrectedText && !alreadyAccepted) {
-			await query(
+		if (hasCorrectedText) {
+			// ATOMIC guard (CODEX1 review finding 1, 2026-07-24): the previous
+			// SELECT-status-then-INSERT was a TOCTOU race — an explicit Save
+			// could land between the read and the insert, and the trailing
+			// in_progress row would knock the freshly-accepted (or flagged/
+			// illegible) day back down via the status trigger. This single
+			// INSERT..SELECT..FOR UPDATE serializes against the save trigger's
+			// row update: whichever commits first, an autosave can never
+			// downgrade a day that has left the pending/in_progress states.
+			const ins = await query(
 				`INSERT INTO day_corrections (day_id, corrected_text, status_after, editor_user_id)
-				 VALUES ($1, $2, 'in_progress', $3)`,
+				 SELECT cd.id, $2, 'in_progress', $3
+				   FROM calendar_days cd
+				  WHERE cd.id = $1 AND cd.correction_status IN ('pending', 'in_progress')
+				    FOR UPDATE`,
 				[day_id, correctedText, userId]
 			);
-			textSaved = true;
+			textSaved = (ins.rowCount ?? 0) > 0;
 		}
 
 		if (hasNarrative) {
@@ -416,7 +427,8 @@ export const actions = {
 			await client.query(
 				`INSERT INTO day_tags (day_id, tag_slug, tag_label, source)
 				 VALUES ($1, $2, $3, 'human')
-				 ON CONFLICT (day_id, tag_slug) DO NOTHING`,
+				 ON CONFLICT (day_id, tag_slug) DO UPDATE
+				   SET source = 'human', tag_label = EXCLUDED.tag_label`,
 				[day_id, tagSlug, tagLabel]
 			);
 			await client.query(

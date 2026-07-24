@@ -48,7 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// worker's own stale-retry window, not treated as already-in-flight here.
 		query<{ scope_key: string }>(
 			`SELECT payload->>'scope_key' AS scope_key FROM job_runs
-			  WHERE job_type = 'narrative_summary' AND status = 'pending' AND payload->>'scope' = 'year'`
+			  WHERE job_type = 'narrative_summary' AND status IN ('pending', 'in_progress') AND payload->>'scope' = 'year'`
 		)
 	]);
 
@@ -110,7 +110,7 @@ export const actions: Actions = {
 		}
 
 		const pending = await query(
-			`SELECT 1 FROM job_runs WHERE job_type = 'narrative_summary' AND status = 'pending'
+			`SELECT 1 FROM job_runs WHERE job_type = 'narrative_summary' AND status IN ('pending', 'in_progress')
 			   AND payload->>'scope' = 'year' AND payload->>'scope_key' = $1`,
 			[yearKey]
 		);
@@ -119,7 +119,14 @@ export const actions: Actions = {
 		}
 
 		await withTransaction(async (client) => {
-			await client.query(`INSERT INTO job_runs (job_type, payload) VALUES ('narrative_summary', $1::jsonb)`, [
+			await client.query(`INSERT INTO job_runs (job_type, payload)
+			 SELECT 'narrative_summary', $1::jsonb
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM job_runs
+			    WHERE job_type = 'narrative_summary'
+			      AND status IN ('pending', 'in_progress')
+			      AND payload->>'scope_key' = $1::jsonb->>'scope_key'
+			      AND payload->>'scope' = $1::jsonb->>'scope')`, [
 				JSON.stringify({ scope: 'year', scope_key: yearKey })
 			]);
 			await auditNarrative(
@@ -230,7 +237,7 @@ export const actions: Actions = {
 		if (!before.rows[0]) return fail(404, { error: 'No narrative draft exists for this year yet' });
 
 		const pending = await query(
-			`SELECT 1 FROM job_runs WHERE job_type = 'narrative_summary' AND status = 'pending'
+			`SELECT 1 FROM job_runs WHERE job_type = 'narrative_summary' AND status IN ('pending', 'in_progress')
 			   AND payload->>'scope' = 'year' AND payload->>'scope_key' = $1`,
 			[yearKey]
 		);
@@ -240,7 +247,14 @@ export const actions: Actions = {
 
 		await withTransaction(async (client) => {
 			await client.query(`UPDATE narrative_summaries SET is_published = false WHERE id = $1`, [before.rows[0].id]);
-			await client.query(`INSERT INTO job_runs (job_type, payload) VALUES ('narrative_summary', $1::jsonb)`, [
+			await client.query(`INSERT INTO job_runs (job_type, payload)
+			 SELECT 'narrative_summary', $1::jsonb
+			 WHERE NOT EXISTS (
+			   SELECT 1 FROM job_runs
+			    WHERE job_type = 'narrative_summary'
+			      AND status IN ('pending', 'in_progress')
+			      AND payload->>'scope_key' = $1::jsonb->>'scope_key'
+			      AND payload->>'scope' = $1::jsonb->>'scope')`, [
 				JSON.stringify({ scope: 'year', scope_key: yearKey })
 			]);
 			await auditNarrative(

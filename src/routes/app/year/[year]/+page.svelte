@@ -87,6 +87,7 @@
 									: ex.mode === 'narrative'
 										? `Year summary only (${formatBytes(ex.byteSize)})`
 										: `Days only (${formatBytes(ex.byteSize)})`}
+								<span class="pdf-date">generated {new Date(ex.createdAt).toLocaleDateString()}</span>
 							</a>
 						</li>
 					{/each}
@@ -233,6 +234,12 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
+	}
+	.pdf-date {
+		font-weight: 400;
+		font-size: 0.78rem;
+		color: var(--color-ink-muted);
+		margin-left: 0.4rem;
 	}
 	.pdf-link {
 		display: flex;

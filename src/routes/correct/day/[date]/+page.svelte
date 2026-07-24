@@ -87,7 +87,32 @@
 		scheduleAutosave();
 	});
 
+	// Single-flight serialization (CODEX1 review finding 1, client half):
+	// overlapping autosaves could complete out of order, making an older
+	// snapshot the latest correction and corrupting lastSavedText. Only one
+	// request runs at a time; a change arriving mid-flight queues exactly one
+	// rerun after the current request settles.
+	let autosaveActive: Promise<void> | null = null;
+	let autosaveRerun = false;
+
 	async function doAutosave(): Promise<void> {
+		if (autosaveActive) {
+			autosaveRerun = true;
+			return;
+		}
+		autosaveActive = runAutosave();
+		try {
+			await autosaveActive;
+		} finally {
+			autosaveActive = null;
+			if (autosaveRerun) {
+				autosaveRerun = false;
+				await doAutosave();
+			}
+		}
+	}
+
+	async function runAutosave(): Promise<void> {
 		if (saving) return;
 		const textChanged = correctedText !== lastSavedText;
 		const narrativeChanged = dayNarrative !== lastSavedNarrative;
@@ -119,6 +144,8 @@
 
 	async function flushAutosave(): Promise<void> {
 		if (autosaveTimer) clearTimeout(autosaveTimer);
+		// Wait out any in-flight request first so the final state wins.
+		if (autosaveActive) await autosaveActive;
 		await doAutosave();
 	}
 

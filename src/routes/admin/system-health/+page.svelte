@@ -46,7 +46,13 @@
 			{#if data.dbBackup}
 				<dl>
 					<dt>Status</dt>
-					<dd>{data.dbBackup.status === 'ok' ? 'OK' : `FAILED${data.dbBackup.error ? ` — ${data.dbBackup.error}` : ''}`}</dd>
+					<dd>
+						{#if data.dbBackup.stale}
+							STALE — no run in over 26h (check cron / log)
+						{:else}
+							{data.dbBackup.status === 'ok' ? 'OK' : `FAILED${data.dbBackup.error ? ` — ${data.dbBackup.error}` : ''}`}
+						{/if}
+					</dd>
 					<dt>Last run</dt><dd>{new Date(data.dbBackup.at).toLocaleString()}</dd>
 					{#if data.dbBackup.dump_bytes}
 						<dt>Dump size</dt><dd>{(data.dbBackup.dump_bytes / 1048576).toFixed(1)} MB</dd>

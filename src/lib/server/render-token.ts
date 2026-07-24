@@ -154,6 +154,13 @@ export function matchesRenderScopePath(path: string, scope: string, key: string)
 	if (scope === 'story') {
 		return path === `/app/stories/${key}`;
 	}
-	if (path === `/app/book/${scope}/${key}`) return true;
-	return /^\/app\/day\/\d{4}-\d{2}-\d{2}\/image$/.test(path);
+	// CODEX1 review finding 4 (2026-07-24): the day-image allowance was
+	// archive-wide for any non-story scope; a 1976 token could fetch any
+	// accepted day's image and unknown scopes inherited the allowance.
+	// Now: only the known 'year' scope, its own book page, and day images
+	// whose date falls in that same year. Everything else fails closed.
+	if (scope !== 'year' || !/^\d{4}$/.test(key)) return false;
+	if (path === `/app/book/year/${key}`) return true;
+	const m = path.match(/^\/app\/day\/(\d{4})-\d{2}-\d{2}\/image$/);
+	return m !== null && m[1] === key;
 }

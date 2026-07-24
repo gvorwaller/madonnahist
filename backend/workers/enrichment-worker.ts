@@ -307,7 +307,28 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 			tags = sanitizeTags(result.tags);
 		}
 
+		let stale = false;
 		await withTransaction(async (client) => {
+			// CODEX1 review finding 3 (2026-07-24): the staleness guard above
+			// runs BEFORE the LLM call; a human re-accepting a changed
+			// correction during that call would get stale extraction committed
+			// over their fresh text's metadata. Revalidate inside the write
+			// transaction, immediately before the destructive replace.
+			const recheck = await client.query(
+				`SELECT cd.correction_status,
+				        (SELECT dc.id FROM day_corrections dc WHERE dc.day_id = cd.id ORDER BY dc.id DESC LIMIT 1) AS latest_id
+				   FROM calendar_days cd WHERE cd.id = $1`,
+				[dayId]
+			);
+			const rc = recheck.rows[0];
+			if (!rc || rc.correction_status !== 'accepted' || String(rc.latest_id) !== String(payloadCorrectionId)) {
+				await client.query(
+					`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
+					[job.id, `skipped: correction changed during extraction (latest=${rc?.latest_id}, status=${rc?.correction_status})`]
+				);
+				stale = true;
+				return;
+			}
 			// Wholesale replace this day's AI-sourced rows — the worker's RLS
 			// DELETE policy (0020_entity_enrichment.sql) restricts this to
 			// source='ai' regardless of the WHERE clause, so a human tag or
@@ -359,6 +380,10 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 			await client.query(`UPDATE job_runs SET status='done', completed_at=NOW() WHERE id=$1`, [job.id]);
 		});
 
+		if (stale) {
+			log(`  day_id=${dayId} (${day.entry_date}): SKIPPED (correction changed during extraction)`);
+			return;
+		}
 		log(`  day_id=${dayId} (${day.entry_date}): ${entities.length} entities, ${tags.length} tags`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
@@ -496,15 +521,29 @@ async function processNarrativeSummary(job: ClaimedJob): Promise<void> {
 		// migration 0021's column-scoped grant exactly, so this statement
 		// succeeds under the worker role's actual privileges rather than
 		// merely under app-role testing.
-		await query(
+		// CODEX1 review finding 2 (2026-07-24): the is_published pre-check runs
+		// BEFORE the LLM call; an admin publishing during generation would have
+		// had the now-published text overwritten by this upsert. The WHERE on
+		// the DO UPDATE closes the window — zero affected rows means a publish
+		// won the race and this generation is discarded as skipped.
+		const upsert = await query(
 			`INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, generated_at, is_published)
 			 VALUES ($1, $2, $3, $4, NOW(), FALSE)
 			 ON CONFLICT (scope, scope_key) DO UPDATE
 			   SET summary_text = EXCLUDED.summary_text,
 			       generated_by = EXCLUDED.generated_by,
-			       generated_at = NOW()`,
+			       generated_at = NOW()
+			 WHERE narrative_summaries.is_published = FALSE`,
 			[scope, scopeKey, summaryText, model]
 		);
+		if ((upsert.rowCount ?? 0) === 0) {
+			await query(
+				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
+				[job.id, `skipped: published during generation — text untouched`]
+			);
+			log(`  scope=year scope_key=${scopeKey}: SKIPPED (published during generation)`);
+			return;
+		}
 
 		await query(
 			`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
@@ -680,18 +719,26 @@ async function processPdfExport(job: ClaimedJob): Promise<void> {
 		]);
 
 		const page = await context.newPage();
-		await page.goto(renderUrl, { waitUntil: 'networkidle', timeout: 120_000 });
-		// Explicit wait for every <img> to finish loading — ?render=pdf already
-		// makes every image eager (src/routes/app/book/[scope]/[key]/+page.svelte),
-		// but 'networkidle' can resolve before a same-origin image response has
-		// actually finished decoding into the DOM; this is the belt to that
-		// suspenders. A story page embeds no images at all
-		// (src/routes/app/stories/[id]/+page.svelte), so document.images is
-		// simply empty there and .every() resolves immediately — harmless to
-		// run unconditionally for both scopes.
-		await page.waitForFunction(() => Array.from(document.images).every((img) => img.complete), undefined, {
-			timeout: 60_000
-		});
+		const response = await page.goto(renderUrl, { waitUntil: 'networkidle', timeout: 120_000 });
+		// CODEX1 review finding 8 (2026-07-24): without these assertions a
+		// login redirect, error page, or broken images could be persisted as a
+		// "successful" export. Require: 2xx response, the final URL still on
+		// the intended path (a redirect to /login would change it), and every
+		// image both complete AND actually decoded (naturalWidth > 0 — a
+		// failed image reports complete=true with naturalWidth=0).
+		if (!response || !response.ok()) {
+			throw new Error(`render fetch failed: HTTP ${response?.status() ?? 'no response'} for ${renderUrl}`);
+		}
+		const finalPath = new URL(page.url()).pathname;
+		const expectedPath = new URL(renderUrl).pathname;
+		if (finalPath !== expectedPath) {
+			throw new Error(`render redirected: expected ${expectedPath}, landed on ${finalPath}`);
+		}
+		await page.waitForFunction(
+			() => Array.from(document.images).every((img) => img.complete && img.naturalWidth > 0),
+			undefined,
+			{ timeout: 60_000 }
+		);
 
 		const footerLabel = scope === 'year' ? scopeKey : 'Family story';
 		const pdfBuffer = await page.pdf({

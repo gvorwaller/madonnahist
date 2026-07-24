@@ -73,7 +73,15 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		dbBackup: dbBackupRes.rows[0]
-			? { ...JSON.parse(dbBackupRes.rows[0].value), updatedAt: dbBackupRes.rows[0].updated_at }
+			? {
+					...JSON.parse(dbBackupRes.rows[0].value),
+					updatedAt: dbBackupRes.rows[0].updated_at,
+					// Stale flag (CODEX1 finding 9): a dead cron must not stay
+					// green — nightly cadence means anything older than 26h is
+					// a failure to run, regardless of the last status.
+					stale:
+						Date.now() - new Date(dbBackupRes.rows[0].updated_at).getTime() > 26 * 3600_000
+				}
 			: null,
 		process: {
 			rss: Math.round(mem.rss / 1024 / 1024),
