@@ -129,14 +129,16 @@ Current working queue, in order:
 | **Now** | td-c51cdb (P1) | AI tag suggestions in the correction UI | 5,674 AI tags already exist; one-tap accept/dismiss |
 | **Next** | td-852d99 (P2) | Viewer month page: full calendar-page image + day grid | The physical artifact adds story interest; pending days' handwriting deliberately visible (transcriptions stay gated) |
 | **Next** | td-310bf7 (P2) | /admin/audit viewer (filter logins/edits/actions) | Logging exists; add login events + filterable UI |
-| Soon | td-ff8a42 | Nightly pg_dump→Spaces + restore drill | The one risk-reduction item open |
+| Soon | td-ff8a42 | Nightly pg_dump→DO Spaces + restore drill | Agreed 2026-07-23 ("cheap insurance"); dedicated prefix/bucket, consider GPG |
+| Next+1 | td-ed1751 | Tap a day on the month-page photo → day detail | crop_bounds overlay; follows td-852d99 |
 | Soon | td-441e27 | Decade narratives | Cheap once 1970s years fill in |
 | Triggered | td-7b0ada | Person narratives | After alias curation matures |
 | Triggered | td-09102a | Narrative style selector | On family voice feedback |
 | Triggered | td-15e231 | Historical context layer | When era context is wanted |
 | Triggered | td-352051 pt2 | Hierarchical whole-archive asking | On family-facing Ask demand |
 | Triggered | td-ae212d | Book pagination/swipe (B5) | If continuous reader feels insufficient |
-| Future | td-ef00c8 / td-d00bb8 / td-dda364 | Multi-corpus groundwork trio | Pre-roadmap direction, unchanged |
+| Future | td-bc2c29 | First-person memory entries (Madonna pre-1976, Gaylon 1976+) | The "full life narrative" direction — 50th anniversary this month; design doc first |
+| Future | td-ef00c8 / td-d00bb8 / td-dda364 | Multi-corpus groundwork trio | Now has concrete requirements via td-bc2c29 |
 
 ## Explicitly deferred (tracked in td, not silently dropped)
 
