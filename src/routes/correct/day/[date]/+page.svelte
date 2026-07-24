@@ -18,18 +18,31 @@
 
 	let correctedText = $state('');
 	let lastSavedText = $state('');
-	$effect(() => { data.day.entry_date; correctedText = initialText; lastSavedText = initialText; });
-
 	let dayNarrative = $state('');
 	let lastSavedNarrative = $state('');
+
+	// Reset editor state ONLY when the day actually changes (tracked by
+	// VALUE, not by object identity). The original effects here depended on
+	// `data.day.entry_date` through the reactive `data` prop, so ANY data
+	// invalidation — adding/accepting a tag, any enhance update() — re-ran
+	// them and silently reset the textarea to initialText, destroying
+	// whatever Madonna had typed since (production incident 2026-07-24:
+	// Save appeared to "not save" because the form submitted the reverted
+	// machine-draft text). The lastLoadedDate guard makes an equal-date
+	// refresh a no-op for user-owned state.
+	let lastLoadedDate = $state('');
 	$effect(() => {
-		data.day.entry_date;
+		const d = data.day.entry_date;
+		if (d === lastLoadedDate) return;
+		lastLoadedDate = d;
+		correctedText = initialText;
+		lastSavedText = initialText;
 		dayNarrative = data.day.day_narrative ?? '';
 		lastSavedNarrative = data.day.day_narrative ?? '';
+		conflictDismissed = false;
+		newTagLabel = '';
+		tagError = '';
 	});
-
-	$effect(() => { data.day.entry_date; conflictDismissed = false; });
-	$effect(() => { data.day.entry_date; newTagLabel = ''; tagError = ''; });
 
 	let saving = $state(false);
 	let saveError = $state('');
@@ -141,6 +154,14 @@
 
 	const canAcceptDraft = $derived(
 		!!data.day.draft_text && data.day.draft_text.trim() !== '' && data.day.correction_status !== 'accepted'
+	);
+	// Accept Draft replaces the day's text with the machine draft VERBATIM.
+	// If Madonna has already typed corrections that differ from the draft,
+	// one tap would silently discard her visible work (this contributed to
+	// the 2026-07-24 lost-text incident) — so it disables the moment the
+	// textarea diverges from the draft, with the title explaining why.
+	const textMatchesDraft = $derived(
+		correctedText.trim() === (data.day.draft_text ?? '').trim() || correctedText.trim() === ''
 	);
 
 	const dateLabel = $derived(
@@ -470,7 +491,14 @@
 					}
 				};
 			}}>
-				<button type="submit" class="action-btn btn-accept-draft" disabled={saving}>
+				<button
+					type="submit"
+					class="action-btn btn-accept-draft"
+					disabled={saving || !textMatchesDraft}
+					title={!textMatchesDraft
+						? 'Your text differs from the machine draft — use Save to keep your edits'
+						: 'Accept the machine draft as-is and continue'}
+				>
 					Accept Draft
 				</button>
 			</form>
