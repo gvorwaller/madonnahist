@@ -55,6 +55,11 @@
 				</form>
 			{/if}
 		</div>
+		{#if data.hasClaim}
+			<form method="POST" action="/correct/month/{monthKey}?/pause" use:enhance class="done-for-now-form">
+				<button type="submit" class="done-for-now-btn">Done for now</button>
+			</form>
+		{/if}
 	</header>
 
 	{#if data.otherClaim}
@@ -271,4 +276,24 @@
 		text-decoration: underline;
 	}
 	.release-link:hover { color: #555; }
+
+	.done-for-now-form {
+		margin-top: 0.75rem;
+	}
+	.done-for-now-btn {
+		min-height: 44px;
+		padding: 0.5rem 1.1rem;
+		background: #fff;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		color: #333;
+		font-size: 0.9rem;
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.done-for-now-btn:hover {
+		border-color: #999;
+		background: #f5f5f5;
+	}
 </style>

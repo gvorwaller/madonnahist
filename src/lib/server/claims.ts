@@ -95,6 +95,47 @@ export async function completeSession(userId: number, year: number, month: numbe
 	`, [userId, JSON.stringify({ year, month })]);
 }
 
+export interface PausedSession {
+	sessionId: number;
+	startedAt: Date;
+	year: number | null;
+	month: number | null;
+}
+
+/**
+ * "Done for now" (td-b52a49 item 4a). Pauses whatever session is currently
+ * `active` for this user — claimMonth()'s exclusivity rule means a user has
+ * at most one active session at a time, so no month/scope needs to be
+ * passed in. Returns null if the user had no active session (e.g. double
+ * submit, or the session already went stale/abandoned).
+ */
+export async function pauseActiveSession(userId: number): Promise<PausedSession | null> {
+	const res = await query<{ id: string; started_at: string; queue_scope: unknown }>(`
+		UPDATE correction_sessions
+		   SET status = 'paused', last_activity_at = NOW()
+		 WHERE user_id = $1 AND status = 'active'
+		 RETURNING id, started_at, queue_scope
+	`, [userId]);
+
+	const row = res.rows[0];
+	if (!row) return null;
+
+	// JSONB comes back as an object already (see cs.md's JSONB-vs-SQLite note);
+	// guard with typeof anyway in case a future driver/version change reverts
+	// that.
+	const scope = (typeof row.queue_scope === 'string' ? JSON.parse(row.queue_scope) : row.queue_scope) as
+		| { year?: number; month?: number }
+		| null
+		| undefined;
+
+	return {
+		sessionId: Number(row.id),
+		startedAt: new Date(row.started_at),
+		year: scope?.year ?? null,
+		month: scope?.month ?? null,
+	};
+}
+
 export interface UserResume {
 	entryDate: string;
 	year: number;
@@ -102,13 +143,17 @@ export interface UserResume {
 }
 
 export async function getUserResume(userId: number): Promise<UserResume | null> {
+	// status IN ('active', 'paused') — not just 'active'. A session paused via
+	// "Done for now" (td-b52a49 item 4) must still be resumable: pausing only
+	// marks the session paused, it never abandons it. Matches the same
+	// two-status filter getClaimForMonth() already uses for the same reason.
 	const res = await query<{ entry_date: string; year: number; month: number }>(`
 		SELECT cd.entry_date::text AS entry_date, cp.year, cp.month
 		  FROM correction_sessions cs
 		  JOIN calendar_days cd ON cd.id = cs.current_day_id
 		  JOIN calendar_pages cp ON cp.id = cd.page_id
 		 WHERE cs.user_id = $1
-		   AND cs.status = 'active'
+		   AND cs.status IN ('active', 'paused')
 		 ORDER BY cs.last_activity_at DESC
 		 LIMIT 1
 	`, [userId]);

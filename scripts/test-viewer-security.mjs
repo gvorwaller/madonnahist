@@ -556,6 +556,57 @@ async function main() {
 			record('POST /correct/day/<date>?/removeTag [viewer] is 403', ok, `expected 403, got ${res.status}`);
 		}
 
+		// ── td-b52a49 / td-c51cdb: new correction-editor actions stay gated
+		//    for viewers the same way addTag/removeTag already do above ──────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/autosave`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ correctedText: 'should not be saved' }).toString()
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/autosave [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/acceptDraft`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie }
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/acceptDraft [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/acceptTag`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie, 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: new URLSearchParams({ tagSlug: ACCEPTED_TAG_SLUG }).toString()
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/acceptTag [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}?/pause`, {
+				method: 'POST',
+				headers: { Cookie: viewerCookie }
+			});
+			const ok = res.status === 403;
+			record('POST /correct/day/<date>?/pause [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/day/${ACCEPTED_DATE}/history`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const ok = res.status === 403;
+			record('GET /correct/day/<date>/history [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/correct/session-done`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const ok = res.status === 403;
+			record('GET /correct/session-done [viewer] is 403', ok, `expected 403, got ${res.status}`);
+		}
+
 		// ── Phase D: entity chip on accepted day links to its person page ──
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATE}`, {

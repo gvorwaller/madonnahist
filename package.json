@@ -22,6 +22,7 @@
 		"test:viewer": "node scripts/test-viewer-security.mjs",
 		"test:enrichment": "node scripts/test-enrichment.mjs",
 		"test:narratives": "node scripts/test-narratives.mjs",
+		"test:correction-workflow": "node scripts/test-correction-workflow.mjs",
 		"test:ask": "node scripts/test-ask.mjs",
 		"test:pdf": "node scripts/test-pdf-export.mjs",
 		"format": "prettier --write .",

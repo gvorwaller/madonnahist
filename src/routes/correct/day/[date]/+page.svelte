@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, deserialize } from '$app/forms';
 	import { page } from '$app/stores';
 
 	const { data } = $props();
@@ -17,10 +17,16 @@
 	);
 
 	let correctedText = $state('');
-	$effect(() => { data.day.entry_date; correctedText = initialText; });
+	let lastSavedText = $state('');
+	$effect(() => { data.day.entry_date; correctedText = initialText; lastSavedText = initialText; });
 
 	let dayNarrative = $state('');
-	$effect(() => { data.day.entry_date; dayNarrative = data.day.day_narrative ?? ''; });
+	let lastSavedNarrative = $state('');
+	$effect(() => {
+		data.day.entry_date;
+		dayNarrative = data.day.day_narrative ?? '';
+		lastSavedNarrative = data.day.day_narrative ?? '';
+	});
 
 	$effect(() => { data.day.entry_date; conflictDismissed = false; });
 	$effect(() => { data.day.entry_date; newTagLabel = ''; tagError = ''; });
@@ -33,6 +39,109 @@
 	let pageImageOpen = $state(false);
 	let newTagLabel = $state('');
 	let tagError = $state('');
+
+	// td-c51cdb — human-confirmed tags keep the existing chips+remove UI;
+	// AI-sourced suggestions render separately with Accept/Dismiss controls.
+	const humanTags = $derived(data.tags.filter((t) => t.source !== 'ai'));
+	const aiTags = $derived(data.tags.filter((t) => t.source === 'ai'));
+
+	// td-b52a49 item 1 — auto-save. Debounces 1.5s after the last change to
+	// correctedText/dayNarrative, and never fires while an explicit
+	// save/skip/flag/accept-draft submit is in flight (the `saving` guard
+	// below). See ?/autosave in +page.server.ts for the server-side safety
+	// gate that suppresses the day_corrections insert on already-accepted
+	// days.
+	let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
+	let autosaveInFlight = $state(false);
+	let autosaveStatus = $state('');
+
+	$effect(() => {
+		data.day.entry_date;
+		autosaveStatus = '';
+		if (autosaveTimer) clearTimeout(autosaveTimer);
+	});
+
+	function scheduleAutosave() {
+		if (saving) return;
+		if (correctedText === lastSavedText && dayNarrative === lastSavedNarrative) return;
+		if (autosaveTimer) clearTimeout(autosaveTimer);
+		autosaveTimer = setTimeout(() => { void doAutosave(); }, 1500);
+	}
+
+	$effect(() => {
+		correctedText;
+		dayNarrative;
+		scheduleAutosave();
+	});
+
+	async function doAutosave(): Promise<void> {
+		if (saving) return;
+		const textChanged = correctedText !== lastSavedText;
+		const narrativeChanged = dayNarrative !== lastSavedNarrative;
+		if (!textChanged && !narrativeChanged) return;
+
+		autosaveInFlight = true;
+		const snapshotText = correctedText;
+		const snapshotNarrative = dayNarrative;
+		try {
+			const formData = new FormData();
+			if (textChanged) formData.set('correctedText', snapshotText);
+			if (narrativeChanged) formData.set('dayNarrative', snapshotNarrative);
+			const res = await fetch('?/autosave', { method: 'POST', body: formData });
+			const result = deserialize(await res.text());
+			if (result.type === 'success') {
+				if (textChanged) lastSavedText = snapshotText;
+				if (narrativeChanged) lastSavedNarrative = snapshotNarrative;
+				const now = new Date();
+				autosaveStatus = `Draft saved ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+			} else {
+				autosaveStatus = 'Draft save failed';
+			}
+		} catch {
+			autosaveStatus = 'Draft save failed';
+		} finally {
+			autosaveInFlight = false;
+		}
+	}
+
+	async function flushAutosave(): Promise<void> {
+		if (autosaveTimer) clearTimeout(autosaveTimer);
+		await doAutosave();
+	}
+
+	let historyOpen = $state(false);
+	let historyLoading = $state(false);
+	let historyError = $state('');
+	let historyData: {
+		ocrRuns: { vendor: string; created_at: string; raw_text: string; confidence_score: number | null }[];
+		llmDraftRuns: { model_name: string; created_at: string; draft_text: string }[];
+		corrections: { display_name: string; created_at: string; status_after: string; corrected_text: string; review_note: string | null }[];
+	} | null = $state(null);
+
+	async function openHistory() {
+		historyOpen = true;
+		historyLoading = true;
+		historyError = '';
+		try {
+			const res = await fetch(`/correct/day/${data.day.entry_date}/history`);
+			if (!res.ok) throw new Error(`status ${res.status}`);
+			historyData = await res.json();
+		} catch {
+			historyError = 'Could not load history.';
+		} finally {
+			historyLoading = false;
+		}
+	}
+
+	function formatHistoryTime(iso: string): string {
+		return new Date(iso).toLocaleString([], {
+			month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit'
+		});
+	}
+
+	const canAcceptDraft = $derived(
+		!!data.day.draft_text && data.day.draft_text.trim() !== '' && data.day.correction_status !== 'accepted'
+	);
 
 	const dateLabel = $derived(
 		new Date(data.day.entry_date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -90,6 +199,7 @@
 		if (lightboxOpen) lightboxOpen = false;
 		if (pageImageOpen) pageImageOpen = false;
 		if (showFlagModal) { showFlagModal = false; flagNote = ''; }
+		if (historyOpen) historyOpen = false;
 	}
 }} />
 
@@ -103,6 +213,24 @@
 		<div class="header-row">
 			<h1>{dateLabel}</h1>
 			<span class="status-badge {statusClass}">{statusLabel}</span>
+			<div class="header-actions">
+				<button type="button" class="header-btn" onclick={openHistory}>History</button>
+				<form
+					method="POST"
+					action="?/pause"
+					use:enhance={async () => {
+						// Flush any pending debounced autosave before navigating away
+						// — SvelteKit's enhance awaits this submit callback before
+						// firing the actual POST, so the last few keystrokes before
+						// "Done for now" aren't lost. See doAutosave()'s server-side
+						// safety gate for what happens on an already-accepted day.
+						await flushAutosave();
+						return async ({ update }) => { update(); };
+					}}
+				>
+					<button type="submit" class="header-btn">Done for now</button>
+				</form>
+			</div>
 		</div>
 		<div class="nav-row">
 			<span class="position">Day {data.position} of {data.total}</span>
@@ -165,7 +293,14 @@
 			{/if}
 
 			<div class="correction-section">
-				<label class="section-label" for="corrected-text">Corrected text</label>
+				<div class="correction-label-row">
+					<label class="section-label" for="corrected-text">Corrected text</label>
+					{#if autosaveInFlight}
+						<span class="autosave-status">Saving draft…</span>
+					{:else if autosaveStatus}
+						<span class="autosave-status">{autosaveStatus}</span>
+					{/if}
+				</div>
 				<textarea
 					id="corrected-text"
 					class="correction-textarea"
@@ -174,11 +309,56 @@
 				></textarea>
 			</div>
 
+			{#if aiTags.length > 0}
+				<div class="tags-section suggested-tags-section">
+					<span class="section-label" id="suggested-tags-heading">Suggested tags</span>
+					<div class="tag-chips" role="group" aria-labelledby="suggested-tags-heading">
+						{#each aiTags as tag (tag.tag_slug)}
+							<span class="tag-chip ai-tag">
+								{tag.tag_label}
+								<form
+									method="POST"
+									action="?/acceptTag"
+									use:enhance={() => {
+										tagError = '';
+										return ({ result, update }) => {
+											if (result.type === 'failure') {
+												tagError = (result.data as { error?: string })?.error ?? 'Accept failed';
+											}
+											update();
+										};
+									}}
+								>
+									<input type="hidden" name="tagSlug" value={tag.tag_slug} />
+									<button type="submit" class="tag-accept" aria-label="Accept suggested tag {tag.tag_label}">&check;</button>
+								</form>
+								<form
+									method="POST"
+									action="?/removeTag"
+									use:enhance={() => {
+										tagError = '';
+										return ({ result, update }) => {
+											if (result.type === 'failure') {
+												tagError = (result.data as { error?: string })?.error ?? 'Dismiss failed';
+											}
+											update();
+										};
+									}}
+								>
+									<input type="hidden" name="tagSlug" value={tag.tag_slug} />
+									<button type="submit" class="tag-remove" aria-label="Dismiss suggested tag {tag.tag_label}">&times;</button>
+								</form>
+							</span>
+						{/each}
+					</div>
+				</div>
+			{/if}
+
 			<div class="tags-section">
 				<span class="section-label" id="tags-heading">Tags</span>
 				<div class="tag-chips" role="group" aria-labelledby="tags-heading">
-					{#each data.tags as tag (tag.tag_slug)}
-						<span class="tag-chip" class:ai-tag={tag.source === 'ai'}>
+					{#each humanTags as tag (tag.tag_slug)}
+						<span class="tag-chip">
 							{tag.tag_label}
 							<form
 								method="POST"
@@ -268,6 +448,7 @@
 
 		<form method="POST" action="?/skip" use:enhance={() => {
 			saving = true;
+			if (autosaveTimer) clearTimeout(autosaveTimer);
 			return ({ update }) => { saving = false; update(); };
 		}}>
 			<button type="submit" class="action-btn btn-secondary" disabled={saving}>
@@ -275,9 +456,30 @@
 			</button>
 		</form>
 
+		{#if canAcceptDraft}
+			<form method="POST" action="?/acceptDraft" use:enhance={() => {
+				saving = true;
+				saveError = '';
+				if (autosaveTimer) clearTimeout(autosaveTimer);
+				return ({ result, update }) => {
+					saving = false;
+					if (result.type === 'failure') {
+						saveError = (result.data as { error?: string })?.error ?? 'Accept draft failed';
+					} else {
+						update();
+					}
+				};
+			}}>
+				<button type="submit" class="action-btn btn-accept-draft" disabled={saving}>
+					Accept Draft
+				</button>
+			</form>
+		{/if}
+
 		<form method="POST" action="?/save" use:enhance={() => {
 			saving = true;
 			saveError = '';
+			if (autosaveTimer) clearTimeout(autosaveTimer);
 			return ({ result, update }) => {
 				saving = false;
 				if (result.type === 'failure') {
@@ -313,6 +515,7 @@
 				</button>
 				<form method="POST" action="?/flag" use:enhance={() => {
 					saving = true;
+					if (autosaveTimer) clearTimeout(autosaveTimer);
 					return ({ update }) => { saving = false; showFlagModal = false; update(); };
 				}}>
 					<input type="hidden" name="reviewNote" value={flagNote} />
@@ -342,6 +545,78 @@
 		<div class="lightbox-content">
 			<div class="lightbox-header">{monthNames[data.day.month]} {data.day.year} — Full Page</div>
 			<img src={pageImageSrc} alt="Full calendar page" class="lightbox-img" />
+		</div>
+	</div>
+{/if}
+
+{#if historyOpen}
+	<div class="modal-overlay" role="dialog" aria-label="History for {dateLabel}">
+		<div class="modal history-modal">
+			<div class="history-header">
+				<h2>History — {dateLabel}</h2>
+				<button class="history-close" onclick={() => historyOpen = false} aria-label="Close history">&times;</button>
+			</div>
+			<div class="history-body">
+				{#if historyLoading}
+					<p class="history-loading">Loading…</p>
+				{:else if historyError}
+					<p class="history-error" role="alert">{historyError}</p>
+				{:else if historyData}
+					<section class="history-section">
+						<h3>Corrections</h3>
+						{#each historyData.corrections as c, i (i)}
+							<div class="history-entry">
+								<div class="history-entry-meta">
+									<span class="history-entry-who">{c.display_name}</span>
+									<span class="history-entry-when">{formatHistoryTime(c.created_at)}</span>
+									<span class="history-entry-status">{c.status_after}</span>
+								</div>
+								{#if c.corrected_text}
+									<div class="history-entry-text">{c.corrected_text}</div>
+								{/if}
+								{#if c.review_note}
+									<div class="history-entry-note">Note: {c.review_note}</div>
+								{/if}
+							</div>
+						{:else}
+							<p class="history-empty">No correction history yet.</p>
+						{/each}
+					</section>
+
+					<section class="history-section">
+						<h3>LLM drafts</h3>
+						{#each historyData.llmDraftRuns as d, i (i)}
+							<div class="history-entry">
+								<div class="history-entry-meta">
+									<span class="history-entry-who">{d.model_name}</span>
+									<span class="history-entry-when">{formatHistoryTime(d.created_at)}</span>
+								</div>
+								<div class="history-entry-text">{d.draft_text}</div>
+							</div>
+						{:else}
+							<p class="history-empty">No LLM drafts yet.</p>
+						{/each}
+					</section>
+
+					<section class="history-section">
+						<h3>OCR runs</h3>
+						{#each historyData.ocrRuns as o, i (i)}
+							<div class="history-entry">
+								<div class="history-entry-meta">
+									<span class="history-entry-who">{o.vendor}</span>
+									<span class="history-entry-when">{formatHistoryTime(o.created_at)}</span>
+									{#if o.confidence_score !== null}
+										<span class="history-entry-status">confidence {o.confidence_score.toFixed(2)}</span>
+									{/if}
+								</div>
+								<div class="history-entry-text">{o.raw_text}</div>
+							</div>
+						{:else}
+							<p class="history-empty">No OCR runs yet.</p>
+						{/each}
+					</section>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}
@@ -392,6 +667,27 @@
 	.status-pending { background: #fff3cd; color: #856404; }
 	.status-done { background: #e6f4e6; color: #1a7a1a; }
 	.status-flag { background: #fde2e2; color: #c33; }
+	.header-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-left: auto;
+	}
+	.header-btn {
+		min-height: 44px;
+		padding: 0.4rem 1rem;
+		background: #fff;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		color: #333;
+		font-size: 0.85rem;
+		font-weight: 500;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.header-btn:hover {
+		border-color: #999;
+		background: #f5f5f5;
+	}
 	.nav-row {
 		display: flex;
 		justify-content: space-between;
@@ -534,6 +830,18 @@
 		display: flex;
 		flex-direction: column;
 	}
+	.correction-label-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+	.autosave-status {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: #666;
+		white-space: nowrap;
+	}
 	.correction-textarea {
 		width: 100%;
 		min-height: 200px;
@@ -555,6 +863,10 @@
 	.tags-section {
 		border-top: 1px solid #e0e0e0;
 		padding-top: 0.75rem;
+	}
+	.suggested-tags-section {
+		border-top: none;
+		padding-top: 0;
 	}
 	.tag-chips {
 		display: flex;
@@ -603,6 +915,25 @@
 	}
 	.tag-remove:hover {
 		background: rgba(0, 0, 0, 0.08);
+	}
+	.tag-accept {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 44px;
+		min-height: 44px;
+		margin: -0.3rem 0 -0.3rem 0;
+		border: none;
+		background: none;
+		font-size: 1rem;
+		font-weight: 700;
+		line-height: 1;
+		color: #1a7a1a;
+		cursor: pointer;
+		border-radius: 999px;
+	}
+	.tag-accept:hover {
+		background: rgba(26, 122, 26, 0.12);
 	}
 	.tag-add-form {
 		display: flex;
@@ -741,6 +1072,18 @@
 		color: #c33;
 		border: 1px solid #c33;
 	}
+	.btn-accept-draft {
+		background: #fff;
+		color: #4a2b5a;
+		border: 1px solid #d8c4e8;
+	}
+	.btn-accept-draft:hover {
+		background: #f3ecf7;
+	}
+	.btn-accept-draft:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
 
 	.modal-overlay {
 		position: fixed;
@@ -766,6 +1109,91 @@
 		margin: 0 0 1rem;
 		color: #555;
 		font-size: 0.9rem;
+	}
+
+	.history-modal {
+		max-width: 640px;
+		max-height: 85vh;
+		display: flex;
+		flex-direction: column;
+	}
+	.history-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+	}
+	.history-header h2 {
+		margin: 0;
+		font-size: 1.1rem;
+	}
+	.history-close {
+		min-width: 44px;
+		min-height: 44px;
+		background: none;
+		border: none;
+		font-size: 1.5rem;
+		line-height: 1;
+		color: #555;
+		cursor: pointer;
+	}
+	.history-body {
+		overflow-y: auto;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+	.history-section h3 {
+		margin: 0 0 0.5rem;
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: #666;
+	}
+	.history-entry {
+		padding: 0.6rem 0.75rem;
+		background: #f8f8f4;
+		border: 1px solid #e0ddd0;
+		border-radius: 6px;
+		margin-bottom: 0.5rem;
+	}
+	.history-entry-meta {
+		display: flex;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+		font-size: 0.75rem;
+		color: #888;
+		margin-bottom: 0.3rem;
+	}
+	.history-entry-who {
+		font-weight: 600;
+		color: #444;
+	}
+	.history-entry-text {
+		font-size: 0.9rem;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		color: #333;
+	}
+	.history-entry-note {
+		margin-top: 0.3rem;
+		font-size: 0.8rem;
+		color: #c33;
+	}
+	.history-empty {
+		font-size: 0.85rem;
+		color: #888;
+		font-style: italic;
+	}
+	.history-loading, .history-error {
+		font-size: 0.9rem;
+		color: #555;
+	}
+	.history-error {
+		color: #c33;
 	}
 	.flag-note {
 		width: 100%;

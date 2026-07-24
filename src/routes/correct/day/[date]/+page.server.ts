@@ -1,6 +1,6 @@
 import { query, withTransaction } from '$lib/db';
 import { populateLexicon } from '$lib/correction-lexicon';
-import { heartbeat, completeSession } from '$lib/server/claims';
+import { heartbeat, completeSession, pauseActiveSession } from '$lib/server/claims';
 import { isValidTagLabel, slugifyTagLabel } from '$lib/server/tags';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -214,6 +214,125 @@ export const actions = {
 		redirect(303, `/correct/day/${nextDate ?? entryDate}${conflictParam}`);
 	},
 
+	// Auto-save (td-b52a49 item 1). Client debounces ~1.5s after typing
+	// pauses and POSTs here via a plain fetch (not a full navigation).
+	//
+	// SAFETY GATE — verified against backend/db/migrations/0005_triggers.sql
+	// (trg_fn_after_correction_insert): for status_after IN
+	// ('pending','in_progress','flagged','illegible') the trigger
+	// unconditionally sets calendar_days.correction_status = NEW.status_after,
+	// with NO guard against clobbering an existing 'accepted' status. An
+	// in_progress autosave insert on an already-accepted day would flip
+	// correction_status back to 'in_progress' and — because every /app/*
+	// viewer query filters on correction_status = 'accepted'
+	// (src/routes/app/day/[date]/+page.server.ts, src/routes/app/search/+page.server.ts)
+	// — silently vanish that day from the family viewer. So: the
+	// day_corrections INSERT is skipped entirely whenever the day's current
+	// correction_status is already 'accepted'; re-edits of an accepted day
+	// persist only through the explicit Save button (status_after='accepted').
+	//
+	// day_narrative is a plain calendar_days column outside the §8 REVOKE
+	// list (see 0012_correction_ui_tables.sql's `GRANT UPDATE (expanded_text,
+	// day_narrative) ON calendar_days`), so it's always safe to autosave
+	// directly regardless of correction_status.
+	autosave: async ({ params, request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const entryDate = params.date;
+		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
+
+		const formData = await request.formData();
+		const hasCorrectedText = formData.has('correctedText');
+		const hasNarrative = formData.has('dayNarrative');
+		const correctedText = (formData.get('correctedText') as string) ?? '';
+		const dayNarrative = (formData.get('dayNarrative') as string) ?? '';
+
+		const userId = Number(locals.user.id);
+
+		const dayRes = await query<{ day_id: number; correction_status: string; year: number; month: number }>(
+			`SELECT cd.id AS day_id, cd.correction_status, cp.year, cp.month
+			   FROM calendar_days cd
+			   JOIN calendar_pages cp ON cp.id = cd.page_id
+			  WHERE cd.entry_date = $1`, [entryDate]
+		);
+		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id, correction_status, year, month } = dayRes.rows[0];
+
+		let textSaved = false;
+		const alreadyAccepted = correction_status === 'accepted';
+
+		if (hasCorrectedText && !alreadyAccepted) {
+			await query(
+				`INSERT INTO day_corrections (day_id, corrected_text, status_after, editor_user_id)
+				 VALUES ($1, $2, 'in_progress', $3)`,
+				[day_id, correctedText, userId]
+			);
+			textSaved = true;
+		}
+
+		if (hasNarrative) {
+			await query(`UPDATE calendar_days SET day_narrative = $1 WHERE id = $2`, [dayNarrative.trim() || null, day_id]);
+		}
+
+		await heartbeat(userId, year, month, day_id);
+
+		return { success: true, textSaved, narrativeSaved: hasNarrative, suppressed: hasCorrectedText && alreadyAccepted, savedAt: new Date().toISOString() };
+	},
+
+	// "Accept draft" (td-b52a49 item 2) — one-click acceptance of the
+	// machine draft text as-is. Same status_after='accepted' path as Save,
+	// so the trigger propagates corrected_text/corrected_by/corrected_at
+	// exactly the same way; skips populateLexicon() since draft_text is
+	// being saved verbatim (diffing draft against itself can never surface a
+	// correction pattern).
+	acceptDraft: async ({ params, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const entryDate = params.date;
+		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
+
+		const userId = Number(locals.user.id);
+
+		const dayRes = await query<{
+			day_id: number; draft_text: string | null; llm_draft_run_id: number | null;
+			correction_status: string; year: number; month: number;
+		}>(`
+			SELECT cd.id AS day_id, ldr.draft_text, cd.latest_llm_draft_run_id AS llm_draft_run_id,
+			       cd.correction_status, cp.year, cp.month
+			  FROM calendar_days cd
+			  JOIN calendar_pages cp ON cp.id = cd.page_id
+			  LEFT JOIN llm_draft_runs ldr ON ldr.id = cd.latest_llm_draft_run_id
+			 WHERE cd.entry_date = $1
+		`, [entryDate]);
+		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id, draft_text, llm_draft_run_id, correction_status, year, month } = dayRes.rows[0];
+
+		if (!draft_text || draft_text.trim() === '') return fail(400, { error: 'No machine draft to accept' });
+		if (correction_status === 'accepted') return fail(400, { error: 'Day is already accepted' });
+
+		await query(
+			`INSERT INTO day_corrections (day_id, corrected_text, status_after, editor_user_id, source_llm_draft_run_id)
+			 VALUES ($1, $2, 'accepted', $3, $4)`,
+			[day_id, draft_text, userId, llm_draft_run_id]
+		);
+
+		await heartbeat(userId, year, month, day_id);
+
+		const nextDate = await nextUncorrectedDate(entryDate);
+		if (!nextDate) {
+			await completeSession(userId, year, month);
+		}
+
+		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+	},
+
+	// "Done for now" (td-b52a49 item 4a) — pauses the user's active
+	// correction_sessions row and sends them to the session summary screen.
+	pause: async ({ locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const userId = Number(locals.user.id);
+		const paused = await pauseActiveSession(userId);
+		redirect(303, paused ? `/correct/session-done?session=${paused.sessionId}` : '/correct');
+	},
+
 	skip: async ({ params, locals }) => {
 		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const entryDate = params.date;
@@ -346,6 +465,52 @@ export const actions = {
 				 JSON.stringify({ tag_slug: tagSlug, tag_label: before.rows[0].tag_label, source: before.rows[0].source }),
 				 null,
 				 `Removed tag "${before.rows[0].tag_label}" from ${entryDate}`]
+			);
+		});
+	},
+
+	// td-c51cdb — accept an AI-suggested tag: converts source 'ai' -> 'human'
+	// in place (rather than delete+reinsert) so the row's created_at and
+	// history are preserved. day_tags_app_full is a FOR ALL RLS policy for
+	// madonnahist_app (0004_grants_rls.sql) and the broad
+	// "GRANT ... UPDATE ... ON ALL TABLES" grant covers day_tags, so this
+	// UPDATE needs no new migration. The 0005 search_aux_text trigger already
+	// fires on UPDATE, so FTS stays in sync automatically.
+	acceptTag: async ({ params, request, locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const entryDate = params.date;
+		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
+
+		const formData = await request.formData();
+		const tagSlug = (formData.get('tagSlug') as string ?? '').trim();
+		if (tagSlug === '') return fail(400, { error: 'Missing tag' });
+
+		const dayRes = await query<{ day_id: number }>(
+			`SELECT id AS day_id FROM calendar_days WHERE entry_date = $1`, [entryDate]
+		);
+		if (!dayRes.rows[0]) return fail(404, { error: 'Day not found' });
+		const { day_id } = dayRes.rows[0];
+		const userId = Number(locals.user.id);
+
+		const before = await query<{ tag_label: string; source: string }>(
+			`SELECT tag_label, source FROM day_tags WHERE day_id = $1 AND tag_slug = $2`,
+			[day_id, tagSlug]
+		);
+		if (!before.rows[0]) return fail(404, { error: 'Tag not found' });
+		if (before.rows[0].source === 'human') return fail(400, { error: 'Tag is already confirmed' });
+
+		await withTransaction(async (client) => {
+			await client.query(
+				`UPDATE day_tags SET source = 'human' WHERE day_id = $1 AND tag_slug = $2`,
+				[day_id, tagSlug]
+			);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
+				[userId, 'tag_accept', 'day_tags', day_id,
+				 JSON.stringify({ tag_slug: tagSlug, tag_label: before.rows[0].tag_label, source: 'ai' }),
+				 JSON.stringify({ tag_slug: tagSlug, tag_label: before.rows[0].tag_label, source: 'human' }),
+				 `Accepted AI-suggested tag "${before.rows[0].tag_label}" on ${entryDate}`]
 			);
 		});
 	}

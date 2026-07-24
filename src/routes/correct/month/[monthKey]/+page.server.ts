@@ -1,6 +1,6 @@
 import { query } from '$lib/db';
 import { error, fail, redirect } from '@sveltejs/kit';
-import { getClaimForMonth, claimMonth, releaseClaim } from '$lib/server/claims';
+import { getClaimForMonth, claimMonth, releaseClaim, pauseActiveSession } from '$lib/server/claims';
 import type { PageServerLoad, Actions } from './$types';
 
 function parseMonthKey(key: string): { year: number; month: number } | null {
@@ -91,5 +91,14 @@ export const actions: Actions = {
 			await releaseClaim(claim.sessionId);
 		}
 		redirect(303, '/correct');
+	},
+
+	// "Done for now" (td-b52a49 item 4a) from the month header. Same pause
+	// path as the day editor's ?/pause action.
+	pause: async ({ locals }) => {
+		if (!locals.user) return fail(401, { error: 'Not authenticated' });
+		const userId = Number(locals.user.id);
+		const paused = await pauseActiveSession(userId);
+		redirect(303, paused ? `/correct/session-done?session=${paused.sessionId}` : '/correct');
 	},
 };
