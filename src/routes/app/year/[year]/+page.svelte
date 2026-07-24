@@ -81,7 +81,7 @@
 				<ul class="downloads-list">
 					{#each data.pdfExports as ex (ex.mode)}
 						<li>
-							<a href="/app/year/{data.year}/pdf?mode={ex.mode}" class="pdf-link">
+							<a href="/app/year/{data.year}/pdf?mode={ex.mode}" class="pdf-link" target="_blank" rel="noopener">
 								{ex.mode === 'full'
 									? `Full year PDF (${formatBytes(ex.byteSize)})`
 									: ex.mode === 'narrative'

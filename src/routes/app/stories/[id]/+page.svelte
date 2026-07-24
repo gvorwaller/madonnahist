@@ -53,8 +53,17 @@
 				&middot; saved {formatDate(data.createdAt)}
 			</p>
 
+			{#if !data.renderMode}
+				<!-- td-863a4a: PDF opens in a NEW tab so iPad Safari's inline PDF
+				     view can't swallow the app tab (closing it returns here), and
+				     Print uses this page's own @media print styles — on iPad
+				     that goes straight to AirPrint with no PDF detour. -->
+				<button type="button" class="btn-secondary" onclick={() => window.print()}>
+					Print
+				</button>
+			{/if}
 			{#if !data.renderMode && data.pdfSizeKb !== null}
-				<a class="btn-secondary" href="/app/stories/{data.id}/pdf">
+				<a class="btn-secondary" href="/app/stories/{data.id}/pdf" target="_blank" rel="noopener">
 					Download PDF ({data.pdfSizeKb} KB)
 				</a>
 			{/if}
