@@ -51,6 +51,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 		`SELECT value::text, updated_at::text FROM app_state WHERE key = 'enrichment_worker_heartbeat'`
 	);
 
+	// Nightly DB backup health (td-ff8a42) — written by
+	// scripts/droplet/db-backup-to-spaces.sh after each run.
+	const dbBackupRes = await query<{ value: string; updated_at: string }>(
+		`SELECT value::text, updated_at::text FROM app_state WHERE key = 'db_backup_last_status'`
+	);
+
 	const pageStatsRes = await query<{
 		total_pages: number;
 		total_days: number;
@@ -66,6 +72,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	`);
 
 	return {
+		dbBackup: dbBackupRes.rows[0]
+			? { ...JSON.parse(dbBackupRes.rows[0].value), updatedAt: dbBackupRes.rows[0].updated_at }
+			: null,
 		process: {
 			rss: Math.round(mem.rss / 1024 / 1024),
 			heapUsed: Math.round(mem.heapUsed / 1024 / 1024),

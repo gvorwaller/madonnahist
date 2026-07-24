@@ -42,6 +42,25 @@
 
 	<div class="grid">
 		<section class="card">
+			<h2>DB Backup</h2>
+			{#if data.dbBackup}
+				<dl>
+					<dt>Status</dt>
+					<dd>{data.dbBackup.status === 'ok' ? 'OK' : `FAILED${data.dbBackup.error ? ` — ${data.dbBackup.error}` : ''}`}</dd>
+					<dt>Last run</dt><dd>{new Date(data.dbBackup.at).toLocaleString()}</dd>
+					{#if data.dbBackup.dump_bytes}
+						<dt>Dump size</dt><dd>{(data.dbBackup.dump_bytes / 1048576).toFixed(1)} MB</dd>
+					{/if}
+					{#if data.dbBackup.nightly_count}
+						<dt>Nightlies kept</dt><dd>{data.dbBackup.nightly_count}</dd>
+					{/if}
+				</dl>
+			{:else}
+				<p class="muted-note">No backup has reported yet (nightly cron; see docs/db-backup-runbook.md).</p>
+			{/if}
+		</section>
+
+		<section class="card">
 			<h2>Web Process</h2>
 			<dl>
 				<dt>RSS</dt><dd>{data.process.rss} MB</dd>
@@ -161,6 +180,12 @@
 		border-radius: 6px;
 		padding: 1rem 1.25rem;
 		background: #fff;
+	}
+	.muted-note {
+		font-size: 0.85rem;
+		font-style: italic;
+		color: #555; /* 7:1 on white */
+		margin: 0;
 	}
 	.card h2 {
 		margin: 0 0 0.75rem;
