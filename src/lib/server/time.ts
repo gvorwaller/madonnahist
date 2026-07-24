@@ -42,3 +42,61 @@ export function formatTimestampInAppTz(value: string | Date): string {
 		timeZoneName: 'short'
 	}).format(date);
 }
+
+/**
+ * Convert a civil date (`YYYY-MM-DD`) interpreted as local midnight in the
+ * app's home timezone into the equivalent UTC instant — used to turn an
+ * admin-supplied date-range boundary (e.g. `/admin/audit`'s "from"/"to"
+ * filters) into a comparison against a `timestamptz` column like
+ * `audit_log.occurred_at`.
+ *
+ * Standard "double conversion" trick (same approach libraries like
+ * date-fns-tz use for `zonedTimeToUtc`): start with a UTC guess equal to the
+ * target wall-clock time, see what that guess actually renders as when
+ * formatted back in the target timezone, then shift the guess by the
+ * difference. One correction pass is enough for a fixed offset; run it
+ * twice so a DST-transition day still converges (the second pass corrects
+ * against the already-adjusted guess).
+ */
+export function startOfDayInAppTzAsUtc(dateStr: string): Date {
+	const [y, m, d] = dateStr.split('-').map(Number);
+	// The desired wall-clock instant, expressed as UTC ms. Each correction
+	// pass must measure the guess's rendered wall clock against THIS fixed
+	// target — measuring against the moving guess makes the loop overshoot
+	// to double the offset (caught in review 2026-07-23: 2026-07-23 EDT
+	// returned 08:00Z instead of 04:00Z).
+	const targetMs = Date.UTC(y, m - 1, d, 0, 0, 0);
+	let guessMs = targetMs;
+	for (let i = 0; i < 2; i++) {
+		const parts = new Intl.DateTimeFormat('en-US', {
+			timeZone: APP_TIMEZONE,
+			hour12: false,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		}).formatToParts(new Date(guessMs));
+		const map: Record<string, string> = {};
+		for (const p of parts) map[p.type] = p.value;
+		// Intl's 24h "hour" can render as "24" for local midnight — normalize
+		// with % 24 before feeding it back into Date.UTC.
+		const renderedAsUtcMs = Date.UTC(
+			Number(map.year),
+			Number(map.month) - 1,
+			Number(map.day),
+			Number(map.hour) % 24,
+			Number(map.minute),
+			Number(map.second)
+		);
+		guessMs -= renderedAsUtcMs - targetMs;
+	}
+	return new Date(guessMs);
+}
+
+/** `dateStr` (YYYY-MM-DD) plus one calendar day, as plain date-component arithmetic — no timezone involved. */
+export function nextDateStr(dateStr: string): string {
+	const [y, m, d] = dateStr.split('-').map(Number);
+	return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+}

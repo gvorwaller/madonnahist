@@ -21,9 +21,23 @@
 		hrefBase?: string;
 		/** Optional query suffix appended to day links (e.g. ?from=<path> for back-navigation memory). */
 		linkSuffix?: string;
+		/**
+		 * Optional href for the month title itself (e.g. /app/year/[year] links
+		 * each month name to /app/month/[monthKey] — td-852d99). Omitted by
+		 * the month page's own use of this component, which would otherwise
+		 * link to itself.
+		 */
+		titleHref?: string;
 	}
 
-	const { year, month, acceptedDays, hrefBase = '/app/day', linkSuffix = '' }: Props = $props();
+	const {
+		year,
+		month,
+		acceptedDays,
+		hrefBase = '/app/day',
+		linkSuffix = '',
+		titleHref
+	}: Props = $props();
 
 	const monthNames = [
 		'January', 'February', 'March', 'April', 'May', 'June',
@@ -75,7 +89,13 @@
 </script>
 
 <div class="month-grid">
-	<h3 class="month-title">{monthNames[month - 1]}</h3>
+	<h3 class="month-title">
+		{#if titleHref}
+			<a href={titleHref} class="month-title-link">{monthNames[month - 1]}</a>
+		{:else}
+			{monthNames[month - 1]}
+		{/if}
+	</h3>
 	<div class="grid" role="grid" aria-label="{monthNames[month - 1]} {year}">
 		{#each weekdayLabels as label (label)}
 			<span class="weekday-label" aria-hidden="true">{label}</span>
@@ -104,6 +124,21 @@
 		margin: 0 0 0.5rem;
 		padding-bottom: 0.3rem;
 		border-bottom: 1px solid var(--color-border);
+	}
+	.month-title-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: var(--color-evergreen-dark);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.month-title-link:hover {
+		background: var(--color-chip-bg);
+	}
+	.month-title-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
 	}
 	.grid {
 		display: grid;

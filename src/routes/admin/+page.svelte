@@ -56,6 +56,11 @@
 			<h2>PDF Exports</h2>
 			<p>Generate downloadable, printable per-year PDF books, with images, for printing or sharing.</p>
 		</a>
+
+		<a href="/admin/audit" class="tool">
+			<h2>Audit Log</h2>
+			<p>Filter logins, edits, and other actions — who changed what and when.</p>
+		</a>
 	</div>
 </div>
 

@@ -12,6 +12,16 @@
 		data.validYear && data.months.some((m) => m.acceptedDays.length > 0)
 	);
 
+	function pad(n: number): string {
+		return String(n).padStart(2, '0');
+	}
+
+	// td-852d99: month names link to the full-page-image month view; the
+	// "from" param lets /app/month/[monthKey] point Back at this year page.
+	function monthHref(year: number, month: number): string {
+		return `/app/month/${year}-${pad(month)}?from=${encodeURIComponent(`/app/year/${year}`)}`;
+	}
+
 	function narrativeParagraphs(text: string): string[] {
 		return text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
 	}
@@ -102,7 +112,13 @@
 
 		<div class="months">
 			{#each data.months as m (m.month)}
-				<MonthGrid year={data.year} month={m.month} acceptedDays={m.acceptedDays} linkSuffix={`?from=${encodeURIComponent(`/app/year/${data.year}`)}`} />
+				<MonthGrid
+					year={data.year}
+					month={m.month}
+					acceptedDays={m.acceptedDays}
+					linkSuffix={`?from=${encodeURIComponent(`/app/year/${data.year}`)}`}
+					titleHref={monthHref(data.year, m.month)}
+				/>
 				{#if m.acceptedDays.length === 0}
 					<p class="month-empty">No transcribed days in {monthNames[m.month - 1]} {data.year} yet.</p>
 				{/if}

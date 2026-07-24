@@ -196,6 +196,10 @@ async function provisionViewer(pool) {
 async function cleanupViewer(pool, userId) {
 	if (!userId) return;
 	await pool.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+	// td-310bf7: login now inserts an audit_log row (audit_log.user_id
+	// REFERENCES users(id), no ON DELETE action) — must go before the users
+	// delete. Same precedent as scripts/test-ask.mjs's cleanupUsers.
+	await pool.query(`DELETE FROM audit_log WHERE user_id = $1`, [userId]);
 	await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
 }
 

@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import { findUserByUsername, recordLogin, verifyPassword } from '$server/auth';
 import { createSession, destroySession, SESSION_COOKIE_NAME } from '$server/session';
 import { SESSION_COOKIE_OPTS } from '../../hooks.server';
+import { query } from '$lib/db';
 
 const DUMMY_HASH =
 	'$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
@@ -51,6 +52,14 @@ export const actions: Actions = {
 		}
 
 		await recordLogin(user.id);
+		// td-310bf7: audit trail for accountability — failed attempts are
+		// deliberately NOT logged in v1 (avoids credential-adjacent noise from
+		// recording attempted usernames), so this only fires on success.
+		await query(
+			`INSERT INTO audit_log (user_id, action, entity_type, entity_id, description)
+			 VALUES ($1, 'login', 'users', $1, 'Signed in')`,
+			[user.id]
+		);
 		const sessionId = await createSession(user.id);
 		cookies.set(SESSION_COOKIE_NAME, sessionId, SESSION_COOKIE_OPTS);
 

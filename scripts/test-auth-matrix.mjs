@@ -92,7 +92,10 @@ function roleAllowed(path, role) {
 	return false;
 }
 
-const PATHS = ['/login', '/api/health', '/', '/app', '/correct', '/admin', '/nonexistent-path'];
+// td-310bf7: /admin/audit swept into the same gating matrix as every other
+// /admin path — roleAllowed()'s existing '/admin' prefix rule already covers
+// it (admin-only), so this needs no new expectation logic, just the path.
+const PATHS = ['/login', '/api/health', '/', '/app', '/correct', '/admin', '/admin/audit', '/nonexistent-path'];
 const METHODS = ['GET', 'POST'];
 const ROLES = ['unauthenticated', 'viewer', 'corrector', 'admin'];
 
@@ -166,6 +169,13 @@ async function cleanupUsers(pool, ids) {
 	const idList = Object.values(ids);
 	if (idList.length === 0) return;
 	await pool.query(`DELETE FROM sessions WHERE user_id = ANY($1::int[])`, [idList]);
+	// td-310bf7: the login action now inserts an audit_log row on success,
+	// and audit_log.user_id REFERENCES users(id) with no ON DELETE action —
+	// this test logs each role in multiple times (the matrix pass plus the
+	// explicit logout re-login), so those rows must go before the users
+	// delete or it hits a foreign key violation. Same precedent as
+	// scripts/test-ask.mjs and scripts/test-pdf-export.mjs's cleanupUsers.
+	await pool.query(`DELETE FROM audit_log WHERE user_id = ANY($1::int[])`, [idList]);
 	await pool.query(`DELETE FROM users WHERE id = ANY($1::int[])`, [idList]);
 }
 
@@ -253,6 +263,21 @@ async function main() {
 		const cookies = { unauthenticated: null };
 		for (const u of TEST_USERS) {
 			cookies[u.role] = await login(u.username, TEST_PASSWORD);
+		}
+
+		// td-310bf7: the login action's success path inserts an audit_log row
+		// (action='login', entity_type='users', entity_id=user id) — verify
+		// directly against the DB rather than the HTTP response, since the
+		// insert is a server-side side effect with no visible trace in the
+		// 303 redirect itself.
+		for (const u of TEST_USERS) {
+			const res = await pool.query(
+				`SELECT 1 FROM audit_log WHERE user_id = $1 AND action = 'login' AND entity_type = 'users' AND entity_id = $1`,
+				[ids[u.role]]
+			);
+			const ok = res.rows.length > 0;
+			record(`login [${u.role}] inserts an audit_log row`, ok,
+				ok ? 'audit_log row found' : 'NO audit_log ROW FOUND FOR THIS LOGIN');
 		}
 
 		for (const path of PATHS) {

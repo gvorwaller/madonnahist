@@ -18,8 +18,25 @@
 	const backHref = $derived(
 		fromParam && /^\/app(\/|\?|$)/.test(fromParam) ? fromParam : '/app'
 	);
+	const monthNames = [
+		'January', 'February', 'March', 'April', 'May', 'June',
+		'July', 'August', 'September', 'October', 'November', 'December'
+	];
+
+	// td-852d99: day-grid links on /app/month/[monthKey] carry
+	// ?from=/app/month/<monthKey> so Back returns to the month's photo —
+	// labeled with the month name when the key parses cleanly, else a plain
+	// generic fallback (the link itself is always well-formed since we
+	// control it, but a stray/hand-edited URL should never crash this).
 	const backLabel = $derived.by(() => {
 		if (backHref.startsWith('/app/year/')) return `Back to ${backHref.slice('/app/year/'.length, '/app/year/'.length + 4)}`;
+		if (backHref.startsWith('/app/month/')) {
+			const key = backHref.slice('/app/month/'.length, '/app/month/'.length + 7);
+			const m = /^(\d{4})-(\d{2})$/.exec(key);
+			const month = m ? Number(m[2]) : NaN;
+			if (m && month >= 1 && month <= 12) return `Back to ${monthNames[month - 1]} ${m[1]}`;
+			return 'Back to the month';
+		}
 		if (backHref.startsWith('/app/browse')) return 'Back to Browse';
 		if (backHref.startsWith('/app/search')) return 'Back to search results';
 		if (backHref.startsWith('/app/book/')) return 'Back to the book';

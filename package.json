@@ -25,6 +25,8 @@
 		"test:correction-workflow": "node scripts/test-correction-workflow.mjs",
 		"test:ask": "node scripts/test-ask.mjs",
 		"test:pdf": "node scripts/test-pdf-export.mjs",
+		"test:month": "node scripts/test-month-page.mjs",
+		"test:admin-audit": "node scripts/test-admin-audit.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},
