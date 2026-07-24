@@ -91,7 +91,10 @@
 <div class="month-grid">
 	<h3 class="month-title">
 		{#if titleHref}
-			<a href={titleHref} class="month-title-link">{monthNames[month - 1]}</a>
+			<a href={titleHref} class="month-title-link"
+				>{monthNames[month - 1]}
+				<span class="title-hint">page photo &#9656;</span></a
+			>
 		{:else}
 			{monthNames[month - 1]}
 		{/if}
@@ -132,6 +135,14 @@
 		color: var(--color-evergreen-dark);
 		text-decoration: underline;
 		text-underline-offset: 2px;
+	}
+	.title-hint {
+		font-size: 0.7rem;
+		font-weight: 600;
+		color: var(--color-evergreen-dark);
+		text-decoration: underline;
+		margin-left: 0.35rem;
+		white-space: nowrap;
 	}
 	.month-title-link:hover {
 		background: var(--color-chip-bg);

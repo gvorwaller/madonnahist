@@ -43,6 +43,12 @@
 		if (backHref.startsWith('/app/person/') || backHref.startsWith('/app/place/')) return 'Back';
 		return 'Back to On this day';
 	});
+	const monthKey = $derived(data.found ? data.entryDate.slice(0, 7) : '');
+	const monthName = $derived(
+		data.found
+			? new Date(data.entryDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+			: ''
+	);
 	// Prev/next keep the same origin so the memory survives day-to-day browsing.
 	const fromSuffix = $derived(
 		fromParam && /^\/app(\/|\?|$)/.test(fromParam) ? `?from=${encodeURIComponent(fromParam)}` : ''
@@ -122,6 +128,13 @@
 				<p class="narrative-text">{data.dayNarrative}</p>
 			</div>
 		{/if}
+
+		<a
+			class="month-page-link"
+			href={`/app/month/${monthKey}?from=${encodeURIComponent(`/app/day/${data.entryDate}`)}`}
+		>
+			See the full {monthName} calendar page &#9656;
+		</a>
 
 		<div class="day-nav">
 			{#if data.prevDate}
@@ -321,6 +334,21 @@
 		margin: 0;
 	}
 
+	.month-page-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		margin-top: 1rem;
+		font-family: var(--font-sans);
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--color-evergreen-dark);
+		text-decoration: underline;
+	}
+	.month-page-link:focus-visible {
+		outline: 2px solid var(--color-evergreen-dark);
+		outline-offset: 2px;
+	}
 	.day-nav {
 		display: flex;
 		gap: 0.75rem;
