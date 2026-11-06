@@ -122,7 +122,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			   FROM calendar_days cd
 			  WHERE cd.correction_status = 'accepted'
 			    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-			    AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.tag_slug = $1))
+			    AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.source = 'human' AND dt.tag_slug = $1))
 			    AND ${entityExistsClause(3, 'person')}
 			    AND ${entityExistsClause(4, 'place')}`,
 			[tag, year, person, place]
@@ -135,7 +135,7 @@ export const load: PageServerLoad = async ({ url }) => {
 			   FROM calendar_days cd
 			  WHERE cd.correction_status = 'accepted'
 			    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-			    AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.tag_slug = $1))
+			    AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.source = 'human' AND dt.tag_slug = $1))
 			    AND ${entityExistsClause(3, 'person')}
 			    AND ${entityExistsClause(4, 'place')}
 			  ORDER BY cd.entry_date DESC
@@ -184,7 +184,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		  WHERE cd.correction_status = 'accepted'
 		    AND cd.fts @@ p.tsq
 		    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-		    AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.tag_slug = $3))
+		    AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.source = 'human' AND dt.tag_slug = $3))
 		    AND ${entityExistsClause(4, 'person')}
 		    AND ${entityExistsClause(5, 'place')}`,
 		[q, year, tag, person, place]
@@ -213,7 +213,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		    WHERE cd.correction_status = 'accepted'
 		      AND cd.fts @@ p.tsq
 		      AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-		      AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.tag_slug = $3))
+		      AND ($3::text IS NULL OR EXISTS (SELECT 1 FROM day_tags dt WHERE dt.day_id = cd.id AND dt.source = 'human' AND dt.tag_slug = $3))
 		      AND ${entityExistsClause(4, 'person')}
 		      AND ${entityExistsClause(5, 'place')}
 		 )

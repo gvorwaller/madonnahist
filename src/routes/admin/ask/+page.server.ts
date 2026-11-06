@@ -210,7 +210,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	const [entityOptions, tagOptions, savedRes] = await Promise.all([
 		getAcceptedEntityPickerOptions(),
-		getAcceptedTagOptions(),
+		getAcceptedTagOptions({ includeAi: true }),
 		query<SavedRow>(
 			`SELECT an.id, an.question, an.subset_definition, an.narrative_text, an.day_count,
 			        an.model_name, an.created_at::text AS created_at, u.display_name AS created_by_name

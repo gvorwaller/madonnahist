@@ -152,7 +152,7 @@
 								<p class="day-text">{day.correctedText}</p>
 								{#if day.dayNarrative}
 									<p class="day-narrative">
-										<span class="generated-tag">In context &mdash; generated.</span>
+										<span class="narrative-tag">In Madonna&rsquo;s words.</span>
 										{day.dayNarrative}
 									</p>
 								{/if}
@@ -415,14 +415,14 @@
 		line-height: 1.6;
 		color: var(--color-ink);
 	}
-	.generated-tag {
+	.narrative-tag {
 		font-family: var(--font-sans);
 		font-style: normal;
 		font-weight: 700;
 		font-size: 0.75rem;
 		text-transform: uppercase;
 		letter-spacing: 0.03em;
-		color: var(--color-amber);
+		color: var(--color-ink-muted);
 	}
 
 	.book-continue {
@@ -477,7 +477,7 @@
 		.book-coverage,
 		.book-eyebrow,
 		.intro-label,
-		.generated-tag,
+		.narrative-tag,
 		.day-label {
 			color: #000 !important;
 			background: none !important;

@@ -42,6 +42,7 @@ export const load: PageServerLoad = async ({ params }) => {
 			   FROM day_tags dt
 			   JOIN calendar_days cd ON cd.id = dt.day_id
 			  WHERE cd.entry_date = $1 AND cd.correction_status = 'accepted'
+			    AND dt.source = 'human'
 			  ORDER BY dt.tag_label`,
 			[entryDate]
 		),

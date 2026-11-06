@@ -124,7 +124,7 @@
 
 		{#if data.dayNarrative}
 			<div class="narrative">
-				<p class="narrative-label">In context <span class="generated-tag">— generated</span></p>
+				<p class="narrative-label">In Madonna's words</p>
 				<p class="narrative-text">{data.dayNarrative}</p>
 			</div>
 		{/if}
@@ -314,12 +314,6 @@
 		letter-spacing: 0.04em;
 		color: var(--color-ink-muted);
 		margin: 0 0 0.5rem;
-	}
-	.generated-tag {
-		font-weight: 500;
-		text-transform: none;
-		letter-spacing: normal;
-		color: var(--color-amber);
 	}
 	.narrative-text {
 		font-family: var(--font-serif);

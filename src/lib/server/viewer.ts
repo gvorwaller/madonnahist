@@ -9,6 +9,11 @@
  * pending/in-progress/flagged/illegible days to anyone who can reach the
  * route or hit the endpoint directly. See
  * docs/2026-07-21-next-phases-search-viewer-narrative-plan.md, Phase B.
+ *
+ * Tags: viewer queries over `day_tags` also filter `source = 'human'`, so
+ * only tags a corrector added or confirmed reach the family; unconfirmed AI
+ * tags stay behind the correction editor's confirm step
+ * (docs/2026-11-05-family-viewer-v3-redesign-plan.md).
  */
 import { query } from '$lib/db';
 
@@ -198,16 +203,21 @@ export interface TagOption {
  * Distinct tags that appear on at least one accepted day, ordered by label —
  * feeds the /app/search tag dropdown. A tag that only exists on a
  * pending/in-progress day never appears here (predicate applied directly in
- * this query, per the file header).
+ * this query, per the file header). Human-confirmed tags only, unless the
+ * caller is an admin surface (`/admin/ask`) passing `includeAi: true`.
  */
-export async function getAcceptedTagOptions(): Promise<TagOption[]> {
+export async function getAcceptedTagOptions(
+	opts: { includeAi?: boolean } = {}
+): Promise<TagOption[]> {
+	const includeAi = opts.includeAi === true;
 	const res = await query<{ tag_slug: string; tag_label: string }>(`
 		SELECT DISTINCT ON (dt.tag_slug) dt.tag_slug, dt.tag_label
 		  FROM day_tags dt
 		  JOIN calendar_days cd ON cd.id = dt.day_id
 		 WHERE cd.correction_status = 'accepted'
+		   AND ($1::boolean OR dt.source = 'human')
 		 ORDER BY dt.tag_slug, dt.tag_label
-	`);
+	`, [includeAi]);
 	return res.rows
 		.map((r) => ({ slug: r.tag_slug, label: r.tag_label }))
 		.sort((a, b) => a.label.localeCompare(b.label));
