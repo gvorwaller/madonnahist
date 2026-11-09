@@ -95,7 +95,7 @@ function roleAllowed(path, role) {
 // td-310bf7: /admin/audit swept into the same gating matrix as every other
 // /admin path — roleAllowed()'s existing '/admin' prefix rule already covers
 // it (admin-only), so this needs no new expectation logic, just the path.
-const PATHS = ['/login', '/api/health', '/', '/app', '/correct', '/admin', '/admin/audit', '/nonexistent-path'];
+const PATHS = ['/login', '/api/health', '/', '/app', '/correct', '/admin', '/admin/audit', '/admin/tags', '/nonexistent-path'];
 const METHODS = ['GET', 'POST'];
 const ROLES = ['unauthenticated', 'viewer', 'corrector', 'admin'];
 

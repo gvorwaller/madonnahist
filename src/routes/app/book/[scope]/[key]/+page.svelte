@@ -152,7 +152,7 @@
 								<p class="day-text">{day.correctedText}</p>
 								{#if day.dayNarrative}
 									<p class="day-narrative">
-										<span class="narrative-tag">In Madonna&rsquo;s words.</span>
+										<span class="narrative-tag">Madonna remembers:</span>
 										{day.dayNarrative}
 									</p>
 								{/if}

@@ -1,5 +1,10 @@
 import { query } from '$lib/db';
-import { formatHumanDate, getAdjacentAcceptedDates, isValidEntryDate } from '$lib/server/viewer';
+import {
+	formatHumanDate,
+	getAdjacentAcceptedDates,
+	isValidEntryDate,
+	VISIBLE_DAY_TAGS
+} from '$lib/server/viewer';
 import { getDayEntityChips } from '$lib/server/entities';
 import type { PageServerLoad } from './$types';
 
@@ -38,12 +43,11 @@ export const load: PageServerLoad = async ({ params }) => {
 	const [{ prev, next }, tagsRes, entities] = await Promise.all([
 		getAdjacentAcceptedDates(entryDate),
 		query<{ tag_slug: string; tag_label: string }>(
-			`SELECT dt.tag_slug, dt.tag_label
-			   FROM day_tags dt
-			   JOIN calendar_days cd ON cd.id = dt.day_id
+			`SELECT vt.tag_slug, vt.tag_label
+			   FROM ${VISIBLE_DAY_TAGS} vt
+			   JOIN calendar_days cd ON cd.id = vt.day_id
 			  WHERE cd.entry_date = $1 AND cd.correction_status = 'accepted'
-			    AND dt.source = 'human'
-			  ORDER BY dt.tag_label`,
+			  ORDER BY vt.tag_label`,
 			[entryDate]
 		),
 		getDayEntityChips(entryDate)

@@ -168,6 +168,40 @@ Rules:
 - Keep tag labels short (1-3 words) and general enough to reuse across many days.
 - If nothing qualifies for a field, return an empty array for it.`;
 
+// Approved tag names (tag_vocabulary, /admin/tags — td-3418e6) are fed to
+// the extractor as preferred labels so the AI reuses names the family
+// already sees instead of inventing near-duplicates. Most-used first,
+// capped, and cached briefly so a backfill doesn't re-query per day.
+const PREFERRED_TAGS_CAP = 150;
+const PREFERRED_TAGS_TTL_MS = 5 * 60 * 1000;
+let preferredTagsCache: { at: number; labels: string[] } | null = null;
+
+async function preferredTagLabels(): Promise<string[]> {
+	if (preferredTagsCache && Date.now() - preferredTagsCache.at < PREFERRED_TAGS_TTL_MS) {
+		return preferredTagsCache.labels;
+	}
+	const res = await query<{ label: string }>(
+		`SELECT tv.label
+		   FROM tag_vocabulary tv
+		   LEFT JOIN day_tags dt ON dt.tag_slug = tv.tag_slug
+		  WHERE tv.status = 'approved'
+		  GROUP BY tv.id, tv.label
+		  ORDER BY COUNT(dt.day_id) DESC, tv.label
+		  LIMIT ${PREFERRED_TAGS_CAP}`
+	);
+	preferredTagsCache = { at: Date.now(), labels: res.rows.map((r) => r.label) };
+	return preferredTagsCache.labels;
+}
+
+function entityExtractSystem(preferred: string[]): string {
+	if (preferred.length === 0) return ENTITY_EXTRACT_SYSTEM;
+	return (
+		ENTITY_EXTRACT_SYSTEM +
+		`\n\nPreferred tag labels (already curated for this archive). When one of these fits the day, use it exactly as written instead of a new synonym; only add a new label when none of these fits:\n` +
+		preferred.map((l) => `- ${l}`).join('\n')
+	);
+}
+
 interface RawEntity {
 	type?: unknown;
 	name?: unknown;
@@ -302,7 +336,11 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 				`DATE: ${day.entry_date}\n\n` +
 				`CORRECTED TEXT:\n${day.corrected_text ?? ''}\n\n` +
 				`DAY NARRATIVE:\n${day.day_narrative ?? ''}`;
-			const result = await completeJson<EntityExtractResult>(ENTITY_EXTRACT_SYSTEM, user, 1536);
+			const result = await completeJson<EntityExtractResult>(
+				entityExtractSystem(await preferredTagLabels()),
+				user,
+				1536
+			);
 			entities = sanitizeEntities(result.entities);
 			tags = sanitizeTags(result.tags);
 		}

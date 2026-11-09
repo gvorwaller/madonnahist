@@ -124,7 +124,7 @@
 
 		{#if data.dayNarrative}
 			<div class="narrative">
-				<p class="narrative-label">In Madonna's words</p>
+				<p class="narrative-label">Madonna remembers</p>
 				<p class="narrative-text">{data.dayNarrative}</p>
 			</div>
 		{/if}

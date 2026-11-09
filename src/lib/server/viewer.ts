@@ -10,10 +10,13 @@
  * route or hit the endpoint directly. See
  * docs/2026-07-21-next-phases-search-viewer-narrative-plan.md, Phase B.
  *
- * Tags: viewer queries over `day_tags` also filter `source = 'human'`, so
- * only tags a corrector added or confirmed reach the family; unconfirmed AI
- * tags stay behind the correction editor's confirm step
- * (docs/2026-11-05-family-viewer-v3-redesign-plan.md).
+ * Tags: viewer queries never read `day_tags` directly — they go through
+ * VISIBLE_DAY_TAGS / visibleTagExistsClause() below. A tag reaches the
+ * family only if a person added or confirmed it on that day
+ * (`source = 'human'`), or an admin approved its tag name in
+ * `tag_vocabulary` (/admin/tags). Merged names display as their canonical
+ * name. Undecided and hidden AI tags never show. See
+ * docs/2026-11-05-family-viewer-v3-redesign-plan.md §Slice 1T.
  */
 import { query } from '$lib/db';
 
@@ -209,18 +212,84 @@ export interface TagOption {
 export async function getAcceptedTagOptions(
 	opts: { includeAi?: boolean } = {}
 ): Promise<TagOption[]> {
-	const includeAi = opts.includeAi === true;
+	// Admin surface (/admin/ask): every raw slug on an accepted day,
+	// unchanged from before tag approval existed.
+	if (opts.includeAi === true) {
+		const res = await query<{ tag_slug: string; tag_label: string }>(`
+			SELECT DISTINCT ON (dt.tag_slug) dt.tag_slug, dt.tag_label
+			  FROM day_tags dt
+			  JOIN calendar_days cd ON cd.id = dt.day_id
+			 WHERE cd.correction_status = 'accepted'
+			 ORDER BY dt.tag_slug, dt.tag_label
+		`);
+		return res.rows
+			.map((r) => ({ slug: r.tag_slug, label: r.tag_label }))
+			.sort((a, b) => a.label.localeCompare(b.label));
+	}
 	const res = await query<{ tag_slug: string; tag_label: string }>(`
-		SELECT DISTINCT ON (dt.tag_slug) dt.tag_slug, dt.tag_label
-		  FROM day_tags dt
-		  JOIN calendar_days cd ON cd.id = dt.day_id
+		SELECT DISTINCT ON (vt.tag_slug) vt.tag_slug, vt.tag_label
+		  FROM ${VISIBLE_DAY_TAGS} vt
+		  JOIN calendar_days cd ON cd.id = vt.day_id
 		 WHERE cd.correction_status = 'accepted'
-		   AND ($1::boolean OR dt.source = 'human')
-		 ORDER BY dt.tag_slug, dt.tag_label
-	`, [includeAi]);
+		 ORDER BY vt.tag_slug, vt.tag_label
+	`);
 	return res.rows
 		.map((r) => ({ slug: r.tag_slug, label: r.tag_label }))
 		.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * The family-visible tags, as a derived table with one row per
+ * (day_id, canonical tag_slug) and columns day_id, tag_slug, tag_label.
+ *
+ * A day_tags row is visible when a person added/confirmed it
+ * (source = 'human') OR its canonical name is approved in tag_vocabulary.
+ * The canonical name is the merge target when the row's own name is
+ * merged, else the name itself; its label comes from tag_vocabulary when
+ * decided, else from the day_tags row. Does NOT apply the accepted-day
+ * predicate — callers join calendar_days and apply it themselves, per the
+ * file header.
+ */
+export const VISIBLE_DAY_TAGS = `(
+	SELECT DISTINCT ON (dt.day_id, COALESCE(tv.merged_into_slug, dt.tag_slug))
+	       dt.day_id,
+	       COALESCE(tv.merged_into_slug, dt.tag_slug) AS tag_slug,
+	       COALESCE(canon.label, dt.tag_label) AS tag_label
+	  FROM day_tags dt
+	  LEFT JOIN tag_vocabulary tv ON tv.tag_slug = dt.tag_slug
+	  LEFT JOIN tag_vocabulary canon ON canon.tag_slug = COALESCE(tv.merged_into_slug, dt.tag_slug)
+	 WHERE dt.source = 'human' OR canon.status = 'approved'
+	 ORDER BY dt.day_id, COALESCE(tv.merged_into_slug, dt.tag_slug), (dt.source = 'human') DESC
+)`;
+
+/**
+ * EXISTS filter for "this day carries visible canonical tag $n" — the
+ * search tag filter. Same visibility rule as VISIBLE_DAY_TAGS, written as a
+ * plain correlated EXISTS so the planner can drive it from the day row.
+ * `slugParam` must already be canonical (see resolveCanonicalTagSlug).
+ */
+export function visibleTagExistsClause(dayIdExpr: string, slugParam: string): string {
+	return `EXISTS (
+		SELECT 1
+		  FROM day_tags dt
+		  LEFT JOIN tag_vocabulary tv ON tv.tag_slug = dt.tag_slug
+		  LEFT JOIN tag_vocabulary canon ON canon.tag_slug = COALESCE(tv.merged_into_slug, dt.tag_slug)
+		 WHERE dt.day_id = ${dayIdExpr}
+		   AND COALESCE(tv.merged_into_slug, dt.tag_slug) = ${slugParam}
+		   AND (dt.source = 'human' OR canon.status = 'approved')
+	)`;
+}
+
+/**
+ * Map a tag slug (e.g. from an old /app/search?tag= link) to its canonical
+ * slug: a merged name resolves to its merge target, anything else to itself.
+ */
+export async function resolveCanonicalTagSlug(slug: string): Promise<string> {
+	const res = await query<{ merged_into_slug: string }>(
+		`SELECT merged_into_slug FROM tag_vocabulary WHERE tag_slug = $1 AND status = 'merged'`,
+		[slug]
+	);
+	return res.rows[0]?.merged_into_slug ?? slug;
 }
 
 /** First ~N sentences of a text block, for card previews. Falls back to a char cap if no sentence boundary is found. */
