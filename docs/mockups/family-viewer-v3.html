@@ -1,0 +1,936 @@
+<!doctype html>
+<!--
+  Vorwaller Family History — Family Viewer V3 mockup (Slice 0, td-078413).
+  Plan: docs/2026-11-05-family-viewer-v3-redesign-plan.md
+  Static HTML + one small script (shell injection, frame-size toggle).
+  Open directly in Safari/Chrome; no server needed.
+  Every entry, memory and name below is INVENTED sample text.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Family Viewer Mockup</title>
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body data-mode="phone">
+
+<div class="gallery-bar">
+  <h1>Family Viewer V3 — mockup</h1>
+  <div class="mode-toggle" role="group" aria-label="Frame size">
+    <button type="button" data-mode="small" aria-pressed="false">Phone 320</button>
+    <button type="button" data-mode="phone" aria-pressed="true">Phone 390</button>
+    <button type="button" data-mode="laptop" aria-pressed="false">Laptop 1280</button>
+  </div>
+  <span class="spacer"></span>
+  <select id="jump" aria-label="Jump to screen"></select>
+</div>
+
+<div class="intro">
+  <h2>Vorwaller Family History</h2>
+  <p>
+    The new family viewer, screen by screen. Use the size toggle above to see every screen as a small
+    phone, an iPhone, or a laptop: the layout follows the <em>frame</em> width, exactly as the real
+    app will. Links inside the frames jump between screens. Each screen has a short
+    <strong>What's new</strong> list and <strong>Questions for you</strong>.
+  </p>
+  <p class="sample-note">
+    <strong>Sample text only.</strong> Every diary entry, memory and name here is made up to show the
+    layout. The real app shows only days Madonna has accepted, and only tags a person has confirmed.
+  </p>
+  <p>
+    Badges show the build order: <span class="slice">Slice 1</span> is the first version the family
+    sees; <span class="slice later">Slice 2–4</span> parts arrive in later updates.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════ TODAY ═══════════════════════════════ -->
+<section class="screen" id="s-today" data-title="Today">
+  <div class="screen-head">
+    <h2>Today <span class="slice">Slice 1</span> <span class="slice later">Slice 2 extras</span></h2>
+    <div class="route">/app &nbsp;·&nbsp; /app?date=11-05</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Opens straight here after sign-in; no landing page.</li>
+        <li>◂ date ▸ arrows plus a date picker, so you can jump to a birthday.</li>
+        <li>Cards lead with the year and the words, with a small handwriting thumbnail beside them.</li>
+        <li>A 🗨 marker shows when Madonna added a memory to that day.</li>
+        <li>The "N of M days transcribed" banner is gone, replaced by a friendly line at the bottom.</li>
+        <li>Slice 2 adds Recently added and Surprise me.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Is "On this day" the right hero, or should the year story lead?</li>
+        <li>Do you want the thumbnail at all on phones? It's small and only a hint.</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="today"><div class="scroll"><div class="page">
+    <div class="today-grid">
+      <div>
+        <p class="eyebrow">On this day</p>
+        <div class="date-nav">
+          <a class="arrow" href="#s-today" aria-label="Previous day, November 4">‹</a>
+          <button type="button" class="picker" aria-label="Pick a date. Showing November 5">📅 Thu, November 5</button>
+          <a class="arrow" href="#s-today" aria-label="Next day, November 6">›</a>
+        </div>
+        <p class="sub" style="text-align:center">4 years have an entry for this date</p>
+
+        <div class="section-h"><h2>From the calendars</h2></div>
+
+        <article class="card entry has-thumb">
+          <div class="entry-head"><span class="year">1974</span><span class="ago">52 years ago · Tuesday</span></div>
+          <p class="snippet">Voted at the church after work. Snowed 4 in. Gaylon shoveled the walk before work. Rebekah home sick with a sore throat. Made bread.</p>
+          <a class="more" href="#s-day">Read the day ▸</a>
+          <div class="crop thumb" aria-hidden="true"><span class="num">5</span>Voted at ch. after wk. Snowed 4 in. G shoveled</div>
+        </article>
+        <article class="card entry has-thumb">
+          <div class="entry-head"><span class="year">1981</span><span class="ago">45 years ago · Thursday</span><span class="mem-flag">🗨 Madonna remembers</span></div>
+          <p class="snippet">Marcus's first day at the new school. Packed his lunch in the red box. Piano lessons 4:00. Mom called from Logan.</p>
+          <a class="more" href="#s-day">Read the day ▸</a>
+          <div class="crop thumb" aria-hidden="true"><span class="num">5</span>M. 1st day new sch. red lunch box</div>
+        </article>
+        <article class="card entry has-thumb">
+          <div class="entry-head"><span class="year">1993</span><span class="ago">33 years ago · Friday</span></div>
+          <p class="snippet">Family dinner at the Hendersons'. Rebekah and Dave announced they're expecting in May! Drove home in fog.</p>
+          <a class="more" href="#s-day">Read the day ▸</a>
+          <div class="crop thumb" aria-hidden="true"><span class="num">5</span>Dinner Hendersons. R &amp; Dave expecting!</div>
+        </article>
+        <article class="card entry">
+          <div class="entry-head"><span class="year">2008</span><span class="ago">18 years ago · Wednesday</span></div>
+          <p class="snippet">Quiet day. Raked leaves. Called Marcus about Thanksgiving plans.</p>
+          <a class="more" href="#s-day">Read the day ▸</a>
+        </article>
+      </div>
+
+      <aside>
+        <div class="section-h"><h2>The story of 1974</h2><a href="#s-year">Read ▸</a></div>
+        <a class="card yearstory" href="#s-year">
+          <p class="eyebrow">Year story</p>
+          <p>The winter of 1974 started early and stayed. The calendar fills with snow totals, sick days and bread …</p>
+          <p class="provenance"><b>AI-written</b> from Madonna's 1974 calendar · reviewed by Gaylon</p>
+        </a>
+
+        <div class="section-h"><h2>Latest family story</h2><a href="#s-stories">All ▸</a></div>
+        <a class="card qa" href="#s-stories">
+          <h3>What did we do for Thanksgiving over the years?</h3>
+          <p class="provenance">From 38 days · saved Oct 30, 2026</p>
+        </a>
+
+        <div class="section-h"><h2>Recently added <span class="slice later">Slice 2</span></h2><a href="#s-timeline">More ▸</a></div>
+        <div class="card">
+          <ul class="chips" style="margin:0">
+            <li><a class="chip" href="#s-day">Mar 12, 1976</a></li>
+            <li><a class="chip" href="#s-day">Mar 11, 1976</a></li>
+            <li><a class="chip" href="#s-day">Mar 10, 1976</a></li>
+          </ul>
+        </div>
+        <a class="btn secondary block" style="margin-top:14px" href="#s-day">🎲 Surprise me <span class="slice later">Slice 2</span></a>
+      </aside>
+    </div>
+    <p class="growing">The archive grows every week as Madonna works through the calendars.</p>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════ TODAY — EMPTY DATE ═══════════════════════════ -->
+<section class="screen" id="s-today-empty" data-title="Today — empty date (Feb 29)">
+  <div class="screen-head">
+    <h2>Today, a date with nothing yet <span class="slice">Slice 1</span></h2>
+    <div class="route">/app?date=02-29</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>No dead end. It explains why the date is empty and offers next steps: the nearest date with entries, the latest year story, and Surprise me.</li>
+        <li>Feb 29 is accepted as a valid date; it just rarely has entries.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Is "nearest date with entries" more useful than "latest day added"?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="today"><div class="scroll"><div class="page">
+    <p class="eyebrow">On this day</p>
+    <div class="date-nav">
+      <a class="arrow" href="#s-today" aria-label="Previous day, February 28">‹</a>
+      <button type="button" class="picker">📅 February 29</button>
+      <a class="arrow" href="#s-today" aria-label="Next day, March 1">›</a>
+    </div>
+    <div class="empty" style="margin-top:16px">
+      <div class="icon" aria-hidden="true">🗓️</div>
+      <h2>No entries for February 29 yet</h2>
+      <p>Leap days are rare, and only some years have been transcribed so far.</p>
+      <a class="btn primary" href="#s-today">See March 1 (3 entries)</a>
+    </div>
+    <div class="section-h"><h2>Or try</h2></div>
+    <a class="card yearstory" href="#s-year">
+      <p class="eyebrow">Year story</p>
+      <h3>The story of 1976</h3>
+      <p class="provenance"><b>AI-written</b> from Madonna's 1976 calendar · reviewed</p>
+    </a>
+    <a class="btn secondary block" style="margin-top:12px" href="#s-day">🎲 Surprise me</a>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ TIMELINE ═══════════════════════════════ -->
+<section class="screen" id="s-timeline" data-title="Timeline">
+  <div class="screen-head">
+    <h2>Timeline <span class="slice later">Slice 2</span></h2>
+    <div class="route">/app/timeline &nbsp;(Slice 1: this tab opens today's Browse page)</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Each year is one row and one tap.</li>
+        <li>The little bars show how many days each month has; a gray stub means none yet. Screen readers get a sentence instead.</li>
+        <li>Each row has a line from the year story, or a highlight if there's no story.</li>
+        <li>Years not started yet are dashed and labeled "Not transcribed yet".</li>
+        <li>Two columns on a laptop.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Newest decade first, or oldest first?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="timeline"><div class="scroll"><div class="page">
+    <h1 class="title">Timeline</h1>
+    <p class="sub">Sixty years of calendars, a year at a time.</p>
+
+    <div class="decade">
+      <h2>1970s <span class="count">1,412 days</span></h2>
+      <div class="decade-years">
+        <a class="yearrow" href="#s-year" aria-label="1974: 365 days. Year story available.">
+          <span class="y">1974</span>
+          <div>
+            <div class="spark" aria-hidden="true"><i style="height:100%"></i><i style="height:93%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i></div>
+            <div class="spark-legend" aria-hidden="true"><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          </div>
+          <p class="line" style="grid-column:2"><span class="story-flag">Year story ·</span> The winter of 1974 started early and stayed …</p>
+        </a>
+        <a class="yearrow" href="#s-year" aria-label="1975: 212 days, January to July.">
+          <span class="y">1975</span>
+          <div>
+            <div class="spark" aria-hidden="true"><i style="height:100%"></i><i style="height:93%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:60%"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i></div>
+            <div class="spark-legend" aria-hidden="true"><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          </div>
+          <p class="line" style="grid-column:2">Marcus learns to ride a bike; a week at Bear Lake in June.</p>
+        </a>
+        <a class="yearrow" href="#s-year" aria-label="1976: 96 days, January to April. Year story available.">
+          <span class="y">1976</span>
+          <div>
+            <div class="spark" aria-hidden="true"><i style="height:100%"></i><i style="height:90%"></i><i style="height:100%"></i><i style="height:20%"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i><i class="none"></i></div>
+            <div class="spark-legend" aria-hidden="true"><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          </div>
+          <p class="line" style="grid-column:2"><span class="story-flag">Year story ·</span> A bicentennial year that began with a broken furnace …</p>
+        </a>
+        <div class="yearrow pending" aria-label="1977: not transcribed yet">
+          <span class="y">1977</span>
+          <p class="line muted" style="grid-column:2;grid-row:span 2">Not transcribed yet</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="decade">
+      <h2>1980s <span class="count">731 days</span></h2>
+      <div class="decade-years">
+        <a class="yearrow" href="#s-year" aria-label="1981: 365 days.">
+          <span class="y">1981</span>
+          <div>
+            <div class="spark" aria-hidden="true"><i style="height:100%"></i><i style="height:93%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i><i style="height:97%"></i><i style="height:100%"></i></div>
+            <div class="spark-legend" aria-hidden="true"><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span><span>J</span><span>A</span><span>S</span><span>O</span><span>N</span><span>D</span></div>
+          </div>
+          <p class="line" style="grid-column:2">Marcus starts at a new school; the long drive to Yellowstone.</p>
+        </a>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ YEAR ═══════════════════════════════ -->
+<section class="screen" id="s-year" data-title="Year — 1976">
+  <div class="screen-head">
+    <h2>Year <span class="slice later">Slice 2</span></h2>
+    <div class="route">/app/year/1976</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>The year story comes first, above the downloads; it was at the bottom before.</li>
+        <li>"Read as a book" and the PDF are one tidy row of buttons.</li>
+        <li>Each month is a card with three highlight days, chosen by confirmed tags and Madonna's memories, then "All 31 days ▸".</li>
+        <li>No more wall of 365 day numbers.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Should the story start open or folded on phones? (Shown open.)</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="timeline"><div class="scroll"><div class="page">
+    <a class="back" href="#s-timeline">◂ Timeline</a>
+    <div class="year-nav">
+      <a class="icon-btn arrow-lg" href="#s-year" aria-label="1975">‹</a>
+      <h1 class="y">1976</h1>
+      <a class="icon-btn arrow-lg" href="#s-year" aria-label="1977 (not transcribed yet)" aria-disabled="true" style="opacity:.35">›</a>
+    </div>
+    <p class="sub" style="text-align:center">96 days so far · January to April</p>
+
+    <details class="story-card fold" open>
+      <summary>📖 The story of 1976</summary>
+      <div class="body">
+        <p>A bicentennial year that began with a broken furnace and three days of borrowed space heaters. By February the calendar is full of school programs, a stake dance, and Rebekah's long bout of chicken pox …</p>
+        <p class="provenance"><b>AI-written</b> from Madonna's calendar entries · reviewed by Gaylon before publishing</p>
+      </div>
+    </details>
+    <div class="actions">
+      <a class="btn secondary" href="#s-year">📚 Read 1976 as a book</a>
+      <a class="btn secondary" href="#s-year">⬇ PDF (1.2 MB)</a>
+    </div>
+
+    <div class="section-h"><h2>Months</h2></div>
+    <div class="months-grid">
+      <section class="daycard">
+        <header><h3>January</h3><span class="meta">31 days</span></header>
+        <div class="rows">
+          <a class="row" href="#s-day"><span class="d">3<small>Sat</small></span><p>Furnace out again. Borrowed heaters from the Larsens.</p></a>
+          <a class="row" href="#s-day"><span class="d">17<small>Sat</small></span><p>Ward dinner. Gaylon ran the slide show. 🗨</p></a>
+          <a class="row" href="#s-day"><span class="d">24<small>Sat</small></span><p>Marcus lost first tooth at breakfast!</p></a>
+        </div>
+        <footer><a href="#s-month">All 31 days ▸</a></footer>
+      </section>
+      <section class="daycard">
+        <header><h3>February</h3><span class="meta">26 days</span></header>
+        <div class="rows">
+          <a class="row" href="#s-day"><span class="d">6<small>Fri</small></span><p>Rebekah broke out in chicken pox. Called school.</p></a>
+          <a class="row" href="#s-day"><span class="d">14<small>Sat</small></span><p>Valentines — G. brought roses and a card.</p></a>
+          <a class="row" href="#s-day"><span class="d">29<small>Sun</small></span><p>Leap day. Snow again. Church at 9.</p></a>
+        </div>
+        <footer><a href="#s-month">All 26 days ▸</a></footer>
+      </section>
+      <section class="daycard">
+        <header><h3>March</h3><span class="meta">31 days</span></header>
+        <div class="rows">
+          <a class="row" href="#s-day"><span class="d">12<small>Fri</small></span><p>Rebekah's school play — she was a tulip. 🗨</p></a>
+          <a class="row" href="#s-day"><span class="d">20<small>Sat</small></span><p>First robin. Planted peas by the fence.</p></a>
+          <a class="row" href="#s-day"><span class="d">28<small>Sun</small></span><p>Easter program. Marcus said his part perfectly.</p></a>
+        </div>
+        <footer><a href="#s-month">All 31 days ▸</a></footer>
+      </section>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ MONTH ═══════════════════════════════ -->
+<section class="screen" id="s-month" data-title="Month — March 1976">
+  <div class="screen-head">
+    <h2>Month <span class="slice later">Slice 3</span></h2>
+    <div class="route">/app/month/1976-03</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>The photo of Madonna's page is the navigator: days with a green outline and ✓ are ready, so tap one to open it.</li>
+        <li>Days not transcribed yet are shaded, can't be tapped, and the legend says so.</li>
+        <li>The number grid is gone, replaced by a reading list of every ready day in full.</li>
+        <li>On a laptop the photo stays put on the left while the list scrolls.</li>
+        <li>"Tap to zoom" stays.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Should the reading list show a "days 14–19 not transcribed yet" line for gaps? (Shown.)</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="timeline"><div class="scroll"><div class="page">
+    <a class="back" href="#s-year">◂ 1976</a>
+    <div class="year-nav">
+      <a class="icon-btn arrow-lg" href="#s-month" aria-label="February 1976">‹</a>
+      <h1 class="title" style="margin:0">March 1976</h1>
+      <a class="icon-btn arrow-lg" href="#s-month" aria-label="April 1976">›</a>
+    </div>
+
+    <div class="month-grid-lap">
+      <div class="sticky">
+        <div class="calpage" role="group" aria-label="Madonna's March 1976 calendar page. Outlined days can be opened.">
+          <p class="cal-title">MARCH 1976</p>
+          <div class="dow"><span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span></div>
+          <div class="cells" id="calcells"></div>
+        </div>
+        <div class="legend">
+          <span><i class="sw" style="box-shadow:inset 0 0 0 2px var(--evergreen);background:#f6edd5"></i>✓ Ready to read, tap it</span>
+          <span><i class="sw" style="background:#e9dfc6;border:1px solid #c9b78f"></i>Not transcribed yet</span>
+        </div>
+        <div class="actions"><button type="button" class="btn secondary">🔍 Tap to zoom</button></div>
+      </div>
+
+      <div>
+        <div class="section-h"><h2>Every day this month</h2><span class="count">25</span></div>
+        <ul class="reading">
+          <li><div class="r-head"><span class="date-pill">Mon, Mar 1</span></div><p class="diary">Back to school after the long weekend. Wash day. Rebekah's spots almost gone.</p></li>
+          <li><div class="r-head"><span class="date-pill">Tue, Mar 2</span></div><p class="diary">Primary presidency mtg 10:00. Made 3 doz. rolls for the Larsens.</p></li>
+          <li><div class="r-head"><span class="date-pill">Fri, Mar 12</span><span class="mem-flag">🗨 Memory</span></div><p class="diary">Rebekah's school play at 2:00 — she was a tulip. Gaylon left work early. Pot roast for supper.</p><a class="back" href="#s-day">Open the day ▸</a></li>
+          <li class="gap">March 14–19 aren't transcribed yet.</li>
+          <li><div class="r-head"><span class="date-pill">Sat, Mar 20</span></div><p class="diary">First robin! Planted peas by the back fence. Marcus helped (sort of).</p></li>
+        </ul>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ DAY ═══════════════════════════════ -->
+<section class="screen" id="s-day" data-title="Day — with Madonna's memory">
+  <div class="screen-head">
+    <h2>Day, with diary text <em>and</em> Madonna's memory <span class="slice">Slice 1</span> <span class="slice later">Slice 3 extras</span></h2>
+    <div class="route">/app/day/1976-03-12</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li><strong>The words come first</strong>, in large serif type.</li>
+        <li><strong>"In Madonna's words"</strong> sits right under the entry. It is her own memory, so it gets her name and a quote style, not an "AI" label. <em>This labeling fix is already made in the current app.</em></li>
+        <li>People, places and confirmed tags show as chips; unconfirmed AI tags are hidden. <em>Also already made.</em></li>
+        <li>Previous/next name the actual dates, and say when days are skipped.</li>
+        <li>The handwriting is in a fold on phones and sits beside the text on a laptop.</li>
+        <li>Slice 3 adds "This date in other years" and Share, which sends the quote, date and link.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li><strong>Does "In Madonna's words" read right to Madonna?</strong> Alternatives: "Madonna remembers", "Mom's memory".</li>
+        <li>Should Share include the memory too, or only the diary entry?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="today"><div class="scroll"><div class="page">
+    <a class="back" href="#s-month">◂ March 1976</a>
+    <p class="eyebrow">Friday</p>
+    <h1 class="title">March 12, 1976</h1>
+
+    <div class="day-grid">
+      <div>
+        <p class="diary">Rebekah's school play at 2:00 — she was a tulip. Gaylon left work early. Pot roast for supper. Snow turning to rain by evening.</p>
+
+        <aside class="memory" aria-label="Madonna's memory of this day">
+          <p class="who">🗨 In Madonna's words</p>
+          <p class="text">She made that tulip costume herself out of a pillowcase and green crepe paper, and wore it around the house for a week afterward. Gaylon was so proud he told everyone at work on Monday.</p>
+        </aside>
+
+        <ul class="chips" aria-label="People and places">
+          <li><a class="chip person" href="#s-person"><span class="label">Rebekah</span></a></li>
+          <li><a class="chip person" href="#s-person"><span class="label">Gaylon</span></a></li>
+          <li><a class="chip place" href="#s-place"><span class="label">Lincoln Elementary</span></a></li>
+          <li><a class="chip tag" href="#s-search">school</a></li>
+        </ul>
+
+        <div class="share-row">
+          <button type="button" class="btn secondary">↗ Share this day <span class="slice later">Slice 3</span></button>
+          <a class="btn secondary" href="#s-month">📅 Whole month</a>
+        </div>
+
+        <nav class="prevnext" aria-label="Nearby days">
+          <a href="#s-day"><small>◂ Previous</small><b>Thu, Mar 11</b></a>
+          <a class="next" href="#s-day"><small>Next ▸</small><b>Sat, Mar 13</b></a>
+        </nav>
+      </div>
+
+      <div class="day-side">
+        <details class="fold">
+          <summary>✍️ See Madonna's handwriting</summary>
+          <div class="fold-body"><div class="crop day-image"><span class="num">12</span>R's sch. play 2:00 — tulip! G left wk early. Pot roast. Snow → rain.</div></div>
+        </details>
+        <div class="lap-image">
+          <p class="eyebrow" style="margin-bottom:6px">Madonna's handwriting</p>
+          <div class="crop day-image"><span class="num">12</span>R's sch. play 2:00 — tulip! G left wk early. Pot roast. Snow → rain.</div>
+          <p class="sub" style="margin-top:6px">Tap to zoom</p>
+        </div>
+
+        <div class="section-h"><h2>March 12 in other years <span class="slice later">Slice 3</span></h2></div>
+        <div class="other-years">
+          <a class="card entry" href="#s-day"><div class="entry-head"><span class="year" style="font-size:1.1rem">1974</span></div><p class="snippet">Dentist for both kids. Paid the water bill.</p></a>
+          <a class="card entry" href="#s-day"><div class="entry-head"><span class="year" style="font-size:1.1rem">1981</span></div><p class="snippet">Marcus's science fair — volcano erupted on cue.</p></a>
+        </div>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════ DAY — SPARSE / ERROR STATES ═══════════════════════ -->
+<section class="screen" id="s-day-sparse" data-title="Day — missing image, skipped days, long names">
+  <div class="screen-head">
+    <h2>Day, edge cases <span class="slice">Slice 1</span></h2>
+    <div class="route">/app/day/1975-07-18</div>
+    <div class="notes">
+      <div><h3>Shown here</h3><ul>
+        <li><strong>No handwriting image:</strong> a clear message instead of a broken picture.</li>
+        <li><strong>Skipped days:</strong> Next says it jumps to Jul 26, and explains why.</li>
+        <li><strong>Long names</strong> wrap or trim inside chips without breaking the layout. Try Phone 320.</li>
+        <li>No memory, so no memory box; nothing empty is shown.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Is "7 days not transcribed yet" helpful, or just noise?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="today"><div class="scroll"><div class="page">
+    <a class="back" href="#s-timeline">◂ 1975</a>
+    <p class="eyebrow">Friday</p>
+    <h1 class="title">July 18, 1975</h1>
+    <div class="day-grid">
+      <div>
+        <p class="diary">Left for Bear Lake 6 am. Stopped in Garden City for raspberry shakes. Great-Aunt Wilhelmina Christensen-Vorwaller came up from Montpelier for the weekend.</p>
+        <ul class="chips">
+          <li><a class="chip person" href="#s-person"><span class="label">Great-Aunt Wilhelmina Christensen-Vorwaller</span></a></li>
+          <li><a class="chip place" href="#s-place"><span class="label">Bear Lake</span></a></li>
+          <li><a class="chip place" href="#s-place"><span class="label">Garden City</span></a></li>
+        </ul>
+        <nav class="prevnext" aria-label="Nearby days">
+          <a href="#s-day"><small>◂ Previous</small><b>Thu, Jul 17</b></a>
+          <a class="next" href="#s-day"><small>Next ▸</small><b>Sat, Jul 26</b></a>
+        </nav>
+        <p class="skip-note">Jul 19–25 aren't transcribed yet, so Next skips ahead.</p>
+      </div>
+      <div class="day-side">
+        <div class="img-missing" style="margin-top:18px">The photo of this day's handwriting isn't available right now.<br>The words above are complete.</div>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ PEOPLE ═══════════════════════════════ -->
+<section class="screen" id="s-people" data-title="People">
+  <div class="screen-head">
+    <h2>People <span class="slice">Slice 1 (A–Z)</span> <span class="slice later">Slice 4 (Places tab, Most mentioned)</span></h2>
+    <div class="route">/app/people &nbsp;·&nbsp; /app/places</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>An index of everyone in the calendars; before, you could only reach a person by finding them on a day.</li>
+        <li>The filter box narrows the list as you type, with no Search button.</li>
+        <li>Each name shows how many days mention them and the years they appear.</li>
+        <li>People | Places switch at the top.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>"Most mentioned" first, or straight to A–Z? (We agreed: no hand-picked "Immediate family" row for now.)</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="people"><div class="scroll"><div class="page">
+    <div class="segmented" role="tablist"><a href="#s-people" aria-current="page">People</a><a href="#s-place">Places</a></div>
+    <label class="searchbox"><span aria-hidden="true">🔍</span><input type="search" placeholder="Find a person…" aria-label="Find a person"></label>
+
+    <div class="people-lap">
+      <div>
+        <div class="section-h"><h2>Most mentioned <span class="slice later">Slice 4</span></h2></div>
+        <div class="top-people">
+          <a class="person-card" href="#s-person"><span class="avatar">G</span><b>Gaylon</b><span>1,104 days</span></a>
+          <a class="person-card" href="#s-person"><span class="avatar">R</span><b>Rebekah</b><span>688 days</span></a>
+          <a class="person-card" href="#s-person"><span class="avatar">M</span><b>Marcus</b><span>652 days</span></a>
+          <a class="person-card" href="#s-person"><span class="avatar">J</span><b>Grandma June</b><span>201 days</span></a>
+        </div>
+      </div>
+      <div>
+        <div class="section-h"><h2>Everyone, A–Z</h2><span class="count">612</span></div>
+        <ul class="az">
+          <li class="letter">B</li>
+          <li><a href="#s-person"><span class="nm">Bishop Larsen</span><span class="yrs">1974–1988</span><span class="count">43</span></a></li>
+          <li class="letter">D</li>
+          <li><a href="#s-person"><span class="nm">Dave Henderson</span><span class="yrs">1990–2019</span><span class="count">118</span></a></li>
+          <li class="letter">G</li>
+          <li><a href="#s-person"><span class="nm">Gaylon</span><span class="yrs">1966–2026</span><span class="count">1,104</span></a></li>
+          <li><a href="#s-person"><span class="nm">Grandma June</span><span class="yrs">1966–1995</span><span class="count">201</span></a></li>
+          <li><a href="#s-person"><span class="nm">Great-Aunt Wilhelmina Christensen-Vorwaller</span><span class="yrs">1975</span><span class="count">3</span></a></li>
+        </ul>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ PERSON ═══════════════════════════════ -->
+<section class="screen" id="s-person" data-title="Person — Rebekah">
+  <div class="screen-head">
+    <h2>Person <span class="slice">Slice 1 (snippets, back link)</span> <span class="slice later">Slice 4 (chart, often with)</span></h2>
+    <div class="route">/app/person/rebekah</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>A quick summary: how many days, first and last year mentioned.</li>
+        <li>A bar per year shows when she appears most, with the number written beside each bar.</li>
+        <li>"Often mentioned with" lists the people who share her days.</li>
+        <li>Days are grouped by year in folds, each with a snippet instead of a bare date.</li>
+        <li>"Search her days" opens Search already filtered.</li>
+        <li>Back returns to wherever you came from.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Later: a printable "Rebekah's history" PDF (td-ef90ab) would go on this page. Want a placeholder button now?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="people"><div class="scroll"><div class="page">
+    <a class="back" href="#s-day">◂ March 12, 1976</a>
+    <p class="eyebrow">Person</p>
+    <h1 class="title">Rebekah</h1>
+    <div class="stats"><div><b>688</b><span>days</span></div><div><b>1968</b><span>first</span></div><div><b>2024</b><span>latest</span></div></div>
+    <div class="actions"><a class="btn primary" href="#s-search">🔍 Search her days</a></div>
+
+    <div class="person-lap">
+      <div>
+        <div class="section-h"><h2>Mentions by year <span class="slice later">Slice 4</span></h2></div>
+        <div class="card bars" role="list">
+          <div class="bar" role="listitem"><span class="yy">1974</span><span class="track"><span class="fill" style="display:block;width:72%"></span></span><span class="n">94</span></div>
+          <div class="bar" role="listitem"><span class="yy">1975</span><span class="track"><span class="fill" style="display:block;width:55%"></span></span><span class="n">71</span></div>
+          <div class="bar" role="listitem"><span class="yy">1976</span><span class="track"><span class="fill" style="display:block;width:30%"></span></span><span class="n">39</span></div>
+          <div class="bar" role="listitem"><span class="yy">1981</span><span class="track"><span class="fill" style="display:block;width:100%"></span></span><span class="n">130</span></div>
+        </div>
+        <div class="section-h"><h2>Often mentioned with <span class="slice later">Slice 4</span></h2></div>
+        <ul class="with-list">
+          <li><a href="#s-person">👤 Marcus <span class="n">402 days together</span></a></li>
+          <li><a href="#s-person">👤 Grandma June <span class="n">96</span></a></li>
+          <li><a href="#s-person">👤 Dave Henderson <span class="n">88</span></a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-h"><h2>Her days</h2><span class="count">688</span></div>
+        <details class="fold" open>
+          <summary>1976 <span class="count">39</span></summary>
+          <div class="fold-body">
+            <div class="daycard" style="border:0">
+              <div class="rows" style="padding:0">
+                <a class="row" href="#s-day"><span class="d">12<small>Mar</small></span><p>School play at 2:00 — she was a tulip. 🗨</p></a>
+                <a class="row" href="#s-day"><span class="d">6<small>Feb</small></span><p>Broke out in chicken pox. Called school.</p></a>
+              </div>
+              <footer style="padding:0"><a href="#s-search">All 39 days in 1976 ▸</a></footer>
+            </div>
+          </div>
+        </details>
+        <details class="fold"><summary>1975 <span class="count">71</span></summary></details>
+        <details class="fold"><summary>1974 <span class="count">94</span></summary></details>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ PLACE ═══════════════════════════════ -->
+<section class="screen" id="s-place" data-title="Place — Bear Lake">
+  <div class="screen-head">
+    <h2>Place <span class="slice later">Slice 4</span></h2>
+    <div class="route">/app/place/bear-lake</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Places look different from people: "Who was there" replaces "Often mentioned with".</li>
+        <li>"Visits by year" shows the pattern of trips over time.</li>
+        <li>No maps; the archive has no coordinates.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Is a place index useful to the family, or should Places stay reachable only from chips?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="people"><div class="scroll"><div class="page">
+    <div class="segmented" role="tablist"><a href="#s-people">People</a><a href="#s-place" aria-current="page">Places</a></div>
+    <a class="back" href="#s-day-sparse" style="display:flex">◂ July 18, 1975</a>
+    <p class="eyebrow">Place</p>
+    <h1 class="title">Bear Lake</h1>
+    <div class="stats"><div><b>47</b><span>days</span></div><div><b>1969</b><span>first</span></div><div><b>2019</b><span>latest</span></div></div>
+    <div class="person-lap">
+      <div>
+        <div class="section-h"><h2>Who was there</h2></div>
+        <ul class="with-list">
+          <li><a href="#s-person">👤 Marcus <span class="n">31 days</span></a></li>
+          <li><a href="#s-person">👤 Rebekah <span class="n">29</span></a></li>
+          <li><a href="#s-person">👤 Great-Aunt Wilhelmina Christensen-Vorwaller <span class="n">3</span></a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="section-h"><h2>Visits by year</h2></div>
+        <div class="card bars">
+          <div class="bar"><span class="yy">1975</span><span class="track"><span class="fill" style="display:block;width:100%"></span></span><span class="n">9</span></div>
+          <div class="bar"><span class="yy">1981</span><span class="track"><span class="fill" style="display:block;width:66%"></span></span><span class="n">6</span></div>
+        </div>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ STORIES ═══════════════════════════════ -->
+<section class="screen" id="s-stories" data-title="Stories">
+  <div class="screen-head">
+    <h2>Stories <span class="slice">Slice 1</span></h2>
+    <div class="route">/app/stories</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Stories now has its own tab; before, the only way in was a link on the Search page.</li>
+        <li><strong>Year stories</strong>: every published year story, each with its "Read as a book" link.</li>
+        <li><strong>Questions answered</strong>: the saved family stories.</li>
+        <li>Every card shows how it was made, e.g. "AI-written from 38 days, reviewed".</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Is "Questions answered" a good name for the saved stories?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="stories"><div class="scroll"><div class="page">
+    <h1 class="title">Stories</h1>
+    <p class="sub">Stories written from Madonna's calendars and reviewed before they appear here.</p>
+
+    <div class="section-h"><h2>Year stories</h2><span class="count">3</span></div>
+    <div class="storylist">
+      <a class="card yearstory" href="#s-year"><p class="eyebrow">1976</p><h3>A bicentennial year, a broken furnace</h3><p>The year began with three days of borrowed space heaters …</p><p class="provenance"><b>AI-written</b> · reviewed · 📚 Read as a book</p></a>
+      <a class="card yearstory" href="#s-year"><p class="eyebrow">1975</p><h3>Bear Lake, bikes and a new roof</h3><p>Marcus learned to ride in April and didn't stop until …</p><p class="provenance"><b>AI-written</b> · reviewed · 📚 Read as a book</p></a>
+      <a class="card yearstory" href="#s-year"><p class="eyebrow">1974</p><h3>The long winter</h3><p>Snow came early and the calendar keeps count …</p><p class="provenance"><b>AI-written</b> · reviewed · 📚 Read as a book</p></a>
+    </div>
+
+    <div class="section-h"><h2>Questions answered</h2><span class="count">5</span></div>
+    <div class="storylist">
+      <a class="card qa" href="#s-stories"><h3>What did we do for Thanksgiving over the years?</h3><p class="provenance"><b>AI-written</b> from 38 days · saved Oct 30, 2026</p></a>
+      <a class="card qa" href="#s-stories"><h3>When did Marcus learn to swim?</h3><p class="provenance"><b>AI-written</b> from 6 days · saved Oct 12, 2026</p></a>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ SEARCH ═══════════════════════════════ -->
+<section class="screen" id="s-search" data-title="Search">
+  <div class="screen-head">
+    <h2>Search <span class="slice">Slice 1 (restyle)</span> <span class="slice later">Slice 4 (typeahead, chips, year range)</span></h2>
+    <div class="route">/app/search?q=bear+lake&amp;person=marcus&amp;from_year=1974&amp;to_year=1985</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>One box. As you type, it suggests people, places and tags, replacing the 4 long dropdowns.</li>
+        <li>Chosen filters become chips; tap ✕ to remove one.</li>
+        <li>Year becomes a From–To range.</li>
+        <li>Each result shows the date, the matching words highlighted, and who was there.</li>
+        <li>Old shared search links keep working.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Should results be newest first by default, or best match first?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="search"><div class="scroll"><div class="page">
+    <div class="search-lap">
+      <div>
+        <h1 class="title">Search</h1>
+        <label class="searchbox"><span aria-hidden="true">🔍</span><input type="search" value="bear la" aria-label="Search the calendars" aria-expanded="true" aria-controls="ta"></label>
+        <ul class="typeahead" id="ta" role="listbox">
+          <li class="group">Places</li>
+          <li class="hl" role="option" aria-selected="true"><a href="#s-search">📍 Bear Lake <span class="k">47 days</span></a></li>
+          <li class="group">Words</li>
+          <li role="option"><a href="#s-search">🔍 Search for “bear la” <span class="k">in diary text</span></a></li>
+        </ul>
+        <ul class="chips" aria-label="Active filters">
+          <li><a class="chip removable" href="#s-search" aria-label="Remove filter: Marcus"><span class="label">👤 Marcus</span><span class="x" aria-hidden="true">✕</span></a></li>
+          <li><a class="chip removable" href="#s-search" aria-label="Remove filter: 1974 to 1985"><span class="label">1974–1985</span><span class="x" aria-hidden="true">✕</span></a></li>
+        </ul>
+        <div class="range">
+          <label for="fy">Years</label>
+          <select id="fy"><option>1974</option></select><span>to</span><select aria-label="To year"><option>1985</option></select>
+        </div>
+      </div>
+      <div>
+        <div class="section-h"><h2>12 days</h2><a href="#s-search">Clear all</a></div>
+        <article class="card result">
+          <div class="entry-head" style="display:flex;gap:10px;align-items:center"><span class="date-pill">Jul 18, 1975</span></div>
+          <p class="diary" style="font-size:1.05rem;margin-top:6px">Left for <mark>Bear Lake</mark> 6 am. Stopped in Garden City for raspberry shakes …</p>
+          <ul class="chips"><li><a class="chip person" href="#s-person"><span class="label">Marcus</span></a></li><li><a class="chip place" href="#s-place"><span class="label">Bear Lake</span></a></li></ul>
+        </article>
+        <article class="card result">
+          <div class="entry-head" style="display:flex;gap:10px;align-items:center"><span class="date-pill">Jun 22, 1981</span><span class="mem-flag">🗨 Memory</span></div>
+          <p class="diary" style="font-size:1.05rem;margin-top:6px">Marcus caught his first fish at <mark>Bear Lake</mark> — a little perch …</p>
+          <ul class="chips"><li><a class="chip person" href="#s-person"><span class="label">Marcus</span></a></li></ul>
+        </article>
+      </div>
+    </div>
+  </div></div></div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ MENU (DRAWER) ═══════════════════════════════ -->
+<section class="screen" id="s-menu" data-title="Menu (☰)">
+  <div class="screen-head">
+    <h2>Menu <span class="slice">Slice 1</span></h2>
+    <div class="route">☰ in the top bar, on every screen</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>The less-used items live here: Books &amp; downloads, About this archive, Sign out.</li>
+        <li>Gaylon and Madonna also see "Corrections" and "Admin" to switch back to their tools. The family never sees these.</li>
+        <li>The old dark admin bar no longer appears on family screens.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>What should "About this archive" say? A few lines from you or Madonna would be lovely here.</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device" data-tab="today"><div class="scroll"><div class="page">
+    <p class="eyebrow">On this day</p><h1 class="title">Thursday, November 5</h1>
+    <p class="snippet diary">Voted at the church after work. Snowed 4 in …</p>
+  </div></div>
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="drawer" role="dialog" aria-label="Menu">
+    <div class="who"><b>Signed in as Rebekah</b><span>username: rebekah</span></div>
+    <nav>
+      <a href="#s-stories">📚 Books &amp; downloads</a>
+      <a href="#s-menu">ℹ️ About this archive</a>
+      <a href="#s-menu">📲 Add to Home Screen</a>
+      <div class="grp">Only Gaylon &amp; Madonna see</div>
+      <a href="#s-menu">✍️ Corrections</a>
+      <a href="#s-menu">⚙️ Admin</a>
+      <button type="button" class="signout">Sign out</button>
+    </nav>
+  </div>
+  </div></div></div>
+</section>
+
+<!-- ═══════════════════════════════ INVITE ═══════════════════════════════ -->
+<section class="screen" id="s-invite" data-title="Invite — welcome">
+  <div class="screen-head">
+    <h2>Invite link: welcome <span class="slice">Slice 1</span></h2>
+    <div class="route">/invite/&lt;token&gt; &nbsp;(Gaylon texts the link from /admin/users)</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Each family member gets a personal link. They choose a password, and that's it.</li>
+        <li>Their username is shown in large type, so the iPhone password manager saves it correctly.</li>
+        <li>Opening the link doesn't use it up; only pressing "Create my account" does.</li>
+        <li>Links expire after 30 days.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Should the family be able to change their display name here, or only you?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device"><div class="solo"><div class="panel">
+    <div class="mark-lg" aria-hidden="true">V</div>
+    <h1>Welcome, Rebekah</h1>
+    <p class="lede">You're invited to <strong>Vorwaller Family History</strong>: sixty years of Mom's calendars, ready to read.</p>
+    <div class="username-box"><span>Your username</span><b>rebekah</b></div>
+    <label class="field"><span>Choose a password</span><input type="password" autocomplete="new-password" value="••••••••••"><small>At least 10 characters. Your phone can suggest one.</small></label>
+    <label class="field"><span>Type it again</span><input type="password" autocomplete="new-password"></label>
+    <button type="button" class="btn primary block">Create my account</button>
+    <p class="sub" style="text-align:center;margin-top:12px">This link is just for you and expires Dec 5, 2026.</p>
+  </div></div></div></div></div>
+</section>
+
+<section class="screen" id="s-invite-done" data-title="Invite — success">
+  <div class="screen-head">
+    <h2>Invite link: success <span class="slice">Slice 1</span></h2>
+    <div class="route">POST /invite/&lt;token&gt; → success</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>Repeats the username, then shows how to add the app to the Home Screen, step by step, with Safari's real button names.</li>
+        <li>They're already signed in, and the button goes to Today.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>Add Android steps too, or iPhone only?</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device"><div class="solo"><div class="panel">
+    <div class="mark-lg" aria-hidden="true">✓</div>
+    <h1>You're in, Rebekah</h1>
+    <div class="username-box"><span>Sign in next time with</span><b>rebekah</b></div>
+    <div class="notice">
+      <p style="margin:0 0 8px;font-weight:700">📲 Put it on your Home Screen</p>
+      <ol class="steps">
+        <li>Tap the <strong>Share</strong> button (the square with an arrow) at the bottom of Safari.</li>
+        <li>Scroll down and tap <strong>Add to Home Screen</strong>.</li>
+        <li>Tap <strong>Add</strong>. It opens like an app from then on.</li>
+      </ol>
+    </div>
+    <a class="btn primary block" style="margin-top:16px" href="#s-today">Start reading</a>
+  </div></div></div></div></div>
+</section>
+
+<section class="screen" id="s-invite-expired" data-title="Invite — expired or used">
+  <div class="screen-head">
+    <h2>Invite link: expired or already used <span class="slice">Slice 1</span></h2>
+    <div class="route">/invite/&lt;token&gt; (expired, used, revoked or malformed — same friendly page)</div>
+    <div class="notes">
+      <div><h3>What's new</h3><ul>
+        <li>One calm message for every bad-link case, so it never says which case it was.</li>
+        <li>Offers the normal sign-in, in case they already set a password.</li>
+      </ul></div>
+      <div class="ask"><h3>Questions for you</h3><ul>
+        <li>"Ask Gaylon" or "Ask Dad / Grandpa"? The grandkids may need a different word.</li>
+      </ul></div>
+    </div>
+  </div>
+  <div class="frames"><div class="frame-wrap"><div class="device"><div class="solo"><div class="panel">
+    <div class="mark-lg" aria-hidden="true">V</div>
+    <h1>This link has expired</h1>
+    <div class="notice warn">
+      <p style="margin:0">Invite links work once and last 30 days. <strong>Ask Gaylon for a new link</strong>; he can send one in a minute.</p>
+    </div>
+    <a class="btn secondary block" style="margin-top:16px" href="#s-invite">I already have a password, sign in</a>
+  </div></div></div></div></div>
+</section>
+
+<div style="height:60px"></div>
+
+<script>
+/* Mockup-only script: injects the shared app shell into each frame,
+   builds the month photo, and drives the frame-size toggle. */
+(() => {
+  const icons = {
+    today: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
+    timeline: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10M9 20V4M14 20v-7M19 20V8"/></svg>',
+    people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c2.3 0 4 1.4 4.5 4"/></svg>',
+    stories: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5c3-1 6-1 9 1 3-2 6-2 9-1v14c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6v14"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>'
+  };
+  const tabs = [['today','Today','#s-today'],['timeline','Timeline','#s-timeline'],['people','People','#s-people'],['stories','Stories','#s-stories'],['search','Search','#s-search']];
+  const menuIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+
+  document.querySelectorAll('.device[data-tab]').forEach((dev) => {
+    const active = dev.dataset.tab;
+    const link = ([k, label, href], cls) =>
+      `<a href="${href}"${k === active ? ' aria-current="page"' : ''}>${cls === 'tab' ? icons[k] : ''}<span>${label}</span></a>`;
+    dev.insertAdjacentHTML('afterbegin',
+      `<header class="topbar"><a class="brand" href="#s-today"><span class="mark" aria-hidden="true">V</span>` +
+      `<span class="short">Family History</span><span class="full">Vorwaller Family History</span></a>` +
+      `<nav class="top-links" aria-label="Main">${tabs.map((t) => link(t, 'top')).join('')}</nav>` +
+      `<span class="spacer"></span><a class="icon-btn" href="#s-menu" aria-label="Menu">${menuIcon}</a></header>`);
+    const scroll = dev.querySelector('.scroll');
+    scroll.insertAdjacentHTML('afterend',
+      `<nav class="tabbar" aria-label="Main">${tabs.map((t) => link(t, 'tab')).join('')}</nav>`);
+  });
+
+  /* Month photo: March 1976 starts on Monday. Ready days are links; others inert. */
+  const cells = document.getElementById('calcells');
+  const notes = { 1: 'Back to sch. Wash day', 2: 'Prim. pres. mtg 10', 12: "R's play 2:00 tulip!", 20: 'First robin. Peas', 28: 'Easter prog.' };
+  const notYet = new Set([14, 15, 16, 17, 18, 19]);
+  let html = '<span class="blank" aria-hidden="true"></span>';
+  for (let d = 1; d <= 31; d++) {
+    const txt = notes[d] || 'wk · ch · groc.';
+    if (notYet.has(d)) {
+      html += `<span class="notyet" aria-label="March ${d}, not transcribed yet"><b>${d}</b>${txt}</span>`;
+    } else {
+      html += `<a class="ready${d === 12 ? ' current' : ''}" href="#s-day" aria-label="March ${d}, read this day"><b>${d}</b>${txt}</a>`;
+    }
+  }
+  const trailing = (7 - ((1 + 31) % 7)) % 7;
+  for (let i = 0; i < trailing; i++) html += '<span class="blank" aria-hidden="true"></span>';
+  cells.innerHTML = html;
+
+  /* Jump menu */
+  const jump = document.getElementById('jump');
+  jump.innerHTML = '<option value="">Jump to screen…</option>' +
+    [...document.querySelectorAll('.screen')].map((s) => `<option value="${s.id}">${s.dataset.title}</option>`).join('');
+  jump.addEventListener('change', () => {
+    if (!jump.value) return;
+    if (document.body.classList.contains('focus-view')) {
+      const u = new URL(location.href); u.searchParams.set('screen', jump.value); u.hash = ''; location.href = u.href;
+    } else location.hash = jump.value;
+  });
+
+  /* Frame size toggle; laptop frames are scaled (CSS zoom) to fit the window.
+     Container queries still see the true 1280px width. */
+  const fit = () => {
+    const laptop = document.body.dataset.mode === 'laptop';
+    const avail = document.documentElement.clientWidth - 32;
+    const scale = laptop ? Math.min(1, avail / 1304) : 1;
+    document.querySelectorAll('.device').forEach((d) => { d.style.zoom = scale === 1 ? '' : String(scale); });
+  };
+  document.querySelectorAll('.mode-toggle button').forEach((b) => b.addEventListener('click', () => {
+    document.body.dataset.mode = b.dataset.mode;
+    document.querySelectorAll('.mode-toggle button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    try { localStorage.setItem('fv3-mode', b.dataset.mode); } catch (e) {}
+    fit();
+  }));
+  try {
+    const saved = localStorage.getItem('fv3-mode');
+    if (saved) document.querySelector(`.mode-toggle button[data-mode="${saved}"]`)?.click();
+  } catch (e) {}
+  /* Focus view: ?screen=s-day&mode=laptop shows one screen alone (also used for screenshots). */
+  const qp = new URLSearchParams(location.search);
+  if (qp.get('mode')) document.querySelector(`.mode-toggle button[data-mode="${qp.get('mode')}"]`)?.click();
+  if (qp.get('screen')) {
+    document.body.classList.add('focus-view');
+    document.querySelectorAll('.screen').forEach((sc) => { sc.hidden = sc.id !== qp.get('screen'); });
+    if (qp.has('bare')) document.body.classList.add('bare');
+  }
+  addEventListener('resize', fit);
+  fit();
+})();
+</script>
+</body>
+</html>
