@@ -305,3 +305,142 @@ export function firstSentences(text: string, count = 2, maxChars = 220): string 
 	}
 	return trimmed.length > maxChars ? trimmed.slice(0, maxChars).trim() + '…' : trimmed;
 }
+
+// ── V3 Slice 1: Today, Stories ──────────────────────────────────────────
+
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]; // Feb 29 allowed
+
+export interface MonthDay {
+	month: number;
+	day: number;
+}
+
+/**
+ * Parse Today's `?date=` param. Accepts `MM-DD` (the app's own links) or a
+ * full `YYYY-MM-DD` (what a native date picker submits; the year is
+ * ignored). Feb 29 is valid. Anything else returns null.
+ */
+export function parseMonthDay(s: string | null | undefined): MonthDay | null {
+	if (!s) return null;
+	const m = /^(?:\d{4}-)?(\d{2})-(\d{2})$/.exec(s);
+	if (!m) return null;
+	const month = Number(m[1]);
+	const day = Number(m[2]);
+	if (month < 1 || month > 12 || day < 1 || day > DAYS_IN_MONTH[month - 1]) return null;
+	return { month, day };
+}
+
+/** The calendar day before/after (wrapping Dec 31 ↔ Jan 1, Feb 29 included). */
+export function shiftMonthDay({ month, day }: MonthDay, delta: 1 | -1): MonthDay {
+	if (delta === 1) {
+		if (day < DAYS_IN_MONTH[month - 1]) return { month, day: day + 1 };
+		return { month: month === 12 ? 1 : month + 1, day: 1 };
+	}
+	if (day > 1) return { month, day: day - 1 };
+	const pm = month === 1 ? 12 : month - 1;
+	return { month: pm, day: DAYS_IN_MONTH[pm - 1] };
+}
+
+export function monthDayKey({ month, day }: MonthDay): string {
+	return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function dayOfYear({ month, day }: MonthDay): number {
+	let n = day;
+	for (let i = 0; i < month - 1; i++) n += DAYS_IN_MONTH[i];
+	return n; // 1..366 on a leap-year calendar
+}
+
+export interface MonthDayCount extends MonthDay {
+	count: number;
+}
+
+/**
+ * The calendar date (month/day, any year) nearest to `target` that has at
+ * least one accepted day, with its entry count — Today's empty-date
+ * fallback (Gaylon, mockup review 2026-11-07). Distance wraps around the
+ * year; ties go to the later date. Returns null when nothing is accepted.
+ */
+export async function getNearestMonthDayWithEntries(target: MonthDay): Promise<MonthDayCount | null> {
+	const res = await query<{ month: number; day: number; count: number }>(
+		`SELECT EXTRACT(MONTH FROM entry_date)::int AS month,
+		        EXTRACT(DAY FROM entry_date)::int AS day,
+		        COUNT(*)::int AS count
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted'
+		  GROUP BY 1, 2`
+	);
+	const t = dayOfYear(target);
+	let best: MonthDayCount | null = null;
+	let bestDist = Infinity;
+	let bestAfter = false;
+	for (const r of res.rows) {
+		const d = dayOfYear(r);
+		const forward = (d - t + 366) % 366;
+		const backward = (t - d + 366) % 366;
+		const dist = Math.min(forward, backward);
+		const after = forward <= backward;
+		if (dist < bestDist || (dist === bestDist && after && !bestAfter)) {
+			best = { month: r.month, day: r.day, count: r.count };
+			bestDist = dist;
+			bestAfter = after;
+		}
+	}
+	return best;
+}
+
+export interface YearStory {
+	year: number;
+	text: string;
+	generatedAt: string;
+}
+
+/** Every published year narrative, newest year first (Stories tab, Today's lead story). */
+export async function getPublishedYearStories(): Promise<YearStory[]> {
+	const res = await query<{ scope_key: string; summary_text: string; generated_at: string }>(
+		`SELECT scope_key, summary_text, generated_at::text AS generated_at
+		   FROM narrative_summaries
+		  WHERE scope = 'year' AND is_published = true AND scope_key ~ '^[0-9]{4}$'
+		  ORDER BY scope_key DESC`
+	);
+	return res.rows.map((r) => ({
+		year: Number(r.scope_key),
+		text: r.summary_text,
+		generatedAt: r.generated_at
+	}));
+}
+
+/**
+ * Today's lead year story: prefer a published year that has an entry on
+ * this date, else any published year. Rotates with the date so the lead
+ * changes day to day but is stable within a day.
+ */
+export function pickLeadYearStory(
+	stories: YearStory[],
+	date: MonthDay,
+	yearsOnThisDate: number[]
+): YearStory | null {
+	if (stories.length === 0) return null;
+	const onDate = stories.filter((s) => yearsOnThisDate.includes(s.year));
+	const pool = onDate.length > 0 ? onDate : stories;
+	return pool[dayOfYear(date) % pool.length];
+}
+
+export interface SavedStorySummary {
+	id: number;
+	question: string;
+	dayCount: number;
+	createdAt: string;
+}
+
+/** Most recently saved family story (adhoc_narratives; saving on /admin/ask is the curation act). */
+export async function getLatestSavedStory(): Promise<SavedStorySummary | null> {
+	const res = await query<{ id: number; question: string; day_count: number; created_at: string }>(
+		`SELECT id, question, day_count, created_at::text AS created_at
+		   FROM adhoc_narratives
+		  ORDER BY created_at DESC
+		  LIMIT 1`
+	);
+	const r = res.rows[0];
+	return r ? { id: r.id, question: r.question, dayCount: r.day_count, createdAt: r.created_at } : null;
+}

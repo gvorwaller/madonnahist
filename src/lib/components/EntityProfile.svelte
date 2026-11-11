@@ -1,228 +1,289 @@
 <script lang="ts">
+	/**
+	 * Person / place profile (V3 Slice 1): stat strip, mentions by year,
+	 * earliest and most recent, and every day grouped by year with a
+	 * snippet. Back returns to wherever the reader came from (?from=).
+	 * Accepted-only data comes from loadEntityProfile().
+	 */
 	import { page } from '$app/state';
-	import type { EntityProfile } from '$lib/server/entities';
+	import type { EntityProfile, EntityDay } from '$lib/server/entities';
+	import { backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
-	const { profile }: { profile: EntityProfile | null } = $props();
+	const { profile, kind }: { profile: EntityProfile | null; kind: 'person' | 'place' } = $props();
+
+	const PER_YEAR = 12;
+
+	const listPath = $derived(kind === 'person' ? '/app/people' : '/app/places');
+	const backHref = $derived(backTarget(page.url.searchParams.get('from'), listPath));
+	const backText = $derived(backLabel(backHref));
+	// Day links come back to this profile (path only, so from= never nests).
+	const here = $derived(page.url.pathname);
 
 	const earliest = $derived(profile && profile.days.length > 0 ? profile.days[0] : null);
-	const mostRecent = $derived(
-		profile && profile.days.length > 0 ? profile.days[profile.days.length - 1] : null
+	const latest = $derived(
+		profile && profile.days.length > 1 ? profile.days[profile.days.length - 1] : null
 	);
-	// Back-navigation memory for day links (see /app/day back handling).
-	const fromSuffix = $derived(`?from=${encodeURIComponent(page.url.pathname)}`);
+
+	// Days grouped by year, newest year first.
+	const byYear = $derived.by(() => {
+		const map = new Map<number, EntityDay[]>();
+		for (const d of profile?.days ?? []) {
+			const y = Number(d.entryDate.slice(0, 4));
+			const list = map.get(y);
+			if (list) list.push(d);
+			else map.set(y, [d]);
+		}
+		return [...map.entries()].sort((a, b) => b[0] - a[0]).map(([year, days]) => ({ year, days }));
+	});
+	const maxCount = $derived(Math.max(1, ...(profile?.yearCounts ?? []).map((y) => y.count)));
+
+	// Folds render their rows only while open, so a person with 1,000+ days
+	// doesn't put every row in the page at once. The newest year starts open.
+	let openYears = $state<Record<number, boolean>>({});
+	let showAll = $state<Record<number, boolean>>({});
+	const isOpen = (year: number, i: number) => openYears[year] ?? i === 0;
+
+	const dayHref = (d: EntityDay) => withFrom(`/app/day/${d.entryDate}`, here);
+	const shortDay = (d: EntityDay) =>
+		new Date(d.entryDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+			month: 'short',
+			timeZone: 'UTC'
+		});
+	const n = (x: number) => x.toLocaleString('en-US');
+	const searchParam = $derived(kind === 'person' ? 'person' : 'place');
 </script>
 
-<div class="entity-page">
-	<a href="/app" class="back-link">&larr; Back</a>
+<div class="v-page wide">
+	<a class="v-back" href={backHref}>◂ {backText}</a>
 
 	{#if !profile}
-		<div class="not-found">
-			<h1>Not found</h1>
+		<div class="v-empty">
+			<h1 class="v-title">Not found</h1>
 			<p>There's no one or nowhere by that name in the archive yet.</p>
+			<a class="v-btn primary" href={listPath}>{kind === 'person' ? 'All people' : 'All places'}</a>
 		</div>
 	{:else}
-		<h1>{profile.displayName}</h1>
+		<p class="v-eyebrow">{kind === 'person' ? 'Person' : 'Place'}</p>
+		<h1 class="v-title">{profile.displayName}</h1>
 
 		{#if profile.mentionCount === 0}
-			<p class="summary">No accepted days mention {profile.displayName} yet.</p>
+			<p class="v-sub">No transcribed days mention {profile.displayName} yet.</p>
 		{:else}
-			<p class="summary">
-				{profile.mentionCount} day{profile.mentionCount === 1 ? '' : 's'} mention {profile.displayName}
-				{#if profile.firstYear && profile.lastYear}
-					<br />
-					{profile.firstYear}{profile.firstYear !== profile.lastYear ? ` — ${profile.lastYear}` : ''}
+			<div class="v-stats">
+				<div>
+					<b>{n(profile.mentionCount)}</b><span>{profile.mentionCount === 1 ? 'day' : 'days'}</span>
+				</div>
+				<div><b>{profile.firstYear}</b><span>first</span></div>
+				<div><b>{profile.lastYear}</b><span>latest</span></div>
+			</div>
+			<div class="v-actions">
+				<a class="v-btn primary" href="/app/search?{searchParam}={profile.slug}">
+					🔍 Search {kind === 'person' ? 'their' : 'its'} days
+				</a>
+				{#if kind === 'person'}
+					<button type="button" class="v-btn" disabled aria-describedby="pdf-later">
+						🖨 Printable history
+					</button>
+					<span id="pdf-later" class="later">Coming later</span>
 				{/if}
-			</p>
+			</div>
 
-			<section class="earliest-recent">
-				{#if earliest}
-					<div class="highlight-block">
-						<p class="label">Earliest</p>
-						<a class="day-card" href="/app/day/{earliest.entryDate}{fromSuffix}">
-							<div class="date">{earliest.dateLabel}</div>
-							<p class="snippet">{earliest.snippet}</p>
-						</a>
+			<div class="profile-grid">
+				<div>
+					<div class="v-section-h">
+						<h2>{kind === 'person' ? 'Mentions' : 'Days'} by year</h2>
 					</div>
-				{/if}
-				{#if mostRecent && mostRecent !== earliest}
-					<div class="highlight-block">
-						<p class="label">Most recent</p>
-						<a class="day-card" href="/app/day/{mostRecent.entryDate}{fromSuffix}">
-							<div class="date">{mostRecent.dateLabel}</div>
-							<p class="snippet">{mostRecent.snippet}</p>
-						</a>
-					</div>
-				{/if}
-			</section>
-
-			{#if profile.yearCounts.length > 0}
-				<section class="by-year">
-					<p class="label">By year</p>
-					<ul class="year-list">
+					<ul class="v-card bars">
 						{#each profile.yearCounts as yc (yc.year)}
 							<li>
-								<span class="year">{yc.year}</span>
-								<span class="count">{yc.count} mention{yc.count === 1 ? '' : 's'}</span>
+								<span class="yy">{yc.year}</span>
+								<span class="track" aria-hidden="true"
+									><span class="fill" style="width: {Math.max(2, (yc.count / maxCount) * 100)}%"
+									></span></span
+								>
+								<span class="num">{yc.count}<span class="v-sr"> days</span></span>
 							</li>
 						{/each}
 					</ul>
-				</section>
-			{/if}
 
-			<section class="all-days">
-				<p class="label">All days</p>
-				<ul class="day-list">
-					{#each profile.days as d (d.entryDate)}
-						<li><a href="/app/day/{d.entryDate}{fromSuffix}">{d.dateLabel}</a></li>
+					<div class="v-section-h"><h2>First and latest</h2></div>
+					{#if earliest}
+						<a class="v-card hl" href={dayHref(earliest)}>
+							<span class="v-eyebrow">Earliest</span>
+							<span class="date">{earliest.dateLabel}</span>
+							<span class="snip">{earliest.snippet}</span>
+						</a>
+					{/if}
+					{#if latest}
+						<a class="v-card hl" href={dayHref(latest)}>
+							<span class="v-eyebrow">Most recent</span>
+							<span class="date">{latest.dateLabel}</span>
+							<span class="snip">{latest.snippet}</span>
+						</a>
+					{/if}
+				</div>
+
+				<div>
+					<div class="v-section-h">
+						<h2>
+							{kind === 'person' ? 'Their days' : 'Days here'}
+							<span class="v-count">{n(profile.mentionCount)}</span>
+						</h2>
+					</div>
+					{#each byYear as g, i (g.year)}
+						<details
+							class="v-fold"
+							open={isOpen(g.year, i)}
+							ontoggle={(e) =>
+								(openYears = {
+									...openYears,
+									[g.year]: (e.currentTarget as HTMLDetailsElement).open
+								})}
+						>
+							<summary>{g.year} <span class="v-count">{g.days.length}</span></summary>
+							{#if isOpen(g.year, i)}
+								<div class="v-fold-body">
+									<ul class="rows">
+										{#each showAll[g.year] ? g.days : g.days.slice(0, PER_YEAR) as d (d.entryDate)}
+											<li>
+												<a href={dayHref(d)}>
+													<span class="d"
+														>{Number(d.entryDate.slice(8, 10))}<small>{shortDay(d)}</small></span
+													>
+													<span class="snip">{d.snippet || d.dateLabel}</span>
+												</a>
+											</li>
+										{/each}
+									</ul>
+									{#if g.days.length > PER_YEAR && !showAll[g.year]}
+										<button
+											type="button"
+											class="show-all"
+											onclick={() => (showAll = { ...showAll, [g.year]: true })}
+										>
+											Show all {g.days.length} days in {g.year} ▾
+										</button>
+									{/if}
+								</div>
+							{/if}
+						</details>
 					{/each}
-				</ul>
-			</section>
+				</div>
+			</div>
 		{/if}
 	{/if}
 </div>
 
 <style>
-	.entity-page {
-		padding: 1rem;
-	}
-	.back-link {
-		display: flex;
-		align-items: center;
-		min-height: 48px;
-		margin-bottom: 0.5rem;
-		font-family: var(--font-sans);
-		font-size: 0.9rem;
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
-	}
-	.back-link:hover {
-		text-decoration: underline;
-	}
-	.back-link:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	h1 {
-		font-family: var(--font-sans);
-		font-size: 1.4rem;
-		margin: 0 0 0.5rem;
-		color: var(--color-ink);
-		text-align: center;
-	}
-	.not-found {
-		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 10px;
-		padding: 1.5rem 1.25rem;
-		text-align: center;
-	}
-	.not-found p {
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
+	.later {
+		align-self: center;
+		font-size: 15px;
 		color: var(--color-ink-muted);
+	}
+	.profile-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0 28px;
+	}
+	@media (min-width: 1024px) {
+		.profile-grid {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+			align-items: start;
+		}
+	}
+	.bars {
+		list-style: none;
 		margin: 0;
+		display: grid;
+		gap: 4px;
 	}
-	.summary {
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
-		line-height: 1.6;
+	.bars li {
+		display: grid;
+		grid-template-columns: 48px minmax(0, 1fr) 40px;
+		gap: 8px;
+		align-items: center;
+		font-size: 15px;
+	}
+	.bars .yy {
 		color: var(--color-ink-muted);
-		text-align: center;
-		margin: 0 0 1.5rem;
+		font-weight: 600;
 	}
-	.label {
-		font-family: var(--font-sans);
-		font-size: 0.8rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--color-ink-muted);
-		margin: 0 0 0.5rem;
+	.bars .track {
+		height: 14px;
+		background: var(--color-chip-bg);
+		border-radius: 4px;
+		overflow: hidden;
 	}
-	.earliest-recent {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		margin-bottom: 1.5rem;
-	}
-	.day-card {
+	.bars .fill {
 		display: block;
-		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 8px;
-		padding: 0.85rem 1rem;
-		text-decoration: none;
-		color: inherit;
+		height: 100%;
+		background: var(--color-evergreen);
 	}
-	.day-card:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	.date {
-		font-family: var(--font-sans);
+	.bars .num {
+		text-align: right;
 		font-weight: 700;
-		font-size: 0.95rem;
-		color: var(--color-evergreen-dark);
-		margin-bottom: 0.35rem;
 	}
-	.snippet {
+	.hl {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.hl .date {
+		font-weight: 700;
+		color: var(--color-evergreen-dark);
+	}
+	.snip {
 		font-family: var(--font-serif);
-		font-size: 1rem;
-		line-height: 1.55;
-		color: var(--color-ink);
-		margin: 0;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
 	}
-	.by-year {
-		margin-bottom: 1.5rem;
-	}
-	.year-list {
+	.rows {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
 	}
-	.year-list li {
-		display: flex;
-		justify-content: space-between;
-		font-family: var(--font-sans);
-		font-size: 0.95rem;
-		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
-	}
-	.year-list .year {
-		font-weight: 700;
-		color: var(--color-ink);
-	}
-	.year-list .count {
-		color: var(--color-ink-muted);
-	}
-	.all-days .day-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.3rem;
-	}
-	.all-days .day-list a {
-		display: flex;
-		align-items: center;
-		min-height: 44px;
-		font-family: var(--font-sans);
-		font-size: 0.95rem;
-		color: var(--color-evergreen-dark);
+	.rows a {
+		display: grid;
+		grid-template-columns: 48px minmax(0, 1fr);
+		gap: 10px;
+		padding: 10px 0;
+		min-height: 52px;
+		border-top: 1px solid var(--color-border);
+		color: inherit;
 		text-decoration: none;
-		border-bottom: 1px solid var(--color-border);
 	}
-	.all-days .day-list a:hover {
+	.rows li:first-child a {
+		border-top: 0;
+	}
+	.rows a:hover .snip {
 		text-decoration: underline;
 	}
-	.all-days .day-list a:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
+	.rows .d {
+		font-family: var(--font-serif);
+		font-weight: 700;
+		font-size: 21px;
+		color: var(--color-evergreen-dark);
+		text-align: center;
+		line-height: 1.1;
+	}
+	.rows .d small {
+		display: block;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+	}
+	.show-all {
+		min-height: 48px;
+		margin-top: 6px;
+		padding: 0 4px;
+		border: 0;
+		background: none;
+		color: var(--color-evergreen);
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.show-all:hover {
+		text-decoration: underline;
 	}
 </style>

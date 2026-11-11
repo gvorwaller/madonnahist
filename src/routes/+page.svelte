@@ -41,9 +41,9 @@
 
 		{#if showFamilyViewer}
 			<a href="/app" class="card">
-				<h2>Family Viewer</h2>
-				<p class="role">Everyone</p>
-				<p class="desc">"On this day in family history," day detail, and full-text search.</p>
+				<h2>Vorwaller Family History</h2>
+				<p class="role">The family</p>
+				<p class="desc">The family viewer: On this day, Timeline, People, Stories and Search.</p>
 				<span class="status active">Active</span>
 			</a>
 		{/if}

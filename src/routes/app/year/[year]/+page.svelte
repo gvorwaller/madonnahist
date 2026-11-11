@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.validYear ? data.year : 'Year'} — madonnahist</title>
+	<title>{data.validYear ? data.year : 'Year'} — Vorwaller Family History</title>
 </svelte:head>
 
 <div class="year-page">
@@ -96,7 +96,7 @@
 		{/if}
 
 		{#if data.narrative}
-			<section class="year-narrative">
+			<section class="year-narrative" id="story">
 				<p class="narrative-label">AI-generated year summary, reviewed by the family</p>
 				{#each narrativeParagraphs(data.narrative) as para, i (i)}
 					<p class="narrative-para">{para}</p>

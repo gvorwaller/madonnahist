@@ -300,6 +300,12 @@ with a phone (390px) / laptop (1280px) toggle and realistic sample text. It must
 Then `docs/ui-mockups-V2.md` §B is superseded by a V3 section.
 
 **Slice 1: Thin family rollout (the first thing the family sees).**
+
+*Split 2026-11-08 into two deploys:* **1a** (no schema): the shell, Today, Day, Stories,
+People/Places, Timeline order, Search clean-up, install icons, thumbnails. **1b** (migration
+0028): invites, login restyle, `returnTo`, `SameSite=Lax` + cs.md, editable About text, display
+name. 1a is safe to ship alone; families are invited only after 1b.
+
 - Invite onboarding (above), the login restyle, the `returnTo` fix, the absolute login action, and
   the `SameSite=Lax` + cs.md change.
 - Viewer shell with the 5 tabs (top links on laptop, bottom tabs on phone, a drawer), the new name

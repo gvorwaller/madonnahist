@@ -352,7 +352,7 @@ async function publishBookNarrative(pool) {
 
 async function cleanupBookNarrative(pool) {
 	await pool.query(`DELETE FROM narrative_summaries WHERE scope = 'year' AND scope_key = $1`, [
-		String(FIXTURE_YEAR)
+		String(BOOK_FIXTURE_YEAR)
 	]);
 }
 
@@ -398,20 +398,23 @@ async function main() {
 
 		const viewerCookie = await login(VIEWER_USERNAME, TEST_PASSWORD);
 
-		// ── Landing page cards filtered by role (Gaylon, 2026-07-23) ────────
-		// src/routes/+page.svelte only renders the cards a role can actually
-		// reach (mirrors src/hooks.server.ts's roleAllowed()) — a viewer's
-		// landing page must never link to /admin (they'd just get a 403 on
-		// click), but must still show the Family Viewer card.
+		// ── V3 Slice 1: a viewer visiting / goes straight to /app ───────────
+		// (Earlier, / showed role-filtered landing cards; a viewer only ever
+		// had one card, so the landing page is skipped for them now.)
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/`, { headers: { Cookie: viewerCookie } });
+			const loc = res.headers.get('location') ?? '';
+			const ok = res.status === 303 && loc.endsWith('/app');
+			record('GET / [viewer] redirects to /app', ok, `status ${res.status}, location ${loc || '(none)'}`);
+		}
+
+		// ── V3 Slice 1: the viewer shell never offers /admin or /correct to a viewer
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app`, { headers: { Cookie: viewerCookie } });
 			const body = await res.text();
-			const hasAdminLink = body.includes('href="/admin"');
-			const hasAppLink = body.includes('href="/app"');
-			record('GET / [viewer] landing page does NOT link to /admin', !hasAdminLink,
-				hasAdminLink ? 'ADMIN CARD LEAKED INTO VIEWER LANDING PAGE' : 'no /admin link, as required');
-			record('GET / [viewer] landing page links to /app', hasAppLink,
-				hasAppLink ? '/app link present' : '/app link missing');
+			const leaked = body.includes('href="/admin"') || body.includes('href="/correct"');
+			record('GET /app [viewer] menu has no Admin/Corrections links', res.status === 200 && !leaked,
+				leaked ? 'ADMIN/CORRECTIONS LINK SHOWN TO A VIEWER' : `status ${res.status}, no tool links`);
 		}
 
 		// ── Day detail: accepted ────────────────────────────────────────────
@@ -711,6 +714,14 @@ async function main() {
 			record('GET /app/book/year/<fixture year> [viewer] unpublished narrative absent', !leaked,
 				leaked ? 'UNPUBLISHED NARRATIVE DRAFT LEAKED INTO BOOK VIEW' : 'draft absent, as required');
 		}
+		// ── V3 Slice 1: Stories and Today never show an unpublished year story
+		for (const path of ['/app/stories', `/app?date=${BOOK_ACCEPTED_DATE.slice(5)}`]) {
+			const res = await fetchNoRedirect(`${BASE_URL}${path}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const leaked = body.includes('WOBBLEFRIMBOOKDRAFT');
+			record(`GET ${path} [viewer] unpublished year story absent`, res.status === 200 && !leaked,
+				leaked ? 'UNPUBLISHED YEAR STORY LEAKED' : `status ${res.status}, draft absent`);
+		}
 		{
 			await publishBookNarrative(pool);
 			const res = await fetchNoRedirect(`${BASE_URL}/app/book/year/${BOOK_FIXTURE_YEAR}`, {
@@ -721,6 +732,92 @@ async function main() {
 			const hasLabel = body.includes('AI-generated year summary');
 			record('GET /app/book/year/<fixture year> [viewer] published narrative present with AI label', hasPublished && hasLabel,
 				`text present: ${hasPublished}, label present: ${hasLabel}`);
+		}
+
+		// ── V3 Slice 1: Stories lists the published year story ─────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/stories`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const ok = body.includes('ZQXPLBOOKPUBLISHED') && body.includes(`/app/year/${BOOK_FIXTURE_YEAR}#story`);
+			record('GET /app/stories [viewer] lists the published year story', ok,
+				`teaser present: ${body.includes('ZQXPLBOOKPUBLISHED')}`);
+		}
+
+		// ── V3 Slice 1: Today for a date shows accepted entries only ────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app?date=${ACCEPTED_DATE.slice(5)}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const ok = res.status === 200 && body.includes(ACCEPTED_MARKER) && body.includes(`/app/day/${ACCEPTED_DATE}`);
+			record('GET /app?date=<accepted MM-DD> [viewer] shows the accepted entry', ok,
+				`status ${res.status}, marker: ${body.includes(ACCEPTED_MARKER)}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app?date=${PENDING_DATE.slice(5)}`, {
+				headers: { Cookie: viewerCookie }
+			});
+			const body = await res.text();
+			const leaked = body.includes(PENDING_MARKER) || body.includes(`/app/day/${PENDING_DATE}`);
+			record('GET /app?date=<pending MM-DD> [viewer] never shows the pending entry', res.status === 200 && !leaked,
+				leaked ? 'PENDING ENTRY LEAKED INTO TODAY' : `status ${res.status}, pending absent`);
+		}
+		for (const bad of ['13-01', '02-30', 'garbage', '1899-02-31']) {
+			const res = await fetchNoRedirect(`${BASE_URL}/app?date=${bad}`, { headers: { Cookie: viewerCookie } });
+			record(`GET /app?date=${bad} [viewer] falls back to today, no crash`, res.status === 200, `status ${res.status}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app?date=02-29`, { headers: { Cookie: viewerCookie } });
+			record('GET /app?date=02-29 [viewer] Feb 29 is a valid date', res.status === 200 &&
+				(await res.text()).includes('February 29'), `status ${res.status}`);
+		}
+
+		// ── V3 Slice 1: thumbnails are authorized before any resizing ──────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${PENDING_DATE}/image?w=240`, {
+				headers: { Cookie: viewerCookie }
+			});
+			record('GET /app/day/<pending>/image?w=240 [viewer] is 404', res.status === 404, `status ${res.status}`);
+		}
+
+		// ── V3 Slice 1: People / Places index is accepted-only ─────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/people`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const ok = res.status === 200 && body.includes(ACCEPTED_ENTITY_NAME) && body.includes(`/app/person/${ACCEPTED_ENTITY_SLUG}`);
+			record('GET /app/people [viewer] lists the accepted-day person', ok, `status ${res.status}`);
+		}
+		for (const path of ['/app/people', '/app/places']) {
+			const res = await fetchNoRedirect(`${BASE_URL}${path}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const leaked = body.includes(PENDING_ENTITY_NAME) || body.includes(PENDING_ENTITY_SLUG);
+			record(`GET ${path} [viewer] never lists a pending-only entity`, res.status === 200 && !leaked,
+				leaked ? 'PENDING-ONLY ENTITY LEAKED INTO INDEX' : `status ${res.status}, absent`);
+		}
+
+		// ── V3 Slice 1: Back links accept only same-site /app paths ────────
+		for (const evil of ['//evil.example/app', 'https://evil.example/app', '/\\evil.example', 'javascript:alert(1)', '/admin']) {
+			const res = await fetchNoRedirect(
+				`${BASE_URL}/app/day/${ACCEPTED_DATE}?from=${encodeURIComponent(evil)}`,
+				{ headers: { Cookie: viewerCookie } }
+			);
+			const body = await res.text();
+			const m = body.match(/class="v-back[^"]*" href="([^"]*)"/);
+			const href = m ? m[1].replace(/&amp;/g, '&') : null;
+			const ok = href !== null && href.startsWith('/app') && !href.startsWith('//');
+			record(`GET /app/day/<accepted>?from=${evil} [viewer] Back stays in /app`, ok, `back href: ${href}`);
+		}
+		{
+			const good = '/app/search?q=zqx&person=someone';
+			const res = await fetchNoRedirect(
+				`${BASE_URL}/app/day/${ACCEPTED_DATE}?from=${encodeURIComponent(good)}`,
+				{ headers: { Cookie: viewerCookie } }
+			);
+			const body = await res.text();
+			const m = body.match(/class="v-back[^"]*" href="([^"]*)"/);
+			const href = m ? m[1].replace(/&amp;/g, '&') : null;
+			record('GET /app/day/<accepted>?from=<search with query> [viewer] Back keeps the query', href === good,
+				`back href: ${href}`);
 		}
 
 		// ── Phase F: invalid scope/key → friendly page, never a crash ──────

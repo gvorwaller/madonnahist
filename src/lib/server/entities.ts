@@ -104,7 +104,9 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 	const days: EntityDay[] = daysRes.rows.map((r) => ({
 		entryDate: r.entry_date,
 		dateLabel: formatHumanDate(r.entry_date),
-		snippet: firstSentences(r.corrected_text ?? '')
+		// Short, one-sentence snippets: a busy person can have 1,000+ days, and
+		// every one is listed (grouped by year) on the profile page.
+		snippet: firstSentences(r.corrected_text ?? '', 1, 160)
 	}));
 
 	const yearCountsMap = new Map<number, number>();
@@ -223,4 +225,50 @@ export async function getAcceptedEntityPickerOptions(): Promise<EntityPickerOpti
 	return res.rows
 		.map((r) => ({ id: r.id, display_name: r.display_name, entityType: r.entity_type }))
 		.sort((a, b) => a.display_name.localeCompare(b.display_name));
+}
+
+export interface DirectoryEntry {
+	slug: string;
+	name: string;
+	days: number;
+	firstYear: number;
+	lastYear: number;
+}
+
+/**
+ * The People / Places index (V3 Slice 1): every canonical person or place
+ * with at least one accepted-day mention (directly or through an alias),
+ * with its day count and first/last year. Accepted-only and alias-resolved,
+ * same shape as getAcceptedEntityOptions() above.
+ */
+export async function getEntityDirectory(entityType: EntityType): Promise<DirectoryEntry[]> {
+	const res = await query<{
+		slug: string;
+		display_name: string;
+		days: number;
+		first_year: number;
+		last_year: number;
+	}>(
+		`SELECT canon.slug, canon.display_name,
+		        COUNT(DISTINCT cd.id)::int AS days,
+		        MIN(EXTRACT(YEAR FROM cd.entry_date))::int AS first_year,
+		        MAX(EXTRACT(YEAR FROM cd.entry_date))::int AS last_year
+		   FROM day_entities de
+		   JOIN calendar_days cd ON cd.id = de.day_id
+		   JOIN entities e ON e.id = de.entity_id
+		   JOIN entities canon ON canon.id = COALESCE(e.alias_of_entity_id, e.id)
+		  WHERE cd.correction_status = 'accepted'
+		    AND canon.entity_type = $1
+		  GROUP BY canon.id, canon.slug, canon.display_name`,
+		[entityType]
+	);
+	return res.rows
+		.map((r) => ({
+			slug: r.slug,
+			name: r.display_name,
+			days: r.days,
+			firstYear: r.first_year,
+			lastYear: r.last_year
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name, 'en', { sensitivity: 'base' }));
 }

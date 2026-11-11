@@ -1,4 +1,5 @@
 import { query } from '$lib/db';
+import { firstSentences, getPublishedYearStories } from '$lib/server/viewer';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -33,9 +34,11 @@ export const load: PageServerLoad = async () => {
 	);
 
 	const stories = res.rows.map((r) => {
-		const sd = (typeof r.subset_definition === 'string'
-			? JSON.parse(r.subset_definition)
-			: r.subset_definition) as { subsetSummary?: string } | null;
+		const sd = (
+			typeof r.subset_definition === 'string'
+				? JSON.parse(r.subset_definition)
+				: r.subset_definition
+		) as { subsetSummary?: string } | null;
 		return {
 			id: r.id,
 			question: r.question,
@@ -45,5 +48,12 @@ export const load: PageServerLoad = async () => {
 		};
 	});
 
-	return { stories };
+	// V3 Slice 1: the Stories tab also lists every published year story
+	// (published-only; unpublished drafts never reach /app).
+	const yearStories = (await getPublishedYearStories()).map((y) => ({
+		year: y.year,
+		teaser: firstSentences(y.text, 2, 240)
+	}));
+
+	return { stories, yearStories };
 };

@@ -37,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>{monthTitle ?? 'Month'} — madonnahist</title>
+	<title>{monthTitle ?? 'Month'} — Vorwaller Family History</title>
 </svelte:head>
 
 <svelte:window

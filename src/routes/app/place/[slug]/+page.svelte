@@ -5,7 +5,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.profile ? data.profile.displayName : 'Not found'} — madonnahist</title>
+	<title>{data.profile ? data.profile.displayName : 'Not found'} — Vorwaller Family History</title>
 </svelte:head>
 
-<EntityProfile profile={data.profile} />
+<EntityProfile profile={data.profile} kind="place" />

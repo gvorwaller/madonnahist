@@ -3,7 +3,6 @@ import {
 	formatHumanDate,
 	getAcceptedTagOptions,
 	getAcceptedYears,
-	getCoverage,
 	resolveCanonicalTagSlug,
 	visibleTagExistsClause
 } from '$lib/server/viewer';
@@ -71,8 +70,7 @@ export const load: PageServerLoad = async ({ url }) => {
 	const pageParam = Number(url.searchParams.get('page') ?? '1');
 	const pageNum = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 
-	const [coverage, years, tagOptions, personOptions, placeOptions] = await Promise.all([
-		getCoverage(),
+	const [years, tagOptions, personOptions, placeOptions] = await Promise.all([
 		getAcceptedYears(),
 		getAcceptedTagOptions(),
 		getAcceptedEntityOptions('person'),
@@ -93,7 +91,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			total: 0,
 			totalPages: 0,
 			results: [] as Array<{ entryDate: string; dateLabel: string; segments: SearchSegment[] }>,
-			coverage,
 			years,
 			tagOptions,
 			personOptions,
@@ -169,7 +166,6 @@ export const load: PageServerLoad = async ({ url }) => {
 			total,
 			totalPages,
 			results,
-			coverage,
 			years,
 			tagOptions,
 			personOptions,
@@ -257,7 +253,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		total,
 		totalPages,
 		results,
-		coverage,
 		years,
 		tagOptions,
 		personOptions,

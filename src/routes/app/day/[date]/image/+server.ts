@@ -2,7 +2,36 @@ import { query } from '$lib/db';
 import { getObject } from '$lib/ingest/spaces-upload';
 import { isValidEntryDate } from '$lib/server/viewer';
 import { error } from '@sveltejs/kit';
+import sharp from 'sharp';
 import type { RequestHandler } from './$types';
+
+/**
+ * Optional `?w=` thumbnail widths (V3 Slice 1, plan "Images", CODEX #8).
+ * Only these fixed widths are accepted, so a crafted URL can't make the
+ * server resize to arbitrary sizes. Resizes are capped at RESIZE_SLOTS at a
+ * time on the shared droplet; the full image is served when every slot is
+ * busy rather than queueing. The authorization query below always runs
+ * first — there is no server-side thumbnail cache to bypass it.
+ */
+const THUMB_WIDTHS = new Set([240, 640]);
+const RESIZE_SLOTS = 2;
+let resizing = 0;
+
+async function maybeResize(buffer: Buffer, width: number | null): Promise<Buffer> {
+	if (width === null || resizing >= RESIZE_SLOTS) return buffer;
+	resizing++;
+	try {
+		return await sharp(buffer)
+			.rotate()
+			.resize({ width, withoutEnlargement: true })
+			.jpeg({ quality: 78 })
+			.toBuffer();
+	} catch {
+		return buffer;
+	} finally {
+		resizing--;
+	}
+}
 
 /**
  * Viewer day image. Copies the object-store-fetch pattern from
@@ -15,7 +44,7 @@ import type { RequestHandler } from './$types';
  * requesting a non-accepted day gets a 404 indistinguishable from a
  * nonexistent day — never a 403 (which would confirm the day exists).
  */
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals, url }) => {
 	if (!locals.user) error(404, 'Not found');
 
 	const entryDate = params.date;
@@ -47,7 +76,10 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		error(404, 'Not found');
 	}
 
-	return new Response(buffer as unknown as BodyInit, {
+	const wParam = Number(url.searchParams.get('w'));
+	const body = await maybeResize(buffer, THUMB_WIDTHS.has(wParam) ? wParam : null);
+
+	return new Response(body as unknown as BodyInit, {
 		headers: {
 			'Content-Type': 'image/jpeg',
 			'Cache-Control': 'private, max-age=3600'

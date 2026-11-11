@@ -1,40 +1,88 @@
 import { query } from '$lib/db';
-import { firstSentences, getCoverage } from '$lib/server/viewer';
+import {
+	firstSentences,
+	getLatestSavedStory,
+	getNearestMonthDayWithEntries,
+	getPublishedYearStories,
+	monthDayKey,
+	parseMonthDay,
+	pickLeadYearStory,
+	shiftMonthDay
+} from '$lib/server/viewer';
 import { todayInAppTz } from '$lib/server/time';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async () => {
-	// "Today" means today in the family's home timezone (src/lib/server/time.ts)
-	// — a UTC anchor would flip to tomorrow's entries every evening, and
-	// Postgres CURRENT_DATE depends on whatever timezone a given session
-	// happens to be configured with (the local test cluster was found running
-	// America/New_York despite cs.md's UTC rule).
-	const { month, day } = todayInAppTz();
+/**
+ * Today (V3 Slice 1): the lead year story, then "On this day" for any
+ * month/day (`?date=MM-DD`, default today in the family's timezone), then
+ * the latest saved family story. An empty date offers the nearest date
+ * that has entries (Gaylon, mockup review 2026-11-07).
+ *
+ * Accepted-only: every query here applies the publishable-day predicate
+ * itself (see src/lib/server/viewer.ts). Year stories are published-only;
+ * saved stories are admin-curated by saving (plan §Publication exceptions).
+ */
+export const load: PageServerLoad = async ({ url }) => {
+	const now = todayInAppTz();
+	// `?date=MM-DD` from the app's own links; `?m=&d=` from the no-JS picker form.
+	const m = url.searchParams.get('m');
+	const d = url.searchParams.get('d');
+	const requested = parseMonthDay(
+		url.searchParams.get('date') ?? (m && d ? `${m.padStart(2, '0')}-${d.padStart(2, '0')}` : null)
+	);
+	const date = requested ?? { month: now.month, day: now.day };
+	const isToday = date.month === now.month && date.day === now.day;
 
-	// Publishable-day predicate applied directly in this query (see
-	// src/lib/server/viewer.ts) — every /app query filters independently.
-	const daysRes = await query<{ entry_date: string; corrected_text: string | null }>(
-		`SELECT entry_date::text AS entry_date, corrected_text
+	const daysRes = await query<{
+		entry_date: string;
+		corrected_text: string | null;
+		has_memory: boolean;
+		has_image: boolean;
+	}>(
+		`SELECT entry_date::text AS entry_date, corrected_text,
+		        (day_narrative IS NOT NULL AND btrim(day_narrative) <> '') AS has_memory,
+		        (day_image_path IS NOT NULL) AS has_image
 		   FROM calendar_days
 		  WHERE correction_status = 'accepted'
 		    AND EXTRACT(MONTH FROM entry_date) = $1
 		    AND EXTRACT(DAY FROM entry_date) = $2
 		  ORDER BY entry_date ASC`,
-		[month, day]
+		[date.month, date.day]
 	);
 
-	const coverage = await getCoverage();
+	const entries = daysRes.rows.map((row) => {
+		const d = new Date(row.entry_date + 'T00:00:00Z');
+		return {
+			entryDate: row.entry_date,
+			year: d.getUTCFullYear(),
+			yearsAgo: now.year - d.getUTCFullYear(),
+			weekday: d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }),
+			preview: firstSentences(row.corrected_text ?? '', 3, 280),
+			hasMemory: row.has_memory,
+			hasImage: row.has_image
+		};
+	});
 
-	const entries = daysRes.rows.map((row) => ({
-		entryDate: row.entry_date,
-		year: Number(row.entry_date.slice(0, 4)),
-		preview: firstSentences(row.corrected_text ?? '', 2)
-	}));
+	const [stories, latestSaved, nearest] = await Promise.all([
+		getPublishedYearStories(),
+		getLatestSavedStory(),
+		entries.length === 0 ? getNearestMonthDayWithEntries(date) : Promise.resolve(null)
+	]);
+
+	const lead = pickLeadYearStory(
+		stories,
+		date,
+		entries.map((e) => e.year)
+	);
 
 	return {
-		month,
-		day,
+		date: { ...date, key: monthDayKey(date) },
+		isToday,
+		prevKey: monthDayKey(shiftMonthDay(date, -1)),
+		nextKey: monthDayKey(shiftMonthDay(date, 1)),
 		entries,
-		coverage
+		nearest: nearest ? { ...nearest, key: monthDayKey(nearest) } : null,
+		leadStory: lead ? { year: lead.year, teaser: firstSentences(lead.text, 2, 200) } : null,
+		latestSaved
 	};
 };

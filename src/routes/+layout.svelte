@@ -11,8 +11,15 @@
 		if (p.startsWith('/app')) return { label: 'Family', href: '/app' };
 		return null;
 	});
+
+	// The family viewer (/app/**) has its own complete shell (top bar, tabs,
+	// menu) — the dark tools bar would just be a second, competing nav there.
+	const viewerRoute = $derived(
+		page.url.pathname === '/app' || page.url.pathname.startsWith('/app/')
+	);
 </script>
 
+{#if !viewerRoute}
 <nav class="topbar">
 	<a href="/" class="home">madonnahist</a>
 	{#if section}
@@ -27,6 +34,7 @@
 		</form>
 	{/if}
 </nav>
+{/if}
 
 <main>
 	{@render children()}

@@ -15,26 +15,26 @@
 </script>
 
 <svelte:head>
-	<title>{data.available ? `${data.question} — madonnahist` : 'Story — madonnahist'}</title>
+	<title>{data.available ? `${data.question} — Vorwaller Family History` : 'Story — Vorwaller Family History'}</title>
 </svelte:head>
 
 {#if !data.available}
 	<div class="story-page">
 		{#if !data.renderMode}
-			<a href="/app/stories" class="back-link">&larr; Family stories</a>
+			<a href="/app/stories" class="back-link">&larr; Stories</a>
 		{/if}
 		<div class="unavailable-card">
 			<h1>Not found</h1>
 			<p>That story doesn't exist, or may have been removed.</p>
 			{#if !data.renderMode}
-				<a href="/app/stories" class="btn-primary">Back to family stories</a>
+				<a href="/app/stories" class="btn-primary">Back to Stories</a>
 			{/if}
 		</div>
 	</div>
 {:else}
 	<div class="story-page" class:render-mode={data.renderMode}>
 		{#if !data.renderMode}
-			<a href="/app/stories" class="back-link">&larr; Family stories</a>
+			<a href="/app/stories" class="back-link">&larr; Stories</a>
 		{/if}
 
 		<article class="story">

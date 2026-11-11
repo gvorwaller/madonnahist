@@ -3,7 +3,7 @@
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
-			month: 'long',
+			month: 'short',
 			day: 'numeric',
 			year: 'numeric'
 		});
@@ -11,119 +11,132 @@
 </script>
 
 <svelte:head>
-	<title>Family stories — madonnahist</title>
+	<title>Stories — Vorwaller Family History</title>
 </svelte:head>
 
-<div class="stories-page">
-	<a href="/app/search" class="back-link">&larr; Back to Search</a>
-
-	<h1>Family stories</h1>
-	<p class="intro">
-		Answers to questions asked of the archive — each one written only from
-		Madonna's transcribed calendar entries, and saved here after review.
-		Tap a question to read the full story.
+<div class="v-page wide">
+	<h1 class="v-title">Stories</h1>
+	<p class="v-sub">
+		Stories written from Madonna's calendars, and reviewed before they appear here.
 	</p>
 
-	{#if data.stories.length === 0}
-		<div class="empty-state">
-			<p>No saved stories yet — they'll appear here as questions get asked and kept.</p>
+	<section aria-labelledby="ys-h">
+		<div class="v-section-h">
+			<h2 id="ys-h">Year stories <span class="v-count">{data.yearStories.length}</span></h2>
 		</div>
-	{:else}
-		<ul class="story-list">
-			{#each data.stories as story (story.id)}
-				<li>
-					<a class="story-card" href="/app/stories/{story.id}">
-						<h2 class="story-question">{story.question}</h2>
-						<p class="story-meta">
-							{story.dayCount} transcribed day{story.dayCount === 1 ? '' : 's'}
-							&middot; {story.subsetSummary}
-							&middot; saved {formatDate(story.createdAt)}
-						</p>
-					</a>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+		{#if data.yearStories.length === 0}
+			<p class="v-muted">
+				No year stories yet. They appear here once a year is written up and reviewed.
+			</p>
+		{:else}
+			<ul class="storylist">
+				{#each data.yearStories as y (y.year)}
+					<li class="v-card yearstory">
+						<a class="story-link" href="/app/year/{y.year}#story">
+							<span class="v-eyebrow">{y.year}</span>
+							<span class="h">The story of {y.year}</span>
+							<span class="teaser">{y.teaser}</span>
+						</a>
+						<p class="v-provenance"><b>AI-written</b> from Madonna's {y.year} calendar, reviewed</p>
+						<div class="links">
+							<a href="/app/year/{y.year}#story">Read the story ▸</a>
+							<a href="/app/book/year/{y.year}">📚 Read {y.year} as a book ▸</a>
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
+
+	<section aria-labelledby="fs-h">
+		<div class="v-section-h">
+			<h2 id="fs-h">Family Stories <span class="v-count">{data.stories.length}</span></h2>
+		</div>
+		<p class="v-sub intro">
+			Each one gathers a theme across many days, written only from Madonna's transcribed entries.
+		</p>
+		{#if data.stories.length === 0}
+			<p class="v-muted">No Family Stories yet. They'll appear here as they're written and kept.</p>
+		{:else}
+			<ul class="storylist">
+				{#each data.stories as story (story.id)}
+					<li>
+						<a class="v-card qa" href="/app/stories/{story.id}">
+							<span class="h">{story.question}</span>
+							<span class="v-provenance">
+								<b>AI-written</b> from {story.dayCount}
+								{story.dayCount === 1 ? 'day' : 'days'} · {story.subsetSummary} · saved {formatDate(
+									story.createdAt
+								)}
+							</span>
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</section>
 </div>
 
 <style>
-	.stories-page {
-		padding: 1rem;
-		max-width: 640px;
-		margin: 0 auto;
-	}
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		min-height: 44px;
-		font-family: var(--font-sans);
-		font-size: 0.9rem;
-		font-weight: 600;
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
-		margin-bottom: 0.25rem;
-	}
-	.back-link:hover {
-		text-decoration: underline;
-	}
-	.back-link:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	h1 {
-		font-family: var(--font-sans);
-		font-size: 1.25rem;
-		margin: 0.25rem 0 0.5rem;
-		color: var(--color-ink);
-	}
-	.intro {
-		font-family: var(--font-sans);
-		font-size: 0.9rem;
-		color: var(--color-ink-muted);
-		margin: 0 0 1.25rem;
-		line-height: 1.5;
-	}
-	.empty-state p {
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
-		color: var(--color-ink-muted);
-	}
-	.story-list {
+	.storylist {
 		list-style: none;
 		margin: 0;
 		padding: 0;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 12px;
 	}
-	.story-list li {
-		margin-bottom: 0.85rem;
+	.storylist :global(.v-card + .v-card) {
+		margin-top: 0;
 	}
-	.story-card {
-		display: block;
-		min-height: 44px;
-		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 10px;
-		padding: 1rem 1.1rem;
-		text-decoration: none;
+	@media (min-width: 1024px) {
+		.storylist {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	.intro {
+		margin: -4px 0 12px;
+	}
+	.story-link {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
 		color: inherit;
+		text-decoration: none;
 	}
-	.story-card:hover {
-		background: var(--color-highlight-bg);
-	}
-	.story-card:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	.story-question {
+	.h {
 		font-family: var(--font-serif);
-		font-size: 1.1rem;
+		font-size: 21px;
 		font-weight: 700;
-		color: var(--color-ink);
-		margin: 0 0 0.5rem;
+		line-height: 1.3;
+		overflow-wrap: anywhere;
 	}
-	.story-meta {
-		margin: 0;
-		font-family: var(--font-sans);
-		font-size: 0.8rem;
-		color: var(--color-ink-muted);
+	.teaser {
+		font-family: var(--font-serif);
+		line-height: 1.55;
+	}
+	.story-link:hover .h {
+		text-decoration: underline;
+	}
+	.links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 18px;
+	}
+	.links a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-weight: 700;
+		color: var(--color-evergreen);
+		text-decoration: none;
+	}
+	.links a:hover {
+		text-decoration: underline;
+	}
+	.qa {
+		height: 100%;
+		display: flex;
+		flex-direction: column;
 	}
 </style>

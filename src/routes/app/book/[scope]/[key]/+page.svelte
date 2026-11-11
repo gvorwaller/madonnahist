@@ -57,7 +57,7 @@
 </script>
 
 <svelte:head>
-	<title>{data.available ? `${data.year} — Book — madonnahist` : 'Book view — madonnahist'}</title>
+	<title>{data.available ? `${data.year} — Book — Vorwaller Family History` : 'Book view — Vorwaller Family History'}</title>
 </svelte:head>
 
 {#if !data.available}
@@ -100,7 +100,7 @@
 
 		<article class="book">
 			<header class="book-header">
-				<p class="book-eyebrow">madonnahist</p>
+				<p class="book-eyebrow">Vorwaller Family History</p>
 				<h1 class="book-title">{data.year}</h1>
 				<p class="book-coverage">
 					{data.coverage.accepted} of {data.coverage.total} days transcribed

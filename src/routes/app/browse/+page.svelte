@@ -5,6 +5,24 @@
 	const { data } = $props();
 
 	const STORAGE_KEY = 'madonnahist.browse.openDecades';
+	const ORDER_KEY = 'vfh.timeline.order';
+
+	// Oldest decade first by default, with a toggle remembered per viewer
+	// (Gaylon, mockup review 2026-11-07). The server sends newest first.
+	let order = $state<'oldest' | 'newest'>('oldest');
+	const decades = $derived(
+		order === 'newest'
+			? data.decades
+			: [...data.decades].reverse().map((g) => ({ ...g, years: [...g.years].reverse() }))
+	);
+	function setOrder(next: 'oldest' | 'newest') {
+		order = next;
+		try {
+			localStorage.setItem(ORDER_KEY, next);
+		} catch {
+			// Private mode / blocked storage: the choice just isn't remembered.
+		}
+	}
 
 	// Per-decade open state, keyed by decade year (e.g. 1970). All decades
 	// still start collapsed by default (per Gaylon, 2026-07-22) — this record
@@ -18,6 +36,12 @@
 
 	onMount(() => {
 		if (!browser) return;
+		try {
+			const saved = localStorage.getItem(ORDER_KEY);
+			if (saved === 'newest' || saved === 'oldest') order = saved;
+		} catch {
+			// ignore
+		}
 		try {
 			const raw = sessionStorage.getItem(STORAGE_KEY);
 			if (!raw) return;
@@ -39,7 +63,11 @@
 		const openList = Object.entries(openDecades)
 			.filter(([, isOpen]) => isOpen)
 			.map(([decade]) => Number(decade));
-		sessionStorage.setItem(STORAGE_KEY, JSON.stringify(openList));
+		try {
+			sessionStorage.setItem(STORAGE_KEY, JSON.stringify(openList));
+		} catch {
+			// Private mode / blocked storage: open state just isn't remembered.
+		}
 	}
 
 	function handleToggle(decade: number, e: Event) {
@@ -64,24 +92,32 @@
 </script>
 
 <svelte:head>
-	<title>Browse — madonnahist</title>
+	<title>Timeline — Vorwaller Family History</title>
 </svelte:head>
 
 <div class="browse-page">
-	<h1>Browse</h1>
+	<h1>Timeline</h1>
 
 	{#if data.decades.length === 0}
 		<div class="empty-state">
 			<p>No calendar pages have been ingested yet — check back once capture work begins.</p>
 		</div>
 	{:else}
+		<div class="order-toggle" role="group" aria-label="Order">
+			<button type="button" aria-pressed={order === 'oldest'} onclick={() => setOrder('oldest')}
+				>Oldest first</button
+			>
+			<button type="button" aria-pressed={order === 'newest'} onclick={() => setOrder('newest')}
+				>Newest first</button
+			>
+		</div>
 		<div class="list-tools">
 			<button type="button" class="linkbtn" onclick={expandAll}>Expand all</button>
 			<span class="tools-sep" aria-hidden="true">&middot;</span>
 			<button type="button" class="linkbtn" onclick={collapseAll}>Collapse all</button>
 		</div>
 
-		{#each data.decades as group (group.decade)}
+		{#each decades as group (group.decade)}
 			<!-- Native details/summary: collapsible with no JS, keyboard- and
 			     Safari-native. All decades start collapsed (per Gaylon,
 			     2026-07-22) — the summary rows carry coverage, so the closed
@@ -128,6 +164,29 @@
 		font-size: 1.25rem;
 		margin: 0 0 1rem;
 		color: var(--color-ink);
+	}
+	.order-toggle {
+		display: inline-flex;
+		padding: 3px;
+		margin: 0 0 0.75rem;
+		border-radius: 999px;
+		background: var(--color-chip-bg);
+	}
+	.order-toggle button {
+		min-height: 44px;
+		padding: 0 16px;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--color-ink);
+		font-family: var(--font-sans);
+		font-size: 16px;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.order-toggle button[aria-pressed='true'] {
+		background: var(--color-paper);
+		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.13);
 	}
 	.list-tools {
 		display: flex;
