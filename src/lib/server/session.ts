@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type pg from 'pg';
 import { query } from '$lib/db';
 import type { DbUser } from './auth';
 
@@ -10,13 +11,12 @@ function newToken(): string {
 	return randomBytes(32).toString('base64url');
 }
 
-export async function createSession(userId: number): Promise<string> {
+export async function createSession(userId: number, client?: pg.PoolClient): Promise<string> {
 	const id = newToken();
 	const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-	await query(
-		`INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)`,
-		[id, userId, expiresAt]
-	);
+	const sql = `INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)`;
+	if (client) await client.query(sql, [id, userId, expiresAt]);
+	else await query(sql, [id, userId, expiresAt]);
 	return id;
 }
 

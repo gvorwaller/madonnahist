@@ -14,9 +14,16 @@
 
 	// The family viewer (/app/**) has its own complete shell (top bar, tabs,
 	// menu) — the dark tools bar would just be a second, competing nav there.
-	const viewerRoute = $derived(
-		page.url.pathname === '/app' || page.url.pathname.startsWith('/app/')
-	);
+	// Sign-in and invite pages use the viewer's branded frame (AuthShell).
+	const viewerRoute = $derived.by(() => {
+		const p = page.url.pathname;
+		return (
+			p === '/app' ||
+			p.startsWith('/app/') ||
+			p === '/login' ||
+			p.startsWith('/invite/')
+		);
+	});
 </script>
 
 {#if !viewerRoute}

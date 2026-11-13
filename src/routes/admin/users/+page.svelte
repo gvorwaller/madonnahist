@@ -44,12 +44,73 @@
 	function formatLastLogin(v: string | null) {
 		return v ?? 'Never';
 	}
+
+	// ── Invite links (V3 Slice 1b) ──
+	type InviteLink = { url: string; expiresAt: string; username: string; displayName: string };
+	let inviting = $state(false);
+	let inviteUsername = $state('');
+	let inviteDisplayName = $state('');
+	let link = $state<InviteLink | null>(null);
+	let copied = $state(false);
+	let confirmInvite = $state<{ kind: 'reissue' | 'revoke'; id: number; username: string } | null>(
+		null
+	);
+	let linkInput: HTMLInputElement | undefined = $state();
+
+	function startInvite() {
+		inviting = true;
+		addingUser = false;
+		inviteUsername = '';
+		inviteDisplayName = '';
+	}
+
+	const longDate = (iso: string) =>
+		new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+	async function copyLink() {
+		if (!link) return;
+		try {
+			await navigator.clipboard.writeText(link.url);
+			copied = true;
+		} catch {
+			// No clipboard access: select the text so Cmd/Ctrl+C works.
+			linkInput?.select();
+		}
+	}
+
+	// Shared enhance handler: the action returns { inviteLink } on success.
+	function inviteResult() {
+		return async ({
+			result,
+			update
+		}: {
+			result: import('@sveltejs/kit').ActionResult;
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			confirmInvite = null;
+			if (result.type === 'failure') {
+				actionError = (result.data as { error?: string })?.error ?? 'That did not work';
+				return;
+			}
+			if (result.type === 'success') {
+				const l = (result.data as { inviteLink?: InviteLink } | undefined)?.inviteLink;
+				if (l) {
+					link = l;
+					copied = false;
+					inviting = false;
+				}
+			}
+			await update();
+		};
+	}
 </script>
 
 <svelte:window onkeydown={(e) => {
 	if (e.key === 'Escape') {
 		if (resetTarget) cancelReset();
 		if (addingUser) cancelAddUser();
+		if (confirmInvite) confirmInvite = null;
+		if (inviting) inviting = false;
 	}
 }} />
 
@@ -85,8 +146,36 @@
 						<td>{u.display_name}</td>
 						<td><span class="role-badge role-{u.role}">{roleLabels[u.role] ?? u.role}</span></td>
 						<td class="date-cell">{u.created_at}</td>
-						<td class="date-cell">{formatLastLogin(u.last_login_at)}</td>
+						<td class="date-cell">
+							{formatLastLogin(u.last_login_at)}
+							{#if u.invite}
+								<span class="invite-status" class:expired={u.invite.expired}>
+									{u.invite.expired
+										? 'Invite link expired'
+										: `Invite link open until ${longDate(u.invite.expiresAt)}`}
+								</span>
+							{/if}
+						</td>
 						<td class="col-actions">
+							{#if u.canInvite}
+								{#if u.invite}
+									<button
+										class="btn btn-sm btn-secondary"
+										onclick={() => (confirmInvite = { kind: 'reissue', id: u.id, username: u.username })}
+										>New link</button
+									>
+									<button
+										class="btn btn-sm btn-secondary"
+										onclick={() => (confirmInvite = { kind: 'revoke', id: u.id, username: u.username })}
+										>Cancel link</button
+									>
+								{:else}
+									<form method="POST" action="/admin/users?/reissueInvite" use:enhance={inviteResult} class="inline">
+										<input type="hidden" name="userId" value={u.id} />
+										<button type="submit" class="btn btn-sm btn-secondary">Invite link</button>
+									</form>
+								{/if}
+							{/if}
 							<button class="btn btn-sm btn-secondary" onclick={() => startReset(u)}>Reset password</button>
 						</td>
 					</tr>
@@ -94,7 +183,7 @@
 				{#if addingUser}
 					<tr>
 						<td colspan="6">
-							<form method="POST" action="?/create" use:enhance={() => {
+							<form method="POST" action="/admin/users?/create" use:enhance={() => {
 								return ({ result, update }) => {
 									if (result.type === 'failure') {
 										actionError = (result.data as { error?: string })?.error ?? 'Create failed';
@@ -123,9 +212,27 @@
 							</form>
 						</td>
 					</tr>
+				{:else if inviting}
+					<tr>
+						<td colspan="6">
+							<form method="POST" action="/admin/users?/invite" use:enhance={inviteResult}>
+								<div class="edit-row">
+									<input type="text" name="displayName" bind:value={inviteDisplayName} class="input" placeholder="Display name (e.g. Grandma Jo)" aria-label="Display name" />
+									<input type="text" name="username" bind:value={inviteUsername} class="input" placeholder="Username (e.g. jo)" aria-label="Username" autocomplete="off" autocapitalize="none" spellcheck="false" />
+									<button type="submit" class="btn btn-sm btn-primary"
+										disabled={inviteUsername.trim() === '' || inviteDisplayName.trim() === ''}>
+										Create invite link
+									</button>
+									<button type="button" class="btn btn-sm btn-secondary" onclick={() => (inviting = false)}>Cancel</button>
+								</div>
+								<p class="hint">Creates a family (viewer) account. They choose their own password from the link, which works once for 30 days. They can change their display name; the username is how they sign in.</p>
+							</form>
+						</td>
+					</tr>
 				{:else}
 					<tr>
 						<td colspan="6">
+							<button class="btn btn-sm btn-primary add-btn" onclick={startInvite}>✉ Invite a family member</button>
 							<button class="btn btn-sm btn-secondary add-btn" onclick={startAddUser}>+ Add user</button>
 						</td>
 					</tr>
@@ -134,6 +241,62 @@
 		</table>
 	</section>
 </div>
+
+<!-- New invite link: shown once, kept until dismissed -->
+{#if link}
+	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="link-h">
+		<div class="modal wide">
+			<h2 id="link-h">Invite link for {link.displayName}</h2>
+			<p>
+				Send this in Messages. It works once and expires <strong>{longDate(link.expiresAt)}</strong>.
+				Their username is <strong class="token">{link.username}</strong>.
+			</p>
+			<input
+				bind:this={linkInput}
+				class="input link-input"
+				type="text"
+				readonly
+				value={link.url}
+				aria-label="Invite link"
+				onfocus={(e) => (e.currentTarget as HTMLInputElement).select()}
+			/>
+			<p class="hint">This link is shown only now. If it's lost, use "New link" on their row.</p>
+			<div class="modal-actions">
+				<button type="button" class="btn btn-primary" onclick={copyLink}>{copied ? 'Copied ✓' : 'Copy link'}</button>
+				<button type="button" class="btn btn-secondary" onclick={() => (link = null)}>Done</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- New link / cancel link confirmation -->
+{#if confirmInvite}
+	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ci-h">
+		<div class="modal">
+			<h2 id="ci-h">{confirmInvite.kind === 'reissue' ? 'Make a new invite link?' : 'Cancel the invite link?'}</h2>
+			<p>
+				{#if confirmInvite.kind === 'reissue'}
+					The link already sent to <strong>{confirmInvite.username}</strong> will stop working, and you'll get a new one to send.
+				{:else}
+					The link sent to <strong>{confirmInvite.username}</strong> will stop working. You can make a new one later.
+				{/if}
+			</p>
+			<form
+				method="POST"
+				action={confirmInvite.kind === 'reissue' ? '/admin/users?/reissueInvite' : '/admin/users?/revokeInvite'}
+				use:enhance={inviteResult}
+			>
+				<input type="hidden" name="userId" value={confirmInvite.id} />
+				<div class="modal-actions">
+					<button type="button" class="btn btn-secondary" onclick={() => (confirmInvite = null)}>Keep it</button>
+					<button type="submit" class="btn btn-danger">
+						{confirmInvite.kind === 'reissue' ? 'Make new link' : 'Cancel link'}
+					</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
 
 <!-- Reset password confirmation modal -->
 {#if resetTarget}
@@ -144,7 +307,7 @@
 				Set a new password for <strong>{resetTarget.username}</strong>.
 				This immediately signs them out of every device — they must log in again with the new password.
 			</p>
-			<form method="POST" action="?/resetPassword" use:enhance={() => {
+			<form method="POST" action="/admin/users?/resetPassword" use:enhance={() => {
 				return ({ result, update }) => {
 					if (result.type === 'failure') {
 						actionError = (result.data as { error?: string })?.error ?? 'Reset failed';
@@ -214,7 +377,7 @@
 		color: #1a1a1a;
 	}
 	.col-actions {
-		width: 160px;
+		width: 300px;
 		text-align: right;
 		white-space: nowrap;
 	}
@@ -290,7 +453,28 @@
 	}
 
 	.add-btn {
-		margin: 0.25rem 0;
+		margin: 0.25rem 0.25rem 0.25rem 0;
+	}
+	.inline {
+		display: inline;
+	}
+	.invite-status {
+		display: block;
+		font-size: 0.75rem;
+		color: #14431a;
+	}
+	.invite-status.expired {
+		color: #7a1a1a;
+	}
+	.modal.wide {
+		max-width: 560px;
+	}
+	.link-input {
+		width: 100%;
+		box-sizing: border-box;
+		font-family: monospace;
+		font-size: 0.85rem;
+		padding: 0.5rem;
 	}
 
 	.edit-row {

@@ -1,93 +1,53 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
+	import {
+		readOpenDecades,
+		readOrder,
+		writeOpenDecades,
+		writeOrder,
+		type Order
+	} from '$lib/viewer/prefs';
 
 	const { data } = $props();
 
 	const STORAGE_KEY = 'madonnahist.browse.openDecades';
-	const ORDER_KEY = 'vfh.timeline.order';
 
 	// Oldest decade first by default, with a toggle remembered per viewer
-	// (Gaylon, mockup review 2026-11-07). The server sends newest first.
-	let order = $state<'oldest' | 'newest'>('oldest');
+	// (Gaylon, mockup review 2026-11-07) and shared with Stories. The server
+	// sends newest first.
+	let order = $state<Order>('oldest');
 	const decades = $derived(
 		order === 'newest'
 			? data.decades
 			: [...data.decades].reverse().map((g) => ({ ...g, years: [...g.years].reverse() }))
 	);
-	function setOrder(next: 'oldest' | 'newest') {
+	function setOrder(next: Order) {
 		order = next;
-		try {
-			localStorage.setItem(ORDER_KEY, next);
-		} catch {
-			// Private mode / blocked storage: the choice just isn't remembered.
-		}
+		writeOrder(next);
 	}
 
 	// Per-decade open state, keyed by decade year (e.g. 1970). All decades
-	// still start collapsed by default (per Gaylon, 2026-07-22) — this record
-	// drives each <details>'s `open` attribute directly (rather than raw DOM
-	// manipulation) so the session-remembered state restored in onMount below
-	// can override the default without a flash: the record starts empty
-	// (everything collapsed), onMount overwrites it synchronously before the
-	// user can interact, and Svelte re-renders from that single source of
-	// truth either way.
+	// start collapsed (per Gaylon, 2026-07-22). This record drives each
+	// <details>'s `open` attribute, so the session-remembered state restored
+	// in onMount, Expand all and Collapse all share one source of truth.
 	let openDecades = $state<Record<number, boolean>>({});
 
 	onMount(() => {
-		if (!browser) return;
-		try {
-			const saved = localStorage.getItem(ORDER_KEY);
-			if (saved === 'newest' || saved === 'oldest') order = saved;
-		} catch {
-			// ignore
-		}
-		try {
-			const raw = sessionStorage.getItem(STORAGE_KEY);
-			if (!raw) return;
-			const openList: unknown = JSON.parse(raw);
-			if (!Array.isArray(openList)) return;
-			const restored: Record<number, boolean> = {};
-			for (const decade of openList) {
-				if (typeof decade === 'number') restored[decade] = true;
-			}
-			openDecades = restored;
-		} catch {
-			// Corrupt/foreign sessionStorage value — ignore, keep the default
-			// (all collapsed) rather than throw.
-		}
+		order = readOrder() ?? 'oldest';
+		openDecades = readOpenDecades(STORAGE_KEY) ?? {};
 	});
-
-	function persist() {
-		if (!browser) return;
-		const openList = Object.entries(openDecades)
-			.filter(([, isOpen]) => isOpen)
-			.map(([decade]) => Number(decade));
-		try {
-			sessionStorage.setItem(STORAGE_KEY, JSON.stringify(openList));
-		} catch {
-			// Private mode / blocked storage: open state just isn't remembered.
-		}
-	}
 
 	function handleToggle(decade: number, e: Event) {
 		const el = e.currentTarget as HTMLDetailsElement;
 		openDecades = { ...openDecades, [decade]: el.open };
-		persist();
+		writeOpenDecades(STORAGE_KEY, openDecades);
 	}
 
-	function expandAll() {
+	function setAll(open: boolean) {
 		const all: Record<number, boolean> = {};
-		for (const g of data.decades) all[g.decade] = true;
+		for (const g of data.decades) all[g.decade] = open;
 		openDecades = all;
-		persist();
-	}
-
-	function collapseAll() {
-		const all: Record<number, boolean> = {};
-		for (const g of data.decades) all[g.decade] = false;
-		openDecades = all;
-		persist();
+		writeOpenDecades(STORAGE_KEY, openDecades);
 	}
 </script>
 
@@ -112,9 +72,9 @@
 			>
 		</div>
 		<div class="list-tools">
-			<button type="button" class="linkbtn" onclick={expandAll}>Expand all</button>
+			<button type="button" class="linkbtn" onclick={() => setAll(true)}>Expand all</button>
 			<span class="tools-sep" aria-hidden="true">&middot;</span>
-			<button type="button" class="linkbtn" onclick={collapseAll}>Collapse all</button>
+			<button type="button" class="linkbtn" onclick={() => setAll(false)}>Collapse all</button>
 		</div>
 
 		{#each decades as group (group.decade)}

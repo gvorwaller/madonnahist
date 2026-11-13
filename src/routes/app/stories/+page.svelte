@@ -1,5 +1,54 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import {
+		readOpenDecades,
+		readOrder,
+		writeOpenDecades,
+		writeOrder,
+		type Order
+	} from '$lib/viewer/prefs';
+
 	const { data } = $props();
+
+	const OPEN_KEY = 'vfh.stories.openDecades';
+
+	// Year stories grouped by decade like the Timeline: every decade starts
+	// collapsed, Expand/Collapse all, and the same oldest/newest choice
+	// (Gaylon, 2026-11-11). The server sends newest year first.
+	let order = $state<Order>('oldest');
+	let openDecades = $state<Record<number, boolean>>({});
+
+	const decades = $derived.by(() => {
+		const out: { decade: number; stories: typeof data.yearStories }[] = [];
+		const years = order === 'newest' ? data.yearStories : [...data.yearStories].reverse();
+		for (const y of years) {
+			const decade = Math.floor(y.year / 10) * 10;
+			const last = out[out.length - 1];
+			if (last && last.decade === decade) last.stories.push(y);
+			else out.push({ decade, stories: [y] });
+		}
+		return out;
+	});
+
+	onMount(() => {
+		order = readOrder() ?? 'oldest';
+		openDecades = readOpenDecades(OPEN_KEY) ?? {};
+	});
+
+	function setOrder(next: Order) {
+		order = next;
+		writeOrder(next);
+	}
+	function toggled(decade: number, e: Event) {
+		openDecades = { ...openDecades, [decade]: (e.currentTarget as HTMLDetailsElement).open };
+		writeOpenDecades(OPEN_KEY, openDecades);
+	}
+	function setAll(open: boolean) {
+		const all: Record<number, boolean> = {};
+		for (const g of decades) all[g.decade] = open;
+		openDecades = all;
+		writeOpenDecades(OPEN_KEY, openDecades);
+	}
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
@@ -29,22 +78,57 @@
 				No year stories yet. They appear here once a year is written up and reviewed.
 			</p>
 		{:else}
-			<ul class="storylist">
-				{#each data.yearStories as y (y.year)}
-					<li class="v-card yearstory">
-						<a class="story-link" href="/app/year/{y.year}#story">
-							<span class="v-eyebrow">{y.year}</span>
-							<span class="h">The story of {y.year}</span>
-							<span class="teaser">{y.teaser}</span>
-						</a>
-						<p class="v-provenance"><b>AI-written</b> from Madonna's {y.year} calendar, reviewed</p>
-						<div class="links">
-							<a href="/app/year/{y.year}#story">Read the story ▸</a>
-							<a href="/app/book/year/{y.year}">📚 Read {y.year} as a book ▸</a>
-						</div>
-					</li>
-				{/each}
-			</ul>
+			<div class="v-tools">
+				<div class="v-order" role="group" aria-label="Order">
+					<button type="button" aria-pressed={order === 'oldest'} onclick={() => setOrder('oldest')}
+						>Oldest first</button
+					>
+					<button type="button" aria-pressed={order === 'newest'} onclick={() => setOrder('newest')}
+						>Newest first</button
+					>
+				</div>
+				<span>
+					<button type="button" class="v-linkbtn" onclick={() => setAll(true)}>Expand all</button>
+					<span aria-hidden="true">·</span>
+					<button type="button" class="v-linkbtn" onclick={() => setAll(false)}>Collapse all</button
+					>
+				</span>
+			</div>
+			{#each decades as g (g.decade)}
+				<details
+					class="v-fold decade"
+					open={openDecades[g.decade] ?? false}
+					ontoggle={(e) => toggled(g.decade, e)}
+				>
+					<summary>
+						<span class="dname">{g.decade}s</span>
+						<span class="dmeta"
+							>{g.stories.length}
+							{g.stories.length === 1 ? 'story' : 'stories'}</span
+						>
+					</summary>
+					<div class="v-fold-body">
+						<ul class="storylist">
+							{#each g.stories as y (y.year)}
+								<li class="v-card yearstory">
+									<a class="story-link" href="/app/year/{y.year}#story">
+										<span class="v-eyebrow">{y.year}</span>
+										<span class="h">The story of {y.year}</span>
+										<span class="teaser">{y.teaser}</span>
+									</a>
+									<p class="v-provenance">
+										<b>AI-written</b> from Madonna's {y.year} calendar, reviewed
+									</p>
+									<div class="links">
+										<a href="/app/year/{y.year}#story">Read the story ▸</a>
+										<a href="/app/book/year/{y.year}">📚 Read {y.year} as a book ▸</a>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					</div>
+				</details>
+			{/each}
 		{/if}
 	</section>
 
@@ -93,6 +177,21 @@
 		.storylist {
 			grid-template-columns: 1fr 1fr;
 		}
+	}
+	.dname {
+		font-size: 19px;
+		color: var(--color-amber);
+	}
+	.dmeta {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+	}
+	.decade .yearstory {
+		background: var(--color-cream);
+	}
+	section + section {
+		margin-top: 28px;
 	}
 	.intro {
 		margin: -4px 0 12px;

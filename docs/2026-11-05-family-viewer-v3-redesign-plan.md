@@ -306,6 +306,24 @@ People/Places, Timeline order, Search clean-up, install icons, thumbnails. **1b*
 0028): invites, login restyle, `returnTo`, `SameSite=Lax` + cs.md, editable About text, display
 name. 1a is safe to ship alone; families are invited only after 1b.
 
+*1a shipped 2026-11-11 (98ea9e8).* **1b built 2026-11-11:**
+- Migration 0028 `user_invites`. The app can SELECT and INSERT, and UPDATE only `used_at`/`revoked_at`;
+  the worker has no access.
+- `/admin/users`: "Invite a family member", New link, Cancel link. A password reset cancels any open
+  link.
+- `/invite/<token>`: public at the exact token shape (a trailing slash redirects), no-store and
+  no-referrer headers, and in-memory caps on attempts.
+- Sign-in page restyled, with an absolute action. `returnTo` keeps the query and rides in a hidden
+  field.
+- Cookie is now `SameSite=Lax`; cs.md updated.
+- `/admin/about` and `/app/about` for the editable About text; `/app/account` for "Your name" and
+  home-screen steps.
+- Invite tokens are redacted in nginx access logs and the app error log.
+- Gaylon, 2026-11-11: year stories on the Stories tab are grouped by decade, collapsed, with
+  Expand/Collapse all and the shared oldest/newest choice, like the Timeline.
+- Login, invite and account fields use `defaultValue`, so text typed or autofilled before the page
+  finishes loading isn't wiped.
+
 - Invite onboarding (above), the login restyle, the `returnTo` fix, the absolute login action, and
   the `SameSite=Lax` + cs.md change.
 - Viewer shell with the 5 tabs (top links on laptop, bottom tabs on phone, a drawer), the new name

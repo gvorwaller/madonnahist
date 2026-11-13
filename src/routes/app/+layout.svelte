@@ -168,6 +168,10 @@
 				</div>
 				<nav aria-label="More">
 					<a href="/app/stories">📚 Books &amp; downloads</a>
+					<a href="/app/about">ℹ️ About this archive</a>
+					{#if data.user && data.user.id !== '0'}
+						<a href="/app/account">👤 Your name &amp; home screen</a>
+					{/if}
 					{#if data.canCorrect || data.canAdmin}
 						<div class="grp">Your other tools</div>
 						{#if data.canCorrect}

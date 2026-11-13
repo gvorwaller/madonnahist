@@ -28,6 +28,7 @@
 		"test:month": "node scripts/test-month-page.mjs",
 		"test:admin-audit": "node scripts/test-admin-audit.mjs",
 		"test:tags": "node scripts/test-tag-vocabulary.mjs",
+		"test:invites": "node scripts/test-invites.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

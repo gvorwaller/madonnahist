@@ -14,20 +14,30 @@ function landingFor(role: string): string {
 	return '/app';
 }
 
-function safeReturnTo(value: string | null): string | null {
-	if (!value) return null;
-	if (!value.startsWith('/')) return null;
-	if (value.startsWith('//')) return null;
-	if (value === '/login') return null;
+/**
+ * Same-site path (with its query) to go back to after signing in, or null.
+ * Rejects anything that could leave the site or loop: protocol-relative
+ * "//", backslashes (browsers read "/\\evil" as "//evil"), control
+ * characters, over-long values, and the login page itself.
+ */
+function safeReturnTo(value: string | null | undefined): string | null {
+	if (!value || value.length > 1000) return null;
+	if (!value.startsWith('/') || value.startsWith('//')) return null;
+	// eslint-disable-next-line no-control-regex
+	if (/[\\\u0000-\u001f\u007f]/.test(value)) return null;
+	const pathOnly = value.split(/[?#]/, 1)[0];
+	if (pathOnly === '/login' || pathOnly.startsWith('/login/')) return null;
 	return value;
 }
 
 export const load: PageServerLoad = ({ locals, url }) => {
+	const returnTo = safeReturnTo(url.searchParams.get('returnTo'));
 	if (locals.user) {
-		const returnTo = safeReturnTo(url.searchParams.get('returnTo'));
 		throw redirect(303, returnTo ?? landingFor(locals.user.role));
 	}
-	return {};
+	// The form posts to the absolute /login?/login (Safari bfcache can
+	// mis-resolve a relative ?/login), so returnTo rides in a hidden field.
+	return { returnTo };
 };
 
 export const actions: Actions = {
@@ -35,20 +45,23 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const username = (form.get('username') ?? '').toString().trim().toLowerCase();
 		const password = (form.get('password') ?? '').toString();
+		const returnTo = safeReturnTo(
+			(form.get('returnTo') ?? '').toString() || url.searchParams.get('returnTo')
+		);
 
 		if (!username || !password) {
-			return fail(400, { username, error: 'Enter a username and password.' });
+			return fail(400, { username, error: 'Enter a username and password.', returnTo });
 		}
 
 		const user = await findUserByUsername(username);
 		if (!user) {
 			await verifyPassword(DUMMY_HASH, password);
-			return fail(401, { username, error: 'Username or password is incorrect.' });
+			return fail(401, { username, error: 'Username or password is incorrect.', returnTo });
 		}
 
 		const ok = await verifyPassword(user.password_hash, password);
 		if (!ok) {
-			return fail(401, { username, error: 'Username or password is incorrect.' });
+			return fail(401, { username, error: 'Username or password is incorrect.', returnTo });
 		}
 
 		await recordLogin(user.id);
@@ -63,7 +76,6 @@ export const actions: Actions = {
 		const sessionId = await createSession(user.id);
 		cookies.set(SESSION_COOKIE_NAME, sessionId, SESSION_COOKIE_OPTS);
 
-		const returnTo = safeReturnTo(url.searchParams.get('returnTo'));
 		throw redirect(303, returnTo ?? landingFor(user.role));
 	},
 

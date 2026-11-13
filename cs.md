@@ -57,7 +57,9 @@ When diagnosing errors, follow this methodology instead of guessing:
 `madonnahist.gaylon.photos` resolves to Cloudflare IPs, not the droplet. **Always use the IP `134.199.211.199` for SSH.** The deploy script already does this correctly — follow its example.
 
 ### Sessions
-Session cookies must be httpOnly, secure, SameSite=Strict. Authenticated access only — admin (correction UI, full read/write) and family viewers (read-only). No public registration.
+Session cookies must be httpOnly, secure, SameSite=Lax. Authenticated access only — admin (correction UI, full read/write) and family viewers (read-only). No public registration; family accounts are admin-created and onboarded by a one-time invite link (`/invite/<token>`, the only public page besides `/login`).
+
+Lax (changed from Strict 2026-11-11, Gaylon-approved, V3 Slice 1b) so a link tapped in Messages or Mail opens signed in. Lax sends the cookie on cross-site top-level GETs, so **GET loads and handlers must not have meaningful side effects**; every state change goes through a POST form action (cross-site POSTs get no cookie, and SvelteKit's `csrf.checkOrigin` rejects them too).
 
 ### Shared Droplet Awareness
 This app co-locates with **gaylonphotos (port 3000)** and **giftlist (port 3001)** on the same droplet. Be mindful of:
@@ -66,6 +68,7 @@ This app co-locates with **gaylonphotos (port 3000)** and **giftlist (port 3001)
 - **Ports**: app=`3002` (gaylonphotos=3000, giftlist=3001); PostgreSQL=`5434` (BTC Dashboard=5433)
 - **PM2 process name** — `madonnahist` (avoid generic names)
 - **Nginx config** — separate server block for `madonnahist.gaylon.photos`
+- **Testing nginx config** — use plain `nginx -t` (it reads `/etc/nginx/nginx.conf`, which sets `user www-data;`); `scripts/deploy-to-DO.sh` already does this. Never run `nginx -t -c <scratch wrapper>` unless the wrapper's first line is `user www-data;`: even in test mode, nginx as root chowns `/var/lib/nginx/{body,fastcgi,proxy,scgi,uwsgi}` to the configured user (default `nobody`), and the www-data workers then fail every buffered request/response with `13: Permission denied` — on all three sites. After any manual nginx test, verify `stat -c '%U:%G %n' /var/lib/nginx/*` still shows `www-data`.
 
 ---
 
@@ -229,6 +232,7 @@ Before marking any task complete, ask yourself:
 - **Missing `await`**: Async function returned a Promise that got spread/consumed as a value, yielding empty/undefined results. Always `await` async calls.
 - **NUMERIC string concatenation**: PostgreSQL NUMERIC returned as string caused `"1" + "2" === "12"` instead of `3`. Cast or coerce at the boundary.
 - **JSONB type drift**: SQLite returned JSON as strings; PostgreSQL JSONB returns objects. Code ported between them must handle both.
+- **Scratch `nginx -t -c` broke all three sites (2026-11-11)**: A pre-check of a new madonnahist nginx config used a `/tmp` wrapper with no `user` directive. nginx chowned its temp dirs to `nobody`; for ~5 hours giftlist photo uploads returned 500 and gaylon.photos map pages were truncated, until `chown -R www-data:root /var/lib/nginx/{body,fastcgi,proxy,scgi,uwsgi}`. Test with plain `nginx -t` (see Shared Droplet Awareness).
 - **Missing import causing CPU spike**: A missing import threw `ReferenceError` in a hot loop, pegging CPU at 100%. Always run a smoke test after refactors.
 
 ### Key Principle

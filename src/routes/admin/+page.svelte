@@ -37,6 +37,11 @@
 			<p>Create family accounts and reset passwords. Admin-created, no self-registration.</p>
 		</a>
 
+		<a href="/admin/about" class="tool">
+			<h2>About Text</h2>
+			<p>Edit the "About this archive" text family members see from the viewer's menu.</p>
+		</a>
+
 		<a href="/admin/tags" class="tool">
 			<h2>Tags</h2>
 			<p>Choose which AI-suggested tag names the family sees. Show, hide, or merge near-duplicates.</p>

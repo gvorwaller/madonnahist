@@ -1,23 +1,51 @@
 import '$lib/server/monitoring';
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE_NAME, validateSession, type SessionUser } from '$server/session';
 import { RENDER_TOKEN_COOKIE_NAME, verifyRenderToken, matchesRenderScopePath } from '$server/render-token';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
 
+// SameSite=Lax (V3 Slice 1b; cs.md "Auth"): a family member tapping a link
+// in Messages or Mail is a cross-site top-level navigation, which Strict
+// would send without the session, so every shared link showed the login
+// page. Lax still withholds the cookie from cross-site POSTs, iframes and
+// subresources, and SvelteKit's csrf.checkOrigin also rejects cross-site
+// form POSTs. GET handlers must stay free of meaningful side effects.
 export const SESSION_COOKIE_OPTS = {
 	path: '/',
 	httpOnly: true,
-	sameSite: 'strict' as const,
+	sameSite: 'lax' as const,
 	secure: !dev,
 	maxAge: 60 * 60 * 24 * 30
 };
 
-const PUBLIC_PATHS = ['/login', '/api/health'];
+const PUBLIC_PATHS = [
+	'/login',
+	'/api/health',
+	// Home-screen install files (iOS fetches these without the session).
+	// adapter-node serves static/ before hooks run in production; these
+	// exact entries keep dev and any future hook-first setup the same.
+	'/manifest.webmanifest',
+	'/favicon.svg',
+	'/apple-touch-icon.png',
+	'/icon-192.png',
+	'/icon-512.png'
+];
+
+// /invite/<token>: exactly one segment with the exact token shape
+// (src/lib/server/invites.ts INVITE_TOKEN_RE), plus an optional trailing
+// slash that SvelteKit then strips. No prefix match, so /invite,
+// /invite/x/y and /invitee/... stay behind sign-in.
+const INVITE_PATH = /^\/invite\/[A-Za-z0-9_-]{43}\/?$/;
 
 function isPublic(path: string): boolean {
-	return PUBLIC_PATHS.some(p => path === p);
+	return PUBLIC_PATHS.includes(path) || INVITE_PATH.test(path);
+}
+
+/** Paths as they may appear in logs: an invite link is a credential. */
+export function redactPath(path: string): string {
+	return path.startsWith('/invite/') ? '/invite/[redacted]' : path;
 }
 
 // Segment-boundary match: `/app` matches `/app` and `/app/...` but never
@@ -52,6 +80,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const path = event.url.pathname;
 
+	if (INVITE_PATH.test(path)) {
+		const response = await resolve(event);
+		// The URL carries a bearer token: never cache it, never send it on
+		// as a Referer.
+		try {
+			response.headers.set('Cache-Control', 'no-store');
+			response.headers.set('Referrer-Policy', 'no-referrer');
+		} catch {
+			// Immutable headers (e.g. a redirect Response): nothing cached there.
+		}
+		return response;
+	}
+
 	if (isPublic(path)) {
 		return resolve(event);
 	}
@@ -81,7 +122,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (!event.locals.user) {
 		if (event.request.method === 'GET') {
-			const returnTo = encodeURIComponent(path);
+			// A malformed invite path may still hold a token: never copy it
+			// into the login URL (and so into logs and history).
+			if (matchesPrefix(path, '/invite')) throw redirect(303, '/login');
+			// Keep the query, so a shared search or ?date= link survives sign-in.
+			const returnTo = encodeURIComponent(path + event.url.search);
 			throw redirect(303, `/login?returnTo=${returnTo}`);
 		}
 		return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -95,4 +140,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	return resolve(event);
+};
+
+// Same output as SvelteKit's default error logger, except the path goes
+// through redactPath() so an invite token never lands in the PM2 logs.
+export const handleError: HandleServerError = ({ error, event, status }) => {
+	const line = `\n[${status}] ${event.request.method} ${redactPath(event.url.pathname)}`;
+	if (status === 404) {
+		console.error(line);
+		return;
+	}
+	const stack = error instanceof Error ? error.stack : String(error);
+	console.error(`${line}\n${stack}`);
 };
