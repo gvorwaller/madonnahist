@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	/**
 	 * Full-screen view of one day's handwriting (V3 Slice 1). Shared by Today
 	 * (tap a thumbnail) and Day (tap the image). A native modal <dialog> gives
@@ -7,19 +8,24 @@
 	 *
 	 * Gaylon (mockup review 2026-11-07): from the full day image you can go
 	 * on to the whole month page, so `monthHref` adds that link.
+	 *
+	 * `overlay` (Slice 3) draws percent-positioned content over the image,
+	 * such as the month photo's tap-a-day cells; it scales with the image.
 	 */
 	let {
 		src,
 		alt,
 		monthHref = null,
 		monthLabel = null,
-		dayHref = null
+		dayHref = null,
+		overlay
 	}: {
 		src: string;
 		alt: string;
 		monthHref?: string | null;
 		monthLabel?: string | null;
 		dayHref?: string | null;
+		overlay?: Snippet;
 	} = $props();
 
 	let dlg: HTMLDialogElement | undefined = $state();
@@ -57,7 +63,10 @@
 	</div>
 	<div class="scroll">
 		{#if shown}
-			<img {src} {alt} />
+			<div class="frame">
+				<img {src} {alt} />
+				{#if overlay}{@render overlay()}{/if}
+			</div>
 		{/if}
 	</div>
 </dialog>
@@ -132,7 +141,12 @@
 		padding: 8px 8px calc(16px + env(safe-area-inset-bottom));
 		touch-action: pinch-zoom pan-x pan-y;
 	}
+	.frame {
+		position: relative;
+		max-width: 100%;
+	}
 	img {
+		display: block;
 		max-width: 100%;
 		height: auto;
 		background: #f4ecd6;

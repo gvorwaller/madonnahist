@@ -15,9 +15,13 @@
 // What this asserts:
 //   - month page renders for an authenticated viewer, 200, with the
 //     page-image endpoint also 200 and image/jpeg
-//   - the day grid's accepted-day links carry ?from=/app/month/<monthKey>
+//   - the reading list shows every accepted day in full, a line for each run
+//     of untranscribed days, and never pending text (V3 Slice 3)
+//   - its day links carry ?from=/app/month/<monthKey>
+//   - photo tap cells mark only accepted days as ready (td-ed1751)
+//   - month arrows link the neighbouring captured pages
 //   - a month with zero accepted days still renders its photo (the whole
-//     point of td-852d99) with an all-inert grid (no day links at all)
+//     point of td-852d99) with no day links and no tappable cells
 //   - an invalid monthKey renders a friendly page, never a crash
 //   - a valid-format monthKey with no ingested page yet renders a friendly
 //     "not captured yet" page, never a raw 404
@@ -93,6 +97,7 @@ const ZERO_ACCEPTED_MONTH = 7; // has ingested days, none accepted
 const MISSING_MONTH = 8; // valid key, never ingested — no calendar_pages row
 const CAPTURE_SESSION = '_month_page_test';
 const ACCEPTED_MARKER = 'MONTHPAGEACCEPTEDTEST';
+const PENDING_MARKER = 'MONTHPAGEPENDINGTEST';
 
 let pass = 0;
 let fail = 0;
@@ -173,13 +178,19 @@ async function writeFixtureImage(objectKey) {
 	await writeFile(fullPath, buffer);
 }
 
+/** A 5x5 px cell on the 40x30 fixture page, one per day, left to right. */
+function cellBounds(day) {
+	const i = day - 1;
+	return JSON.stringify({ x: (i % 7) * 5, y: Math.floor(i / 7) * 5, width: 5, height: 5 });
+}
+
 async function provisionMonth(pool, month, { acceptedDayCount, pendingDayCount }) {
 	const objectKey = `fixtures/month-page-test/${FIXTURE_YEAR}-${month}/page.jpg`;
 	await writeFixtureImage(objectKey);
 
 	await pool.query(
-		`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO calendar_pages (year, month, page_image_path, capture_session, image_width, image_height)
+		 VALUES ($1, $2, $3, $4, 40, 30)
 		 ON CONFLICT (year, month) DO NOTHING`,
 		[FIXTURE_YEAR, month, objectKey, CAPTURE_SESSION]
 	);
@@ -195,18 +206,18 @@ async function provisionMonth(pool, month, { acceptedDayCount, pendingDayCount }
 		const day = i + 1;
 		const date = `${FIXTURE_YEAR}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 		await pool.query(
-			`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-			 VALUES ($1, $2, $3, $4, 'accepted')`,
-			[pageId, date, `fixtures/month-page-test/${date}.jpg`, `${ACCEPTED_MARKER} for ${date}.`]
+			`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status, crop_bounds)
+			 VALUES ($1, $2, $3, $4, 'accepted', $5)`,
+			[pageId, date, `fixtures/month-page-test/${date}.jpg`, `${ACCEPTED_MARKER} for ${date}.`, cellBounds(day)]
 		);
 	}
 	for (let i = 0; i < pendingDayCount; i++) {
 		const day = acceptedDayCount + i + 1;
 		const date = `${FIXTURE_YEAR}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 		await pool.query(
-			`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-			 VALUES ($1, $2, $3, $4, 'pending')`,
-			[pageId, date, `fixtures/month-page-test/${date}.jpg`, `Pending fixture text for ${date}.`]
+			`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status, crop_bounds)
+			 VALUES ($1, $2, $3, $4, 'pending', $5)`,
+			[pageId, date, `fixtures/month-page-test/${date}.jpg`, `${PENDING_MARKER} for ${date}.`, cellBounds(day)]
 		);
 	}
 
@@ -256,7 +267,7 @@ async function main() {
 		const zeroAcceptedMonthKey = `${FIXTURE_YEAR}-${String(ZERO_ACCEPTED_MONTH).padStart(2, '0')}`;
 		const missingMonthKey = `${FIXTURE_YEAR}-${String(MISSING_MONTH).padStart(2, '0')}`;
 
-		// ── Month page with accepted days: 200, shows image, shows coverage ──
+		// ── Month page with accepted days: photo, reading list, no pending text ──
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/month/${acceptedMonthKey}`, {
 				headers: { Cookie: viewerCookie }
@@ -266,12 +277,30 @@ async function main() {
 			const hasImage = body.includes(`/app/month/${acceptedMonthKey}/page-image`);
 			record('GET /app/month/<accepted month> [viewer] renders the page image', hasImage,
 				hasImage ? 'image src present' : 'image src missing');
-			const hasCoverage = body.includes('3 of 5 days transcribed');
-			record('GET /app/month/<accepted month> [viewer] shows coverage line', hasCoverage,
-				hasCoverage ? '"3 of 5 days transcribed" present' : 'coverage line missing/wrong');
+			const readCount = (body.match(new RegExp(`<p class="diary[^"]*">${ACCEPTED_MARKER}`, 'g')) ?? []).length;
+			record('GET /app/month/<accepted month> [viewer] reading list has every accepted day in full', readCount === 3,
+				`expected 3 entries, got ${readCount}`);
+			const noPending = !body.includes(PENDING_MARKER);
+			record('GET /app/month/<accepted month> [viewer] no pending text anywhere (page or data)', noPending,
+				noPending ? 'pending marker absent' : 'PENDING TEXT LEAKED');
+			const gap = body.includes('June 4–30 aren’t transcribed yet.') || body.includes("June 4–30 aren't transcribed yet.");
+			record('GET /app/month/<accepted month> [viewer] gap line for untranscribed days', gap,
+				gap ? '"June 4–30 aren\'t transcribed yet." present' : 'gap line missing');
+			const noCoverage = !/\d+ of \d+ days transcribed/.test(body);
+			record('GET /app/month/<accepted month> [viewer] no "N of M transcribed" banner', noCoverage,
+				noCoverage ? 'banner gone' : 'coverage banner still present');
+			// Photo cells are drawn client-side once the image shape is checked; the
+			// page data must mark only accepted days as ready (3 ready, 2 inert).
+			const ready = (body.match(/ready:true/g) ?? []).length;
+			const inert = (body.match(/ready:false/g) ?? []).length;
+			record('GET /app/month/<accepted month> [viewer] photo cells: only accepted days are tappable',
+				ready === 3 && inert === 2, `ready ${ready}, inert ${inert}`);
+			const nextLink = body.includes(`href="/app/month/${zeroAcceptedMonthKey}"`);
+			record('GET /app/month/<accepted month> [viewer] next-month arrow goes to the next captured page', nextLink,
+				nextLink ? 'next link present' : 'next link missing');
 		}
 
-		// ── Grid links carry the from param ─────────────────────────────────
+		// ── Reading-list links carry the from param ─────────────────────────
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/month/${acceptedMonthKey}`, {
 				headers: { Cookie: viewerCookie }
@@ -280,7 +309,7 @@ async function main() {
 			const expectedDate = `${FIXTURE_YEAR}-${String(ACCEPTED_MONTH).padStart(2, '0')}-01`;
 			const expectedHref = `/app/day/${expectedDate}?from=${encodeURIComponent(`/app/month/${acceptedMonthKey}`)}`;
 			const hasLink = body.includes(expectedHref);
-			record('GET /app/month/<accepted month> [viewer] day-grid link carries ?from=', hasLink,
+			record('GET /app/month/<accepted month> [viewer] reading-list day link carries ?from=', hasLink,
 				hasLink ? 'expected href present' : `expected href missing: ${expectedHref}`);
 		}
 
@@ -294,7 +323,7 @@ async function main() {
 				`status ${res.status}, content-type ${res.headers.get('content-type')}`);
 		}
 
-		// ── Zero accepted days: photo still shows, grid is all-inert ────────
+		// ── Zero accepted days: photo still shows, nothing is tappable ───────
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/month/${zeroAcceptedMonthKey}`, {
 				headers: { Cookie: viewerCookie }
@@ -304,12 +333,18 @@ async function main() {
 			const hasImage = body.includes(`/app/month/${zeroAcceptedMonthKey}/page-image`);
 			record('GET /app/month/<zero-accepted month> [viewer] still renders the photo', hasImage,
 				hasImage ? 'image src present' : 'IMAGE MISSING — the whole point of td-852d99');
-			const hasCoverage = body.includes('0 of 4 days transcribed');
-			record('GET /app/month/<zero-accepted month> [viewer] shows 0-of-N coverage', hasCoverage,
-				hasCoverage ? '"0 of 4 days transcribed" present' : 'coverage line missing/wrong');
+			const emptyState = body.includes('Nothing to read yet');
+			record('GET /app/month/<zero-accepted month> [viewer] friendly "nothing to read yet"', emptyState,
+				emptyState ? 'empty state present' : 'empty state missing');
 			const noDayLinks = !/\/app\/day\/\d{4}-\d{2}-\d{2}/.test(body);
-			record('GET /app/month/<zero-accepted month> [viewer] grid is all-inert (no day links)', noDayLinks,
-				noDayLinks ? 'no day-detail links in body' : 'A DAY LINK LEAKED INTO AN ALL-PENDING MONTH GRID');
+			record('GET /app/month/<zero-accepted month> [viewer] no day links at all', noDayLinks,
+				noDayLinks ? 'no day-detail links in body' : 'A DAY LINK LEAKED INTO AN ALL-PENDING MONTH');
+			const noReady = !/ready:true/.test(body) && !body.includes(PENDING_MARKER);
+			record('GET /app/month/<zero-accepted month> [viewer] no tappable cells, no pending text', noReady,
+				noReady ? 'all cells inert' : 'A PENDING DAY IS TAPPABLE OR ITS TEXT LEAKED');
+			const prevLink = body.includes(`href="/app/month/${acceptedMonthKey}"`);
+			record('GET /app/month/<zero-accepted month> [viewer] previous-month arrow', prevLink,
+				prevLink ? 'prev link present' : 'prev link missing');
 			const imgRes = await fetchNoRedirect(`${BASE_URL}/app/month/${zeroAcceptedMonthKey}/page-image`, {
 				headers: { Cookie: viewerCookie }
 			});

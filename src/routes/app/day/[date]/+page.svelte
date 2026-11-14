@@ -67,6 +67,46 @@
 
 	const monthDayLabel = $derived(fmt(data.entryDate, { month: 'long', day: 'numeric' }));
 
+	// Share (Slice 3): quote, date and link, because a link preview can't see
+	// past sign-in (plan: AGY2 #11). Includes Madonna's memory (Gaylon,
+	// mockup review 2026-11-07). Cancelling the share sheet does nothing;
+	// without a share sheet it copies, and without clipboard access it shows
+	// the text to copy by hand (CODEX #9).
+	let shareStatus = $state<string | null>(null);
+	let shareManual = $state<string | null>(null);
+	function shareBody(): string {
+		const when = fmt(data.entryDate, {
+			weekday: 'long',
+			month: 'long',
+			day: 'numeric',
+			year: 'numeric'
+		});
+		let text = `“${(data.correctedText ?? '').trim()}”\n— Madonna's calendar, ${when}`;
+		if (data.dayNarrative?.trim()) text += `\n\nMadonna remembers: “${data.dayNarrative.trim()}”`;
+		return text;
+	}
+	async function share() {
+		shareStatus = null;
+		shareManual = null;
+		const url = `${location.origin}/app/day/${data.entryDate}`;
+		const text = shareBody();
+		if (typeof navigator.share === 'function') {
+			try {
+				await navigator.share({ title: document.title, text, url });
+				return;
+			} catch (e) {
+				if (e instanceof DOMException && e.name === 'AbortError') return;
+			}
+		}
+		const all = `${text}\n\n${url}`;
+		try {
+			await navigator.clipboard.writeText(all);
+			shareStatus = 'Copied. Paste it into a message or email.';
+		} catch {
+			shareManual = all;
+		}
+	}
+
 	let zoom: ImageZoom | undefined = $state();
 	let imgFailed = $state(false);
 	async function openZoom() {
@@ -142,6 +182,7 @@
 				{/if}
 
 				<div class="v-actions">
+					<button type="button" class="v-btn secondary" onclick={share}>↗ Share this day</button>
 					{#if data.hasImage && !imgFailed}
 						<button type="button" class="v-btn secondary phone-only" onclick={openZoom}>
 							✍️ See Madonna's handwriting
@@ -151,6 +192,16 @@
 						📅 {monthLabel} page
 					</a>
 				</div>
+
+				<p class="share-status" role="status">{shareStatus ?? ''}</p>
+				{#if shareManual}
+					<label class="share-manual">
+						<span>Copy this and paste it into a message:</span>
+						<textarea readonly rows="6" onfocus={(e) => e.currentTarget.select()}
+							>{shareManual}</textarea
+						>
+					</label>
+				{/if}
 
 				<nav class="prevnext" aria-label="Nearby days">
 					{#if data.prevDate}
@@ -290,6 +341,33 @@
 		color: var(--color-ink-muted);
 		font-size: 16px;
 		text-align: center;
+	}
+
+	.share-status {
+		margin: 6px 0 0;
+		font-size: 16px;
+		font-weight: 600;
+		color: var(--color-evergreen-dark);
+	}
+	.share-status:empty {
+		display: none;
+	}
+	.share-manual {
+		display: grid;
+		gap: 6px;
+		margin-top: 10px;
+		font-size: 16px;
+		font-weight: 600;
+	}
+	.share-manual textarea {
+		width: 100%;
+		font: inherit;
+		font-weight: 400;
+		padding: 10px;
+		border: 1px solid var(--color-ink-muted);
+		border-radius: 10px;
+		background: var(--color-paper);
+		color: var(--color-ink);
 	}
 
 	.prevnext {

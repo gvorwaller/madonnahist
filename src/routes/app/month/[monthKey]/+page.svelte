@@ -1,251 +1,465 @@
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
-	import MonthGrid from '$components/MonthGrid.svelte';
+	import ImageZoom from '$lib/components/viewer/ImageZoom.svelte';
+	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { data } = $props();
 
-	const monthNames = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
-	];
+	// Back goes where the reader came from (validated /app path), else this
+	// month's year page.
+	const fromParam = $derived(page.url.searchParams.get('from'));
+	const backHref = $derived(
+		backTarget(fromParam, data.found ? `/app/year/${data.year}` : '/app/timeline')
+	);
+	const backText = $derived(backLabel(backHref));
 
-	let zoomOpen = $state(false);
-	function closeZoom() {
-		zoomOpen = false;
+	const monthName = $derived(data.found || data.reason === 'missing' ? MONTHS[data.month - 1] : '');
+	const monthTitle = $derived(data.found ? `${monthName} ${data.year}` : null);
+	const here = $derived(`/app/month/${data.monthKey}`);
+
+	/** Day of this month the reader came from, outlined in amber on the photo. */
+	const currentDay = $derived.by(() => {
+		if (!data.found || !fromParam) return null;
+		const m = /^\/app\/day\/(\d{4}-\d{2})-(\d{2})(?:\?|$)/.exec(fromParam);
+		return m && m[1] === data.monthKey ? Number(m[2]) : null;
+	});
+
+	const monthLabel = (key: string) =>
+		`${MONTHS[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+
+	function fmt(entryDate: string, opts: Intl.DateTimeFormatOptions): string {
+		return new Date(entryDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+			...opts,
+			timeZone: 'UTC'
+		});
 	}
 
-	// Same back-navigation-memory pattern as /app/day/[date] — a page linking
-	// here appends ?from=<encoded /app path>; falls back to this month's own
-	// year page (always known) rather than a bare /app.
-	const fromParam = $derived(page.url.searchParams.get('from'));
-	const backHref = $derived.by(() => {
-		if (fromParam && /^\/app(\/|\?|$)/.test(fromParam)) return fromParam;
-		return data.found ? `/app/year/${data.year}` : '/app';
-	});
-	const backLabel = $derived.by(() => {
-		if (backHref.startsWith('/app/year/')) {
-			// Parsed straight from the href (not data.year) — the "from" param
-			// (when present) is the actual page the visitor came from, which
-			// isn't necessarily this month's own year.
-			return `Back to ${backHref.slice('/app/year/'.length, '/app/year/'.length + 4)}`;
+	type Item =
+		| { kind: 'day'; entryDate: string; text: string; hasMemory: boolean }
+		| { kind: 'gap'; text: string };
+
+	/** Reading list with a line for each run of days not transcribed yet. */
+	const items = $derived.by((): Item[] => {
+		if (!data.found || data.days.length === 0) return [];
+		const last = new Date(Date.UTC(data.year, data.month, 0)).getUTCDate();
+		const byDay = new Map(data.days.map((d) => [Number(d.entryDate.slice(8, 10)), d]));
+		const out: Item[] = [];
+		let gapStart: number | null = null;
+		const closeGap = (end: number) => {
+			if (gapStart === null) return;
+			const what =
+				gapStart === end ? `${monthName} ${gapStart}` : `${monthName} ${gapStart}–${end}`;
+			out.push({
+				kind: 'gap',
+				text: `${what} ${gapStart === end ? "isn't" : "aren't"} transcribed yet.`
+			});
+			gapStart = null;
+		};
+		for (let day = 1; day <= last; day++) {
+			const d = byDay.get(day);
+			if (d) {
+				closeGap(day - 1);
+				out.push({ kind: 'day', ...d });
+			} else if (gapStart === null) {
+				gapStart = day;
+			}
 		}
-		if (backHref.startsWith('/app/timeline')) return 'Back to the Timeline';
-		return 'Back to On this day';
+		closeGap(last);
+		return out;
 	});
 
-	const monthTitle = $derived(data.found ? `${monthNames[data.month - 1]} ${data.year}` : null);
+	// Tap targets are drawn only once the served image is known to have the
+	// shape the crop bounds were measured on (plan: CODEX #8).
+	let img: HTMLImageElement | undefined = $state();
+	let cellsOk = $state(false);
+	let imgFailed = $state(false);
+	function checkImage() {
+		if (!img || !data.found || !data.photo || img.naturalWidth === 0) return;
+		const served = img.naturalWidth / img.naturalHeight;
+		const expected = data.photo.width / data.photo.height;
+		cellsOk = Math.abs(served - expected) / expected < 0.015;
+	}
+	onMount(() => {
+		if (img?.complete) checkImage();
+	});
+	const showCells = $derived(cellsOk && data.found && (data.photo?.cells.length ?? 0) > 0);
+
+	let zoom: ImageZoom | undefined = $state();
+	async function openZoom() {
+		await tick();
+		zoom?.open();
+	}
 </script>
 
 <svelte:head>
 	<title>{monthTitle ?? 'Month'} — Vorwaller Family History</title>
 </svelte:head>
 
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape' && zoomOpen) closeZoom();
-	}}
-/>
+{#snippet cells()}
+	{#if data.found && data.photo && showCells}
+		{#each data.photo.cells as c (c.day)}
+			{@const style = `left:${c.left}%;top:${c.top}%;width:${c.width}%;height:${c.height}%`}
+			{#if c.ready}
+				{@const date = `${data.monthKey}-${String(c.day).padStart(2, '0')}`}
+				<a
+					class="cell ready"
+					class:current={c.day === currentDay}
+					{style}
+					href={withFrom(`/app/day/${date}`, here)}
+					aria-label="{monthName} {c.day}, read this day"
+					><span class="tick" aria-hidden="true">✓</span></a
+				>
+			{:else}
+				<span class="cell notyet" {style} aria-hidden="true"></span>
+			{/if}
+		{/each}
+	{/if}
+{/snippet}
 
-<div class="month-page">
-	<a href={backHref} class="back-link">&larr; {backLabel}</a>
+<div class="v-page wide">
+	<a class="v-back" href={backHref}>◂ {backText}</a>
 
 	{#if !data.found}
-		<div class="empty-state">
-			<h1>{data.reason === 'invalid' ? 'Not a valid month' : 'Not captured yet'}</h1>
+		<div class="v-empty">
+			<div class="icon" aria-hidden="true">🗓️</div>
+			<h1 class="v-title">{data.reason === 'invalid' ? 'Not a valid month' : 'Not captured yet'}</h1>
 			<p>
 				{#if data.reason === 'invalid'}
 					That doesn't look like a month in this archive.
 				{:else}
-					This month ({monthNames[data.month - 1]} {data.year}) hasn't been captured yet — check
-					back once its page has been photographed and ingested.
+					The page for {monthName}
+					{data.year} hasn't been photographed yet. Check back later.
 				{/if}
 			</p>
-			<a href={backHref} class="btn-primary">{backLabel}</a>
+			<a class="v-btn primary" href={backHref}>◂ {backText}</a>
 		</div>
 	{:else}
-		<h1 class="month-heading">{monthTitle}</h1>
-
-		<button class="image-btn" onclick={() => (zoomOpen = true)}>
-			<img
-				class="month-image"
-				src="/app/month/{data.monthKey}/page-image"
-				alt="Calendar page for {monthTitle}"
-			/>
-			<span class="zoom-hint">Tap to zoom</span>
-		</button>
-
-		<p class="coverage-line">
-			{#if data.coverage.total > 0}
-				{data.coverage.accepted} of {data.coverage.total} days transcribed
+		<nav class="month-nav" aria-label="Other months">
+			{#if data.prevMonth}
+				<a
+					class="arrow"
+					href="/app/month/{data.prevMonth}"
+					aria-label="Previous month, {monthLabel(data.prevMonth)}">‹</a
+				>
 			{:else}
-				No days ingested for this month yet.
+				<span class="arrow off" aria-hidden="true">‹</span>
+			{/if}
+			<h1 class="m">{monthTitle}</h1>
+			{#if data.nextMonth}
+				<a
+					class="arrow"
+					href="/app/month/{data.nextMonth}"
+					aria-label="Next month, {monthLabel(data.nextMonth)}">›</a
+				>
+			{:else}
+				<span class="arrow off" aria-hidden="true">›</span>
+			{/if}
+		</nav>
+		<p class="v-sub center">
+			{#if data.days.length > 0}
+				{data.days.length}
+				{data.days.length === 1 ? 'day' : 'days'} to read
+			{:else}
+				Nothing transcribed yet
 			{/if}
 		</p>
 
-		<MonthGrid
-			year={data.year}
-			month={data.month}
-			acceptedDays={data.acceptedDays}
-			linkSuffix={`?from=${encodeURIComponent(`/app/month/${data.monthKey}`)}`}
-		/>
+		<div class="layout">
+			<div class="photo-col">
+				{#if imgFailed}
+					<p class="img-missing">
+						The photo of this page isn't available right now. The days below are complete.
+					</p>
+				{:else}
+					<div
+						class="photo"
+						role="group"
+						aria-label="Madonna's {monthTitle} calendar page{showCells
+							? '. Outlined days can be opened.'
+							: ''}"
+					>
+						<img
+							bind:this={img}
+							src="/app/month/{data.monthKey}/page-image"
+							alt="Madonna's calendar page for {monthTitle}"
+							onload={checkImage}
+							onerror={() => (imgFailed = true)}
+						/>
+						{@render cells()}
+					</div>
+					{#if showCells}
+						<ul class="legend">
+							<li><i class="sw ready" aria-hidden="true">✓</i> Green outline: ready to read, tap it</li>
+							<li><i class="sw notyet" aria-hidden="true"></i> Shaded: not transcribed yet</li>
+						</ul>
+					{/if}
+					<div class="v-actions">
+						<button type="button" class="v-btn secondary" onclick={openZoom}>🔍 Zoom in</button>
+					</div>
+				{/if}
+			</div>
+
+			<section class="reading-col" aria-labelledby="reading-h">
+				<div class="v-section-h">
+					<h2 id="reading-h">Every day this month</h2>
+					{#if data.days.length > 0}<span class="v-count">{data.days.length}</span>{/if}
+				</div>
+				{#if items.length === 0}
+					<div class="v-empty">
+						<div class="icon" aria-hidden="true">✍️</div>
+						<h2>Nothing to read yet</h2>
+						<p>
+							Madonna hasn't transcribed any days from {monthTitle} yet. The photo above shows
+							the page as she wrote it.
+						</p>
+					</div>
+				{:else}
+					<ul class="reading">
+						{#each items as it, i (it.kind === 'day' ? it.entryDate : `gap-${i}`)}
+							{#if it.kind === 'day'}
+								<li>
+									<div class="r-head">
+										<a class="pill" href={withFrom(`/app/day/${it.entryDate}`, here)}
+											>{fmt(it.entryDate, { weekday: 'short', month: 'short', day: 'numeric' })}<span
+												class="v-sr">: open this day</span
+											></a
+										>
+										{#if it.hasMemory}
+											<span class="v-mem-flag">🗨 Madonna remembers</span>
+										{/if}
+									</div>
+									<p class="diary">{it.text}</p>
+								</li>
+							{:else}
+								<li class="gap">{it.text}</li>
+							{/if}
+						{/each}
+					</ul>
+				{/if}
+			</section>
+		</div>
 	{/if}
 </div>
 
-{#if zoomOpen}
-	<div class="zoom-overlay" role="dialog" aria-label="Zoomed calendar page">
-		<button class="zoom-close" onclick={closeZoom} aria-label="Close zoomed image">&times;</button>
-		<div class="zoom-scroll">
-			<img
-				class="zoom-image"
-				src="/app/month/{data.monthKey}/page-image"
-				alt="Calendar page for {monthTitle}, zoomed"
-			/>
-		</div>
-	</div>
+{#if data.found && !imgFailed}
+	<ImageZoom
+		bind:this={zoom}
+		src="/app/month/{data.monthKey}/page-image"
+		alt="Madonna's calendar page for {monthTitle}, enlarged"
+		overlay={cells}
+	/>
 {/if}
 
 <style>
-	.month-page {
-		padding: 1rem;
-	}
-	.back-link {
-		display: inline-flex;
+	.month-nav {
+		display: flex;
 		align-items: center;
-		min-height: 48px;
-		margin-bottom: 0.5rem;
-		font-family: var(--font-sans);
-		font-size: 0.9rem;
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
+		justify-content: space-between;
+		gap: 8px;
+		margin: 4px 0 0;
 	}
-	.back-link:hover {
-		text-decoration: underline;
-	}
-	.back-link:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-
-	.month-heading {
-		font-family: var(--font-sans);
-		font-size: 1.25rem;
-		margin: 0 0 0.75rem;
+	.m {
+		margin: 0;
+		font-family: var(--font-serif);
+		font-size: 29px;
+		font-weight: 700;
+		text-align: center;
 		color: var(--color-ink);
 	}
-
-	.image-btn {
-		display: block;
-		width: 100%;
-		padding: 0;
-		border: 1px solid var(--color-border);
-		border-radius: 8px;
-		background: var(--color-paper);
-		cursor: zoom-in;
-		position: relative;
-		overflow: hidden;
-	}
-	.image-btn:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	.month-image {
-		display: block;
-		width: 100%;
-		height: auto;
-	}
-	.zoom-hint {
-		position: absolute;
-		right: 0.5rem;
-		bottom: 0.5rem;
-		background: rgba(43, 38, 32, 0.72);
-		color: #fff;
-		font-family: var(--font-sans);
-		font-size: 0.7rem;
-		padding: 0.2rem 0.5rem;
-		border-radius: 4px;
-	}
-
-	.coverage-line {
-		margin: 0.75rem 0 1.25rem;
-		font-family: var(--font-sans);
-		font-size: 0.85rem;
-		color: var(--color-ink-muted);
-	}
-
-	.empty-state {
-		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 10px;
-		padding: 1.5rem 1.25rem;
-		text-align: center;
-	}
-	.empty-state h1 {
-		font-family: var(--font-sans);
-		font-size: 1.25rem;
-		margin: 0 0 0.5rem;
-	}
-	.empty-state p {
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
-		line-height: 1.6;
-		color: var(--color-ink-muted);
-		margin: 0 0 1.25rem;
-	}
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 52px;
-		padding: 0.6rem 1.5rem;
-		border-radius: 8px;
-		background: var(--color-evergreen);
-		color: #fff;
-		font-family: var(--font-sans);
-		font-weight: 700;
-		text-decoration: none;
-	}
-	.btn-primary:focus-visible {
-		outline: 2px solid var(--color-ink);
-		outline-offset: 2px;
-	}
-
-	.zoom-overlay {
-		position: fixed;
-		inset: 0;
-		z-index: 100;
-		background: rgba(20, 18, 14, 0.92);
-		touch-action: pinch-zoom;
-	}
-	.zoom-scroll {
-		width: 100%;
-		height: 100%;
-		overflow: auto;
-		display: flex;
-		align-items: flex-start;
-		justify-content: center;
-	}
-	.zoom-image {
-		max-width: 100%;
-		height: auto;
-		touch-action: pinch-zoom;
-	}
-	.zoom-close {
-		position: fixed;
-		top: 0.75rem;
-		right: 1rem;
-		z-index: 101;
+	.arrow {
+		flex: none;
 		width: 48px;
 		height: 48px;
-		border-radius: 50%;
-		border: none;
-		background: rgba(255, 255, 255, 0.15);
-		color: #fff;
-		font-size: 1.75rem;
+		border-radius: 999px;
+		border: 1px solid var(--color-border);
+		background: var(--color-paper);
+		display: grid;
+		place-items: center;
+		font-size: 30px;
 		line-height: 1;
-		cursor: pointer;
+		padding-bottom: 4px;
+		color: var(--color-ink);
+		text-decoration: none;
 	}
-	.zoom-close:focus-visible {
-		outline: 2px solid #fff;
-		outline-offset: 2px;
+	a.arrow:hover {
+		border-color: var(--color-ink-muted);
+	}
+	.arrow.off {
+		visibility: hidden;
+	}
+	.center {
+		text-align: center;
+		margin: 2px 0 16px;
+	}
+
+	.layout {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 8px 32px;
+	}
+	@media (min-width: 1024px) {
+		.layout {
+			grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+			align-items: start;
+		}
+		.photo-col {
+			position: sticky;
+			top: calc(var(--topbar-h) + 16px);
+		}
+		.reading-col > .v-section-h {
+			margin-top: 0;
+		}
+	}
+
+	/* Tap targets sit over the photo, positioned in percent of the image. */
+	.photo {
+		position: relative;
+		border: 1px solid var(--color-border);
+		border-radius: 10px;
+		overflow: hidden;
+		background: #f4ecd6;
+	}
+	.photo img {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.cell {
+		position: absolute;
+		box-sizing: border-box;
+	}
+	a.cell.ready {
+		box-shadow: inset 0 0 0 2px var(--color-evergreen);
+		border-radius: 3px;
+	}
+	a.cell.ready:hover {
+		box-shadow: inset 0 0 0 3px var(--color-evergreen);
+		background: rgba(32, 77, 58, 0.1);
+	}
+	a.cell.ready:focus-visible {
+		outline: 3px solid var(--color-amber);
+		outline-offset: 0;
+	}
+	a.cell.current {
+		box-shadow: inset 0 0 0 3px var(--color-amber);
+	}
+	.tick {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: var(--color-evergreen);
+		color: #fff;
+		font-size: 11px;
+		font-weight: 700;
+		line-height: 1;
+	}
+	/* Not transcribed yet: a cream wash with hatching (shape, not just color). */
+	.cell.notyet {
+		background: repeating-linear-gradient(
+			135deg,
+			rgba(250, 246, 236, 0.62) 0 6px,
+			rgba(222, 212, 189, 0.62) 6px 9px
+		);
+	}
+
+	.legend {
+		list-style: none;
+		margin: 10px 0 0;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px 18px;
+		font-size: 15px;
+		color: var(--color-ink-muted);
+	}
+	.legend li {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.sw {
+		width: 22px;
+		height: 18px;
+		border-radius: 3px;
+		display: grid;
+		place-items: center;
+		font-style: normal;
+		font-size: 12px;
+		font-weight: 700;
+	}
+	.sw.ready {
+		box-shadow: inset 0 0 0 2px var(--color-evergreen);
+		color: var(--color-evergreen);
+		background: var(--color-paper);
+	}
+	.sw.notyet {
+		border: 1px solid var(--color-border);
+		background: repeating-linear-gradient(135deg, #faf6ec 0 6px, #ded4bd 6px 9px);
+	}
+	.img-missing {
+		margin: 0;
+		padding: 14px;
+		border: 1px dashed var(--color-ink-muted);
+		border-radius: 10px;
+		color: var(--color-ink-muted);
+		font-size: 16px;
+		text-align: center;
+	}
+
+	.reading {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.reading li {
+		padding: 12px 0 14px;
+		border-top: 1px solid var(--color-border);
+	}
+	.reading li:first-child {
+		border-top: 0;
+		padding-top: 0;
+	}
+	.r-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 12px;
+		margin: 0 0 4px;
+	}
+	.pill {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		padding: 0 14px;
+		border-radius: 999px;
+		background: var(--color-evergreen-soft);
+		color: var(--color-evergreen-dark);
+		font-weight: 700;
+		font-size: 16px;
+		text-decoration: none;
+	}
+	.pill:hover {
+		text-decoration: underline;
+	}
+	.diary {
+		margin: 0;
+		font-family: var(--font-serif);
+		font-size: 19px;
+		line-height: 1.65;
+		max-width: 62ch;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+	.reading li.gap {
+		padding: 10px 0;
+		font-size: 16px;
+		font-style: italic;
+		color: var(--color-ink-muted);
 	}
 </style>

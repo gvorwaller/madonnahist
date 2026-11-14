@@ -1,10 +1,11 @@
 import { query } from '$lib/db';
-import { getAcceptedDaysByMonth } from '$lib/server/viewer';
+import { getAdjacentCapturedMonths, getMonthPhoto, getMonthReading } from '$lib/server/viewer';
 import type { PageServerLoad } from './$types';
 
 /**
- * Viewer month page (td-852d99) — the full scanned calendar-page image plus
- * the existing MonthGrid day navigator. Any authenticated role reaches this
+ * Viewer month page (td-852d99; V3 Slice 3, td-ed1751) — the full scanned
+ * calendar-page photo with tap-a-day targets, then a reading list of every
+ * accepted day's full text. Any authenticated role reaches this
  * (gated by src/hooks.server.ts's blanket /app allow), unlike the
  * accepted-only day pages: see this route's page-image/+server.ts for the
  * deliberate policy note on why the page photo itself is not gated the same
@@ -59,24 +60,26 @@ export const load: PageServerLoad = async ({ params }) => {
 		};
 	}
 
-	const [byMonth, coverageRes] = await Promise.all([
-		getAcceptedDaysByMonth(year),
-		query<{ accepted: number; total: number }>(
-			`SELECT COUNT(*) FILTER (WHERE correction_status = 'accepted')::int AS accepted,
-			        COUNT(*)::int AS total
-			   FROM calendar_days WHERE page_id = $1`,
-			[pageRow.id]
-		)
+	// Accepted-only: the reading list and the photo's links come from
+	// accepted days. Other days get an inert, shaded cell (position only).
+	const [days, photo, adjacent] = await Promise.all([
+		getMonthReading(year, month),
+		getMonthPhoto(pageRow.id),
+		getAdjacentCapturedMonths(year, month)
 	]);
 
-	const coverage = coverageRes.rows[0] ?? { accepted: 0, total: 0 };
+	const key = (m: { year: number; month: number } | null) =>
+		m ? `${m.year}-${String(m.month).padStart(2, '0')}` : null;
 
 	return {
 		found: true as const,
 		monthKey: params.monthKey,
 		year,
 		month,
-		acceptedDays: byMonth.get(month) ?? [],
-		coverage
+		days,
+		photo,
+		prevMonth: key(adjacent.prev),
+		nextMonth: key(adjacent.next)
 	};
 };
+

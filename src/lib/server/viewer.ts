@@ -181,7 +181,7 @@ export interface AdjacentAcceptedYears {
 	next: number | null;
 }
 
-/** Accepted days for a single year, as a day-of-month array per month (1-12) — feeds MonthGrid. */
+/** Accepted days for a single year, as a day-of-month array per month (1-12) (month counts on the year page). */
 export async function getAcceptedDaysByMonth(year: number): Promise<Map<number, number[]>> {
 	const res = await query<{ month: number; day: number }>(
 		`SELECT EXTRACT(MONTH FROM entry_date)::int AS month,
@@ -647,4 +647,124 @@ export async function getSameDateOtherYears(entryDate: string): Promise<string[]
 		[entryDate]
 	);
 	return res.rows.map((r) => r.entry_date);
+}
+
+// ── V3 Slice 3: Month page (photo tap-a-day + reading list) ─────────────
+
+export interface MonthReadingDay {
+	entryDate: string;
+	text: string;
+	hasMemory: boolean;
+}
+
+/** Every accepted day of one month, oldest first, with its full text. */
+export async function getMonthReading(year: number, month: number): Promise<MonthReadingDay[]> {
+	const res = await query<{ entry_date: string; corrected_text: string | null; has_memory: boolean }>(
+		`SELECT entry_date::text AS entry_date, corrected_text,
+		        (day_narrative IS NOT NULL AND btrim(day_narrative) <> '') AS has_memory
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted'
+		    AND entry_date >= make_date($1, $2, 1)
+		    AND entry_date < make_date($1, $2, 1) + interval '1 month'
+		  ORDER BY entry_date`,
+		[year, month]
+	);
+	return res.rows.map((r) => ({
+		entryDate: r.entry_date,
+		text: r.corrected_text ?? '',
+		hasMemory: r.has_memory
+	}));
+}
+
+export interface PhotoCell {
+	day: number;
+	/** Accepted, so the cell links to the day. Only this flag is sent for other days, never text. */
+	ready: boolean;
+	/** Position on the served page image, in percent. */
+	left: number;
+	top: number;
+	width: number;
+	height: number;
+}
+
+export interface MonthPhoto {
+	/** Pixel size the crop bounds refer to; the client checks the served image has the same shape. */
+	width: number;
+	height: number;
+	cells: PhotoCell[];
+}
+
+/**
+ * Tap targets for the month photo (td-ed1751). `crop_bounds` are pixels on
+ * the image the page-image endpoint serves (the warped image when there is
+ * one, else the original), so the reference size must come from the same
+ * image. Days without crop bounds get no cell; a page without a known size
+ * gets no cells at all.
+ */
+export async function getMonthPhoto(pageId: number): Promise<MonthPhoto | null> {
+	const res = await query<{
+		ref_w: number | null;
+		ref_h: number | null;
+		day: number;
+		ready: boolean;
+		crop_bounds: { x: number; y: number; width: number; height: number } | null;
+	}>(
+		`SELECT CASE WHEN cp.warped_image_path IS NOT NULL THEN cp.warped_width ELSE cp.image_width END AS ref_w,
+		        CASE WHEN cp.warped_image_path IS NOT NULL THEN cp.warped_height ELSE cp.image_height END AS ref_h,
+		        EXTRACT(DAY FROM cd.entry_date)::int AS day,
+		        (cd.correction_status = 'accepted') AS ready,
+		        cd.crop_bounds
+		   FROM calendar_pages cp
+		   JOIN calendar_days cd ON cd.page_id = cp.id
+		  WHERE cp.id = $1
+		    AND EXTRACT(YEAR FROM cd.entry_date) = cp.year
+		    AND EXTRACT(MONTH FROM cd.entry_date) = cp.month
+		  ORDER BY cd.entry_date`,
+		[pageId]
+	);
+	const first = res.rows[0];
+	if (!first || !first.ref_w || !first.ref_h) return null;
+	const w = first.ref_w;
+	const h = first.ref_h;
+	const pct = (n: number, of: number) => Math.round((n / of) * 100_000) / 1000;
+	const cells: PhotoCell[] = [];
+	for (const r of res.rows) {
+		const b = r.crop_bounds;
+		if (!b || !(b.width > 0) || !(b.height > 0)) continue;
+		if (b.x < 0 || b.y < 0 || b.x + b.width > w * 1.01 || b.y + b.height > h * 1.01) continue;
+		cells.push({
+			day: r.day,
+			ready: r.ready,
+			left: pct(b.x, w),
+			top: pct(b.y, h),
+			width: pct(b.width, w),
+			height: pct(b.height, h)
+		});
+	}
+	return { width: w, height: h, cells };
+}
+
+export interface MonthRef {
+	year: number;
+	month: number;
+}
+
+/** The captured months just before and after this one (any page, transcribed or not). */
+export async function getAdjacentCapturedMonths(
+	year: number,
+	month: number
+): Promise<{ prev: MonthRef | null; next: MonthRef | null }> {
+	const [prev, next] = await Promise.all([
+		query<MonthRef>(
+			`SELECT year, month FROM calendar_pages
+			  WHERE (year, month) < ($1, $2) ORDER BY year DESC, month DESC LIMIT 1`,
+			[year, month]
+		),
+		query<MonthRef>(
+			`SELECT year, month FROM calendar_pages
+			  WHERE (year, month) > ($1, $2) ORDER BY year, month LIMIT 1`,
+			[year, month]
+		)
+	]);
+	return { prev: prev.rows[0] ?? null, next: next.rows[0] ?? null };
 }

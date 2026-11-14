@@ -398,7 +398,7 @@ too many tags anyway. Gaylon approved deciding **per tag name**, not per day.
 - Today: recently transcribed, "Surprise me", and "this date in other years".
 - Thumbnail widths and `NavProgress`.
 
-*Slice 2 built 2026-11-12 (uncommitted):*
+*Slice 2 built 2026-11-12, shipped 2026-11-14 (67fb047):*
 - `/app/timeline` replaces Browse (`/app/browse` → 308). Decade folds, collapsed, with
   Expand/Collapse all and the shared oldest/newest order. Each year row is one link with a 12-month
   bar strip (a dashed stub for an empty month), a visible day count, and a story line or highlight.
@@ -418,6 +418,23 @@ too many tags anyway. Gaylon approved deciding **per tag name**, not per day.
 **Slice 3: Month and Day upgrades.** Month photo tap-a-day (td-ed1751) plus the full-text reading
 list, with the grid dropped. On the laptop, the day page goes side by side. Share as quote plus
 link.
+
+*Slice 3 built 2026-11-14 (uncommitted):*
+- Month page: the page photo is the navigator. Accepted days get a green outline with a ✓ and
+  link to the day; other days get a hatched cream wash and are inert (position only, never text).
+  Cells come from `crop_bounds` against the served image's size (warped when there is one) and are
+  drawn only after the browser confirms the served image has that shape. "Zoom in" opens the shared
+  `ImageZoom`, which now takes an `overlay` so the zoomed photo is tappable too. Arriving from a day
+  outlines that day in amber.
+- Reading list "Every day this month": every accepted day in full, with a date pill linking to the
+  day, the "Madonna remembers" flag, and a line per run of untranscribed days ("March 14–19 aren't
+  transcribed yet."). The number grid and the "N of M transcribed" line are gone; `MonthGrid` is
+  deleted. ‹ › go to the neighbouring captured months. Two columns at ≥1024px with the photo sticky.
+- Day: "↗ Share this day" sends the quote, "— Madonna's calendar, {date}", Madonna's memory when
+  there is one, and the link. Cancel does nothing; no share sheet copies to the clipboard
+  ("Copied…"); no clipboard shows the text in a box to copy by hand. Laptop two-column, dated
+  prev/next and other years were already in from Slices 1–2.
+- Tests: month 23 (rewritten for the reading list and cells).
 
 **Slice 4: People, Places, and Search depth.** `/app/places`. Person/place layouts that differ
 (a place shows who was there; a person shows who they're often mentioned with), a mentions-by-year
