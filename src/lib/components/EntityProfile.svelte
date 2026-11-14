@@ -9,6 +9,7 @@
 	import { page } from '$app/state';
 	import type { EntityProfile, EntityDay, RelatedEntity } from '$lib/server/entities';
 	import { backLabel, backTarget, withFrom } from '$lib/viewer/nav';
+	import { appleMapsLink, googleDirectionsLink, googleMapsLink } from '$lib/viewer/maplinks';
 
 	const { profile, kind }: { profile: EntityProfile | null; kind: 'person' | 'place' } = $props();
 
@@ -52,6 +53,17 @@
 		});
 	const n = (x: number) => x.toLocaleString('en-US');
 	const searchParam = $derived(kind === 'person' ? 'person' : 'place');
+	// Map links (td-085e19): the matched name helps Apple/Google label the pin.
+	const mapPlace = $derived(
+		profile?.location
+			? {
+					name: profile.location.name || profile.displayName,
+					lat: profile.location.lat,
+					lon: profile.location.lon,
+					placeId: profile.location.placeId
+				}
+			: null
+	);
 	const relHref = (r: RelatedEntity) => withFrom(`/app/${r.entityType}/${r.slug}`, here);
 	// Slice 4: a person shows who they're often mentioned with and the places
 	// linked to them; a place shows who was there (plan: AGY2 #7).
@@ -107,6 +119,22 @@
 					<span id="pdf-later" class="later">Coming later</span>
 				{/if}
 			</div>
+			{#if mapPlace}
+				<div class="maps" role="group" aria-label="Open {profile.displayName} in a map app">
+					{#if profile.location?.address}<p class="addr">📍 {profile.location.address}</p>{/if}
+					<div class="map-links">
+						<a class="v-btn secondary" href={googleMapsLink(mapPlace)} target="_blank" rel="noopener"
+							>🗺 Map<span class="v-sr"> (Google Maps, opens a new tab)</span></a
+						>
+						<a class="v-btn secondary" href={appleMapsLink(mapPlace)} target="_blank" rel="noopener"
+							>Apple Maps<span class="v-sr"> (opens a new tab)</span></a
+						>
+						<a class="v-btn secondary" href={googleDirectionsLink(mapPlace)} target="_blank" rel="noopener"
+							>↗ Directions<span class="v-sr"> (Google Maps, opens a new tab)</span></a
+						>
+					</div>
+				</div>
+			{/if}
 
 			<div class="profile-grid">
 				<div>
@@ -218,6 +246,20 @@
 </div>
 
 <style>
+	.maps {
+		margin: 14px 0 0;
+	}
+	.addr {
+		margin: 0 0 6px;
+		font-size: 16px;
+		color: var(--color-ink-muted);
+		overflow-wrap: anywhere;
+	}
+	.map-links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+	}
 	.later {
 		align-self: center;
 		font-size: 15px;

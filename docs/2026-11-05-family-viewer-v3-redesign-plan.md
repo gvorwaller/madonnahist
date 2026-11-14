@@ -441,7 +441,7 @@ link.
 bar chart, and days grouped by year. Search gets typeahead with removable chips and the year range
 (separate `person` and `place` params kept).
 
-*Slice 4 built 2026-11-14 (uncommitted):*
+*Slice 4 built 2026-11-14, shipped 2026-11-14 (eeefc2d):*
 - Person and place pages: co-mentions from accepted `day_entities` joins (aliases resolved,
   distinct days, self excluded, top 8 per type). A person shows "Often mentioned with" and "Places
   linked to {Name}"; a place shows "Who was here" and "Visits by year". The People/Places index,
@@ -454,6 +454,18 @@ bar chart, and days grouped by year. Search gets typeahead with removable chips 
   date, highlighted words, the memory flag and people/place chips. The four dropdowns and their
   option lists are gone. Chip labels show a name only when it has an accepted mention.
 - Tests: viewer 90 (14 new or rewritten), tags 35 (dropdown checks moved to the typeahead).
+
+*Places maps (td-085e19) built 2026-11-14 (uncommitted):*
+- Links, not embedded maps (Gaylon): place pages show **🗺 Map** (Google), **Apple Maps** and
+  **↗ Directions** plus the matched address, like the trips app. No browser key or map script.
+- Lookups: Google Places text search, biased toward Salt Lake City when most of a place's accepted
+  mentions fall in Aug 1976 – May 1979 or May 1984 – May 1986, else Jacksonville. Generic words and
+  possessive names are never sent; places known only from pending days are never sent.
+- Confident matches show automatically (Gaylon won't approve every place). Chains and common names
+  get no map. Weaker matches wait on `/admin/places` ("Needs a look") with Use this, Search again,
+  Looks right, Wrong place, No map and Undo; every decision is audited. New places are looked up
+  hourly and by a button. Migration 0029 `place_locations` (app only; worker none).
+- Tests: `test:places` 34 (needs `MADONNAHIST_GEOCODE_STUB=1` on the server).
 
 **Tracking.** After approval, create a td epic "Family Viewer V3" with one task per slice, plus a
 standalone task for the AI-tag hiding and the memory relabel. Link td-ed1751 (Slice 3) and td-ae212d

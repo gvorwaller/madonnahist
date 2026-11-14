@@ -52,6 +52,11 @@
 			<p>Review AI-extracted people/places/events, merge duplicates, and manage aliases.</p>
 		</a>
 
+		<a href="/admin/places" class="tool">
+			<h2>Place Maps</h2>
+			<p>Map and directions links for places. Check the few lookups that need a look.</p>
+		</a>
+
 		<a href="/admin/narratives" class="tool">
 			<h2>Year Narratives</h2>
 			<p>Generate, edit, and publish AI-drafted year summaries for the family viewer.</p>

@@ -29,6 +29,7 @@
 		"test:admin-audit": "node scripts/test-admin-audit.mjs",
 		"test:tags": "node scripts/test-tag-vocabulary.mjs",
 		"test:invites": "node scripts/test-invites.mjs",
+		"test:places": "node scripts/test-places.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

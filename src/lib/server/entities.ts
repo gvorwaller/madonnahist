@@ -17,6 +17,7 @@
 import { query } from '$lib/db';
 import { redirect } from '@sveltejs/kit';
 import { formatHumanDate, firstSentences } from '$lib/server/viewer';
+import { getShownLocation, type PlaceLocation } from '$lib/server/places';
 
 export type EntityType = 'person' | 'place';
 
@@ -50,6 +51,8 @@ export interface EntityProfile {
 	days: EntityDay[];
 	/** People and places mentioned on the same accepted days (V3 Slice 4). */
 	related: { people: RelatedEntity[]; places: RelatedEntity[] };
+	/** Places only: the auto or confirmed location for Map/Directions links (td-085e19). */
+	location: PlaceLocation | null;
 }
 
 const RELATED_PER_TYPE = 8;
@@ -148,7 +151,7 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 	// DISTINCT requires every ORDER BY expression to appear (verbatim) in the
 	// select list — ordering by the unqualified `entry_date` alias rather
 	// than the cast `cd.entry_date::text` expression satisfies that.
-	const [daysRes, related] = await Promise.all([
+	const [daysRes, related, location] = await Promise.all([
 		query<{ entry_date: string; corrected_text: string | null }>(
 			`SELECT DISTINCT cd.entry_date::text AS entry_date, cd.corrected_text
 			   FROM day_entities de
@@ -158,7 +161,8 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 			  ORDER BY entry_date`,
 			[groupIds]
 		),
-		getRelatedEntities(canonicalId, groupIds)
+		getRelatedEntities(canonicalId, groupIds),
+		entityType === 'place' ? getShownLocation(canonicalId) : Promise.resolve(null)
 	]);
 
 	const days: EntityDay[] = daysRes.rows.map((r) => ({
@@ -187,7 +191,9 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 		lastYear: yearCounts.length > 0 ? yearCounts[yearCounts.length - 1].year : null,
 		yearCounts,
 		days,
-		related
+		related,
+		// Shown only once the place has an accepted mention.
+		location: days.length > 0 ? location : null
 	};
 }
 

@@ -1,10 +1,11 @@
 import '$lib/server/monitoring';
-import type { Handle, HandleServerError } from '@sveltejs/kit';
+import type { Handle, HandleServerError, ServerInit } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 import { SESSION_COOKIE_NAME, validateSession, type SessionUser } from '$server/session';
 import { RENDER_TOKEN_COOKIE_NAME, verifyRenderToken, matchesRenderScopePath } from '$server/render-token';
 import { dev } from '$app/environment';
 import { env } from '$env/dynamic/private';
+import { startPlaceLookupTimer } from '$lib/server/places';
 
 // SameSite=Lax (V3 Slice 1b; cs.md "Auth"): a family member tapping a link
 // in Messages or Mail is a cross-site top-level navigation, which Strict
@@ -65,6 +66,11 @@ function roleAllowed(path: string, role: string): boolean {
 	if (path === '/') return true; // exact landing page only
 	return false;
 }
+
+/** Once per server start: the hourly lookup of new places (td-085e19). */
+export const init: ServerInit = async () => {
+	startPlaceLookupTimer();
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const token = event.cookies.get(SESSION_COOKIE_NAME);
