@@ -398,6 +398,23 @@ too many tags anyway. Gaylon approved deciding **per tag name**, not per day.
 - Today: recently transcribed, "Surprise me", and "this date in other years".
 - Thumbnail widths and `NavProgress`.
 
+*Slice 2 built 2026-11-12 (uncommitted):*
+- `/app/timeline` replaces Browse (`/app/browse` → 308). Decade folds, collapsed, with
+  Expand/Collapse all and the shared oldest/newest order. Each year row is one link with a 12-month
+  bar strip (a dashed stub for an empty month), a visible day count, and a story line or highlight.
+  Ingested years with nothing accepted show dashed "Not transcribed yet".
+- Year page: story first (open, foldable), then "Read as a book" and the PDF buttons in one row,
+  then a card per month with up to three highlights and "All N days ▸". Months with nothing yet are
+  listed in one line. Highlight rank: has Madonna's memory, then family-visible tags, then
+  people/places mentioned, then earliest date (`getMonthHighlights`, `getTimelineYears`).
+- Today: "Recently added" (latest accepted by `corrected_at`) and "🎲 Surprise me"
+  (`/app/surprise`, a no-store 303 to a random accepted day).
+- "This date in other years" went on the **Day** page rather than Today, because Today already
+  lists every year for its date. It links each year plus "Read them together on one page".
+- `NavProgress` (from birds) in the viewer shell. Thumbnail widths shipped in 1a.
+- Tests: viewer 76 (17 new), narratives' leak check now matches story sentences (day highlights
+  share the fixture marker).
+
 **Slice 3: Month and Day upgrades.** Month photo tap-a-day (td-ed1751) plus the full-text reading
 list, with the grid dropped. On the laptop, the day page goes side by side. Share as quote plus
 link.

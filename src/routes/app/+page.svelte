@@ -201,6 +201,29 @@
 		</section>
 	{/if}
 
+	<section class="extra" aria-labelledby="recent-h">
+		{#if data.recent.length > 0}
+			<div class="v-section-h">
+				<h2 id="recent-h">Recently added</h2>
+			</div>
+			<ul class="recent v-card">
+				{#each data.recent as r (r.entryDate)}
+					<li>
+						<a href={withFrom(`/app/day/${r.entryDate}`, from)}>
+							<b>{shortDate(r.entryDate)}</b>
+							{#if r.snippet}<span>{r.snippet}</span>{/if}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{:else}
+			<h2 id="recent-h" class="v-sr">More to read</h2>
+		{/if}
+		<a class="v-btn secondary block surprise" href="/app/surprise" data-sveltekit-reload
+			>🎲 Surprise me: a random day</a
+		>
+	</section>
+
 	<p class="growing">The archive grows every week as Madonna works through the calendars.</p>
 </div>
 
@@ -217,7 +240,7 @@
 	.today {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
-		grid-template-areas: 'lead' 'main' 'more' 'growing';
+		grid-template-areas: 'lead' 'main' 'more' 'extra' 'growing';
 		gap: 0 28px;
 	}
 	.lead {
@@ -230,6 +253,9 @@
 	.more-stories {
 		grid-area: more;
 	}
+	.extra {
+		grid-area: extra;
+	}
 	.growing {
 		grid-area: growing;
 		text-align: center;
@@ -240,9 +266,9 @@
 	@media (min-width: 1024px) {
 		.today {
 			grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-			grid-template-areas: 'main lead' 'main more' 'growing growing';
+			grid-template-areas: 'main lead' 'main more' 'main extra' 'growing growing';
 			align-items: start;
-			grid-template-rows: auto 1fr auto;
+			grid-template-rows: auto auto 1fr auto;
 		}
 		.more-stories .v-section-h {
 			margin-top: 0;
@@ -262,6 +288,43 @@
 	.read {
 		color: var(--color-evergreen);
 		font-weight: 700;
+	}
+	.recent {
+		list-style: none;
+		margin: 0;
+		padding: 4px 16px;
+	}
+	.recent li + li {
+		border-top: 1px solid var(--color-border);
+	}
+	.recent a {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		min-height: 52px;
+		padding: 8px 0;
+		color: inherit;
+		text-decoration: none;
+	}
+	.recent b {
+		color: var(--color-evergreen-dark);
+		font-size: 16px;
+	}
+	.recent span {
+		font-family: var(--font-serif);
+		font-size: 17px;
+		line-height: 1.4;
+		overflow: hidden;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+	.recent a:hover span {
+		text-decoration: underline;
+	}
+	.surprise {
+		margin-top: 14px;
 	}
 	.qa h3 {
 		font-family: var(--font-serif);

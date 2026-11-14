@@ -4,6 +4,7 @@ import {
 	getLatestSavedStory,
 	getNearestMonthDayWithEntries,
 	getPublishedYearStories,
+	getRecentlyAccepted,
 	monthDayKey,
 	parseMonthDay,
 	pickLeadYearStory,
@@ -15,7 +16,8 @@ import type { PageServerLoad } from './$types';
 /**
  * Today (V3 Slice 1): the lead year story, then "On this day" for any
  * month/day (`?date=MM-DD`, default today in the family's timezone), then
- * the latest saved family story. An empty date offers the nearest date
+ * the latest saved family story, recently added days and "Surprise me"
+ * (Slice 2). An empty date offers the nearest date
  * that has entries (Gaylon, mockup review 2026-11-07).
  *
  * Accepted-only: every query here applies the publishable-day predicate
@@ -63,9 +65,10 @@ export const load: PageServerLoad = async ({ url }) => {
 		};
 	});
 
-	const [stories, latestSaved, nearest] = await Promise.all([
+	const [stories, latestSaved, recent, nearest] = await Promise.all([
 		getPublishedYearStories(),
 		getLatestSavedStory(),
+		getRecentlyAccepted(5),
 		entries.length === 0 ? getNearestMonthDayWithEntries(date) : Promise.resolve(null)
 	]);
 
@@ -83,6 +86,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		entries,
 		nearest: nearest ? { ...nearest, key: monthDayKey(nearest) } : null,
 		leadStory: lead ? { year: lead.year, teaser: firstSentences(lead.text, 2, 200) } : null,
-		latestSaved
+		latestSaved,
+		recent
 	};
 };

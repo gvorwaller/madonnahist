@@ -131,6 +131,19 @@ const ACCEPTED_DATE = '1899-01-10';
 const PENDING_DATE = '1899-01-11';
 const FIXTURE_CAPTURE_SESSION = '_viewer_security_test';
 
+// V3 Slice 2 fixtures: January 1903 with two accepted days.
+// - 1903-01-10 shares a month/day with ACCEPTED_DATE (1899-01-10), so it is
+//   the "other years" sibling of an accepted day;
+// - 1903-01-11 shares one with PENDING_DATE (1899-01-11), which must never
+//   be offered as its sibling;
+// - 1903-01-11 carries a memory, so it outranks the earlier plain day as
+//   the year's highlight.
+const SLICE2_YEAR = 1903;
+const SLICE2_PLAIN_DATE = '1903-01-10';
+const SLICE2_MEMORY_DATE = '1903-01-11';
+const SLICE2_PLAIN_MARKER = 'ZQXHIGHLIGHTPLAIN';
+const SLICE2_MEMORY_MARKER = 'ZQXHIGHLIGHTMEMORY';
+
 let pass = 0;
 let fail = 0;
 const rows = [];
@@ -226,8 +239,8 @@ async function provisionFixtureDays(pool) {
 	]);
 
 	const acceptedRes = await pool.query(
-		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-		 VALUES ($1, $2, $3, $4, 'accepted')
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status, corrected_at)
+		 VALUES ($1, $2, $3, $4, 'accepted', '2999-01-01')
 		 RETURNING id`,
 		[pageId, ACCEPTED_DATE, 'fixtures/viewer-security-test/fake-accepted.jpg',
 			`Distinctive fixture entry for viewer security test: ${ACCEPTED_MARKER} happened here. A second sentence follows for preview purposes.`]
@@ -235,8 +248,8 @@ async function provisionFixtureDays(pool) {
 	const acceptedDayId = acceptedRes.rows[0].id;
 
 	const pendingRes = await pool.query(
-		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
-		 VALUES ($1, $2, $3, $4, 'pending')
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status, corrected_at)
+		 VALUES ($1, $2, $3, $4, 'pending', '2999-01-02')
 		 RETURNING id`,
 		[pageId, PENDING_DATE, 'fixtures/viewer-security-test/fake-pending.jpg',
 			`Distinctive fixture entry for viewer security test: ${PENDING_MARKER} happened here — this must never leak.`]
@@ -320,6 +333,33 @@ async function provisionBookFixtureDays(pool) {
 	return bookPageId;
 }
 
+async function provisionSlice2Days(pool) {
+	await pool.query(
+		`INSERT INTO calendar_pages (year, month, page_image_path, capture_session)
+		 VALUES ($1, 1, $2, $3)
+		 ON CONFLICT (year, month) DO NOTHING`,
+		[SLICE2_YEAR, 'fixtures/viewer-security-test/fake-slice2-page.jpg', FIXTURE_CAPTURE_SESSION]
+	);
+	const pageRes = await pool.query(`SELECT id FROM calendar_pages WHERE year = $1 AND month = 1`, [SLICE2_YEAR]);
+	const slice2PageId = pageRes.rows[0].id;
+	await pool.query(`DELETE FROM calendar_days WHERE entry_date = ANY($1::date[])`, [
+		[SLICE2_PLAIN_DATE, SLICE2_MEMORY_DATE]
+	]);
+	await pool.query(
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, correction_status)
+		 VALUES ($1, $2, $3, $4, 'accepted')`,
+		[slice2PageId, SLICE2_PLAIN_DATE, 'fixtures/viewer-security-test/fake-slice2-a.jpg',
+			`A plain fixture day: ${SLICE2_PLAIN_MARKER} was here.`]
+	);
+	await pool.query(
+		`INSERT INTO calendar_days (page_id, entry_date, day_image_path, corrected_text, day_narrative, correction_status)
+		 VALUES ($1, $2, $3, $4, $5, 'accepted')`,
+		[slice2PageId, SLICE2_MEMORY_DATE, 'fixtures/viewer-security-test/fake-slice2-b.jpg',
+			`A remembered fixture day: ${SLICE2_MEMORY_MARKER} was here.`, 'A fixture memory.']
+	);
+	return slice2PageId;
+}
+
 async function cleanupBookFixtureDays(pool, bookPageId) {
 	if (!bookPageId) return;
 	await pool.query(`DELETE FROM calendar_days WHERE page_id = $1`, [bookPageId]);
@@ -382,6 +422,7 @@ async function main() {
 	let viewerId;
 	let pageId;
 	let bookPageId;
+	let slice2PageId;
 	try {
 		try {
 			await fetch(`${BASE_URL}/api/health`);
@@ -395,6 +436,7 @@ async function main() {
 		pageId = await provisionFixtureDays(pool);
 		bookPageId = await provisionBookFixtureDays(pool);
 		await provisionBookNarrative(pool);
+		slice2PageId = await provisionSlice2Days(pool);
 
 		const viewerCookie = await login(VIEWER_USERNAME, TEST_PASSWORD);
 
@@ -820,6 +862,106 @@ async function main() {
 				`back href: ${href}`);
 		}
 
+		// ── V3 Slice 2: Timeline ────────────────────────────────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/browse`, { headers: { Cookie: viewerCookie } });
+			const loc = res.headers.get('location') ?? '';
+			record('GET /app/browse [viewer] redirects to /app/timeline', res.status === 308 && loc.endsWith('/app/timeline'),
+				`status ${res.status}, location ${loc || '(none)'}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/timeline`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			record('GET /app/timeline [viewer] renders', res.status === 200, `status ${res.status}`);
+			// 1899 has one accepted and one pending day: the count says 1.
+			const counted = body.includes(`aria-label="${FIXTURE_YEAR}: 1 day, January.`);
+			record('GET /app/timeline [viewer] counts only accepted days', counted,
+				counted ? 'aria-label says 1 day' : 'expected "1899: 1 day, January." label');
+			const leaked = body.includes(PENDING_MARKER);
+			record('GET /app/timeline [viewer] never shows pending text', !leaked,
+				leaked ? 'PENDING TEXT LEAKED INTO TIMELINE' : 'absent');
+			const ranked = body.includes(SLICE2_MEMORY_MARKER) && !body.includes(SLICE2_PLAIN_MARKER);
+			record('GET /app/timeline [viewer] year line is the memory day (highlight ranking)', ranked,
+				`memory: ${body.includes(SLICE2_MEMORY_MARKER)}, plain: ${body.includes(SLICE2_PLAIN_MARKER)}`);
+			const story = body.includes('ZQXPLBOOKPUBLISHED') && !body.includes('WOBBLEFRIMBOOKDRAFT');
+			record('GET /app/timeline [viewer] year line uses the published story only', story,
+				`published: ${body.includes('ZQXPLBOOKPUBLISHED')}`);
+		}
+
+		// ── V3 Slice 2: Year page month cards ──────────────────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${BOOK_FIXTURE_YEAR}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const ok = res.status === 200 && body.includes(ACCEPTED_MARKER) && body.includes(`/app/day/${BOOK_ACCEPTED_DATE}`);
+			record('GET /app/year/<fixture year> [viewer] month card shows the accepted day', ok, `status ${res.status}`);
+			const leaked = body.includes(PENDING_MARKER) || body.includes(`/app/day/${BOOK_PENDING_DATE}`);
+			record('GET /app/year/<fixture year> [viewer] month card never shows the pending day', !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO YEAR PAGE' : 'absent');
+			const story = body.indexOf('ZQXPLBOOKPUBLISHED');
+			const months = body.indexOf('id="months-h"');
+			record('GET /app/year/<fixture year> [viewer] story comes before the months', story > -1 && months > story,
+				`story at ${story}, months at ${months}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${SLICE2_YEAR}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const both = body.includes(SLICE2_PLAIN_MARKER) && body.includes(SLICE2_MEMORY_MARKER);
+			record('GET /app/year/<slice2 year> [viewer] January card lists both accepted days', both,
+				`plain: ${body.includes(SLICE2_PLAIN_MARKER)}, memory: ${body.includes(SLICE2_MEMORY_MARKER)}`);
+		}
+
+		// ── V3 Slice 2: Today extras ───────────────────────────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app?date=03-15`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const recent = body.slice(body.indexOf('id="recent-h"'));
+			const ok = body.includes('id="recent-h"') && recent.includes(`/app/day/${ACCEPTED_DATE}`);
+			record('GET /app [viewer] Recently added lists the newest accepted day', ok,
+				ok ? 'present' : 'accepted fixture day missing from Recently added');
+			const leaked = recent.includes(`/app/day/${PENDING_DATE}`) || body.includes(PENDING_MARKER);
+			record('GET /app [viewer] Recently added never lists a pending day', !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO RECENTLY ADDED' : 'absent');
+			record('GET /app [viewer] has a Surprise me link', body.includes('href="/app/surprise"'), '');
+		}
+		{
+			const accepted = new Set(
+				(await pool.query(`SELECT entry_date::text AS d FROM calendar_days WHERE correction_status = 'accepted'`))
+					.rows.map((r) => r.d)
+			);
+			let bad = null;
+			for (let i = 0; i < 25 && !bad; i++) {
+				const res = await fetchNoRedirect(`${BASE_URL}/app/surprise`, { headers: { Cookie: viewerCookie } });
+				const loc = res.headers.get('location') ?? '';
+				const m = /^\/app\/day\/(\d{4}-\d{2}-\d{2})\?from=%2Fapp$/.exec(loc);
+				if (res.status !== 303 || !m || !accepted.has(m[1]) || res.headers.get('cache-control') !== 'no-store') {
+					bad = `status ${res.status}, location ${loc}, cache ${res.headers.get('cache-control')}`;
+				}
+			}
+			record('GET /app/surprise [viewer] x25 always lands on an accepted day, uncached', !bad, bad ?? 'ok');
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/surprise`);
+			const loc = res.headers.get('location') ?? '';
+			record('GET /app/surprise [signed out] goes to login', res.status === 303 && loc.startsWith('/login'),
+				`status ${res.status}, location ${loc}`);
+		}
+
+		// ── V3 Slice 2: Day page, this date in other years ─────────────────
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${ACCEPTED_DATE}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const ok = body.includes('in other years') && body.includes(`/app/day/${SLICE2_PLAIN_DATE}`);
+			record('GET /app/day/<accepted> [viewer] links the same date in another year', ok,
+				`section: ${body.includes('in other years')}`);
+		}
+		{
+			const res = await fetchNoRedirect(`${BASE_URL}/app/day/${SLICE2_MEMORY_DATE}`, { headers: { Cookie: viewerCookie } });
+			const body = await res.text();
+			const leaked = body.includes(`/app/day/${PENDING_DATE}`);
+			record('GET /app/day/<slice2 day> [viewer] never offers a pending day as another year', res.status === 200 && !leaked,
+				leaked ? 'PENDING DAY LEAKED INTO OTHER YEARS' : `status ${res.status}, absent`);
+		}
+
 		// ── Phase F: invalid scope/key → friendly page, never a crash ──────
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/book/month/${BOOK_FIXTURE_YEAR}`, {
@@ -852,6 +994,7 @@ async function main() {
 	} finally {
 		await cleanupBookNarrative(pool);
 		await cleanupBookFixtureDays(pool, bookPageId);
+		await cleanupBookFixtureDays(pool, slice2PageId);
 		await cleanupFixtureDays(pool, pageId);
 		await cleanupViewer(pool, viewerId);
 		await pool.end();

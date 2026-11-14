@@ -117,8 +117,15 @@ const STUB_TEXT_A =
 	`${MARKER} second paragraph, distinct from the first.`;
 const STUB_TEXT_B = `${MARKER}OVERWRITE this text must never be written — the year is published.`;
 const STUB_TEXT_C = `${MARKER}REGEN regenerated narrative text after unpublish.`;
+// Story-only phrases. The fixture days also contain MARKER, and since V3
+// Slice 2 the year page shows day highlights, so leak checks look for the
+// story's own sentences rather than the bare marker.
+const STORY_A_PHRASE = 'first paragraph of the initial generated year narrative';
+const STORY_C_PHRASE = `${MARKER}REGEN`;
 
-const GENERATED_LABEL = 'AI-generated year summary, reviewed by the family';
+// The year page's provenance line (V3 Slice 2 wording; the <b>AI-written</b>
+// prefix is markup, so match the plain-text tail).
+const GENERATED_LABEL = 'calendar, reviewed before publishing';
 
 let pass = 0;
 let fail = 0;
@@ -328,7 +335,7 @@ async function main() {
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}`, { headers: { Cookie: viewerCookie } });
 			const body = await res.text();
-			const leaked = body.includes(MARKER) || body.includes(GENERATED_LABEL);
+			const leaked = body.includes(STORY_A_PHRASE) || body.includes(GENERATED_LABEL);
 			record(
 				'GET /app/year/<fixture year> [viewer] does NOT show the unpublished draft',
 				res.status === 200 && !leaked,
@@ -345,7 +352,7 @@ async function main() {
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}`, { headers: { Cookie: viewerCookie } });
 			const body = await res.text();
-			const showsText = body.includes(MARKER);
+			const showsText = body.includes(STORY_A_PHRASE);
 			const showsLabel = body.includes(GENERATED_LABEL);
 			record(
 				'GET /app/year/<fixture year> [viewer] shows the published narrative text',
@@ -353,7 +360,7 @@ async function main() {
 				`status ${res.status}, text present: ${showsText}`
 			);
 			record(
-				'GET /app/year/<fixture year> [viewer] shows the "AI-generated" label',
+				'GET /app/year/<fixture year> [viewer] shows the AI-written provenance label',
 				showsLabel,
 				showsLabel ? 'label present' : 'label missing from body'
 			);
@@ -400,7 +407,7 @@ async function main() {
 		{
 			const res = await fetchNoRedirect(`${BASE_URL}/app/year/${FIXTURE_YEAR}`, { headers: { Cookie: viewerCookie } });
 			const body = await res.text();
-			const leaked = body.includes(MARKER) || body.includes(GENERATED_LABEL);
+			const leaked = body.includes(STORY_C_PHRASE) || body.includes(GENERATED_LABEL);
 			record(
 				'GET /app/year/<fixture year> [viewer] hides the regenerated draft until republished',
 				res.status === 200 && !leaked,

@@ -29,7 +29,7 @@
 			// isn't necessarily this month's own year.
 			return `Back to ${backHref.slice('/app/year/'.length, '/app/year/'.length + 4)}`;
 		}
-		if (backHref.startsWith('/app/browse')) return 'Back to Browse';
+		if (backHref.startsWith('/app/timeline')) return 'Back to the Timeline';
 		return 'Back to On this day';
 	});
 

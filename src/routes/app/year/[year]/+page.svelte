@@ -1,34 +1,44 @@
 <script lang="ts">
-	import MonthGrid from '$components/MonthGrid.svelte';
+	import { page } from '$app/state';
+	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { data } = $props();
 
-	const monthNames = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
-	];
+	// Back goes where the reader came from (validated /app path), else the Timeline.
+	const backHref = $derived(backTarget(page.url.searchParams.get('from'), '/app/timeline'));
+	const backText = $derived(backLabel(backHref));
+	const here = $derived(`/app/year/${data.year}`);
 
-	const yearHasAcceptedDays = $derived(
-		data.validYear && data.months.some((m) => m.acceptedDays.length > 0)
-	);
+	const withDays = $derived(data.months.filter((m) => m.count > 0));
+	const emptyMonths = $derived(data.months.filter((m) => m.count === 0));
+	const totalDays = $derived(withDays.reduce((sum, m) => sum + m.count, 0));
 
-	function pad(n: number): string {
-		return String(n).padStart(2, '0');
-	}
+	const spanLabel = $derived.by(() => {
+		if (withDays.length === 0) return '';
+		const first = MONTHS[withDays[0].month - 1];
+		const last = MONTHS[withDays[withDays.length - 1].month - 1];
+		return first === last ? first : `${first} to ${last}`;
+	});
 
-	// td-852d99: month names link to the full-page-image month view; the
-	// "from" param lets /app/month/[monthKey] point Back at this year page.
-	function monthHref(year: number, month: number): string {
-		return `/app/month/${year}-${pad(month)}?from=${encodeURIComponent(`/app/year/${year}`)}`;
+	const pad = (n: number) => String(n).padStart(2, '0');
+	const plural = (n: number, one: string, many: string) =>
+		`${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+
+	function weekdayShort(entryDate: string): string {
+		return new Date(entryDate + 'T00:00:00Z').toLocaleDateString('en-US', {
+			weekday: 'short',
+			timeZone: 'UTC'
+		});
 	}
 
 	function narrativeParagraphs(text: string): string[] {
-		return text.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0);
+		return text
+			.split(/\n{2,}/)
+			.map((p) => p.trim())
+			.filter((p) => p.length > 0);
 	}
 
-	// Matches src/routes/admin/exports/+page.svelte's formatBytes exactly —
-	// duplicated rather than shared, same small-per-route-helper precedent as
-	// the pdfExportFilename() duplication between the two download endpoints.
+	// Same output as /admin/exports' formatBytes.
 	function formatBytes(n: number): string {
 		if (!Number.isFinite(n) || n < 0) return '—';
 		if (n < 1024) return `${n} B`;
@@ -41,307 +51,322 @@
 		}
 		return `${value.toFixed(1)} ${units[unitIndex]}`;
 	}
+	const PDF_LABEL: Record<string, string> = {
+		full: 'PDF, whole year',
+		narrative: 'PDF, story only',
+		days: 'PDF, days only'
+	};
+	// A PDF is an edition as of the day it was made (CODEX1 finding 10).
+	const pdfMadeOn = $derived.by(() => {
+		if (data.pdfExports.length === 0) return null;
+		const latest = data.pdfExports.map((e) => e.createdAt).sort()[data.pdfExports.length - 1];
+		return new Date(latest).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
+	});
 </script>
 
 <svelte:head>
 	<title>{data.validYear ? data.year : 'Year'} — Vorwaller Family History</title>
 </svelte:head>
 
-<div class="year-page">
-	<a href="/app/browse" class="back-link">&larr; Back to Browse</a>
+<div class="v-page wide">
+	<a class="v-back" href={backHref}>◂ {backText}</a>
 
 	{#if !data.validYear}
-		<div class="empty-state">
-			<h1>Not a valid year</h1>
-			<p>That doesn't look like a year in this archive.</p>
-			<a href="/app/browse" class="btn-primary">Back to Browse</a>
+		<div class="v-empty">
+			<div class="icon" aria-hidden="true">🗓️</div>
+			<h1 class="v-title">Not a year in this archive</h1>
+			<p>That doesn't look like a year Madonna's calendars cover.</p>
+			<a class="v-btn primary" href="/app/timeline">Go to the Timeline</a>
 		</div>
 	{:else}
-		<nav class="year-nav" aria-label="Year navigation">
+		<nav class="year-nav" aria-label="Other years">
 			{#if data.prevYear}
-				<a href="/app/year/{data.prevYear}" class="year-chevron">&#9666; {data.prevYear}</a>
+				<a
+					class="arrow"
+					href="/app/year/{data.prevYear}"
+					aria-label="Previous year, {data.prevYear}">‹</a
+				>
 			{:else}
-				<span class="year-chevron disabled">&#9666;</span>
+				<span class="arrow off" aria-hidden="true">‹</span>
 			{/if}
-			<h1 class="year-title">{data.year}</h1>
+			<h1 class="y">{data.year}</h1>
 			{#if data.nextYear}
-				<a href="/app/year/{data.nextYear}" class="year-chevron">{data.nextYear} &#9656;</a>
+				<a class="arrow" href="/app/year/{data.nextYear}" aria-label="Next year, {data.nextYear}"
+					>›</a
+				>
 			{:else}
-				<span class="year-chevron disabled">&#9656;</span>
+				<span class="arrow off" aria-hidden="true">›</span>
 			{/if}
 		</nav>
-
-		{#if yearHasAcceptedDays}
-			<a href="/app/book/year/{data.year}" class="book-cta">Read {data.year} as a book &#9656;</a>
-		{/if}
-
-		{#if data.pdfExports.length > 0}
-			<section class="downloads-block" aria-label="Print and download">
-				<p class="downloads-heading">Print &amp; download</p>
-				<ul class="downloads-list">
-					{#each data.pdfExports as ex (ex.mode)}
-						<li>
-							<a href="/app/year/{data.year}/pdf?mode={ex.mode}" class="pdf-link" target="_blank" rel="noopener">
-								{ex.mode === 'full'
-									? `Full year PDF (${formatBytes(ex.byteSize)})`
-									: ex.mode === 'narrative'
-										? `Year summary only (${formatBytes(ex.byteSize)})`
-										: `Days only (${formatBytes(ex.byteSize)})`}
-								<span class="pdf-date">generated {new Date(ex.createdAt).toLocaleDateString()}</span>
-							</a>
-						</li>
-					{/each}
-				</ul>
-			</section>
+		{#if totalDays > 0}
+			<p class="v-sub center">{plural(totalDays, 'day', 'days')} so far · {spanLabel}</p>
 		{/if}
 
 		{#if data.narrative}
-			<section class="year-narrative" id="story">
-				<p class="narrative-label">AI-generated year summary, reviewed by the family</p>
-				{#each narrativeParagraphs(data.narrative) as para, i (i)}
-					<p class="narrative-para">{para}</p>
+			<details class="v-fold story" id="story" open>
+				<summary>📖 The story of {data.year}</summary>
+				<div class="v-fold-body">
+					{#each narrativeParagraphs(data.narrative) as para, i (i)}
+						<p class="para">{para}</p>
+					{/each}
+					<p class="v-provenance">
+						<b>AI-written</b> from Madonna's {data.year} calendar, reviewed before publishing
+					</p>
+				</div>
+			</details>
+		{/if}
+
+		{#if totalDays > 0}
+			<div class="v-actions downloads">
+				<a class="v-btn secondary" href="/app/book/year/{data.year}"
+					>📚 Read {data.year} as a book</a
+				>
+				{#each data.pdfExports as ex (ex.mode)}
+					<a
+						class="v-btn secondary"
+						href="/app/year/{data.year}/pdf?mode={ex.mode}"
+						target="_blank"
+						rel="noopener"
+						>⬇ {PDF_LABEL[ex.mode] ?? 'PDF'}
+						<span class="size">({formatBytes(ex.byteSize)})</span></a
+					>
 				{/each}
-			</section>
-		{/if}
+			</div>
+			{#if pdfMadeOn}
+				<p class="pdf-note">PDFs show the archive as of {pdfMadeOn}.</p>
+			{/if}
 
-		{#if !yearHasAcceptedDays}
-			<p class="empty-hint">
-				No transcribed days for {data.year} yet — check back as correction continues
-				({data.coverage.accepted} of {data.coverage.total} days transcribed so far).
-			</p>
-		{/if}
-
-		<div class="months">
-			{#each data.months as m (m.month)}
-				<MonthGrid
-					year={data.year}
-					month={m.month}
-					acceptedDays={m.acceptedDays}
-					linkSuffix={`?from=${encodeURIComponent(`/app/year/${data.year}`)}`}
-					titleHref={monthHref(data.year, m.month)}
-				/>
-				{#if m.acceptedDays.length === 0}
-					<p class="month-empty">No transcribed days in {monthNames[m.month - 1]} {data.year} yet.</p>
+			<section aria-labelledby="months-h">
+				<div class="v-section-h"><h2 id="months-h">Months</h2></div>
+				<div class="months">
+					{#each withDays as m (m.month)}
+						{@const monthHref = withFrom(`/app/month/${data.year}-${pad(m.month)}`, here)}
+						<section class="monthcard" aria-labelledby="m-{m.month}">
+							<header>
+								<h3 id="m-{m.month}"><a href={monthHref}>{MONTHS[m.month - 1]}</a></h3>
+								<span class="meta">{plural(m.count, 'day', 'days')}</span>
+							</header>
+							{#if m.highlights.length > 0}
+								<ul class="rows">
+									{#each m.highlights as h (h.entryDate)}
+										<li>
+											<a class="row" href={withFrom(`/app/day/${h.entryDate}`, here)}>
+												<span class="d"
+													>{Number(h.entryDate.slice(8, 10))}<small
+														>{weekdayShort(h.entryDate)}</small
+													></span
+												>
+												<span class="snip"
+													>{h.snippet}{#if h.hasMemory}
+														<span class="mem">
+															🗨 <span class="v-sr">Madonna remembers this day</span></span
+														>{/if}</span
+												>
+											</a>
+										</li>
+									{/each}
+								</ul>
+							{/if}
+							<footer>
+								<a href={monthHref}>All {plural(m.count, 'day', 'days')} ▸</a>
+							</footer>
+						</section>
+					{/each}
+				</div>
+				{#if emptyMonths.length > 0}
+					<p class="not-yet">
+						<b>Not transcribed yet:</b>
+						{emptyMonths.map((m) => MONTHS[m.month - 1]).join(', ')}
+					</p>
 				{/if}
-			{/each}
-		</div>
+			</section>
+		{:else}
+			<div class="v-empty">
+				<div class="icon" aria-hidden="true">✍️</div>
+				<h2>No days from {data.year} yet</h2>
+				<p>Check back as Madonna works through the calendars.</p>
+				<a class="v-btn primary" href="/app/timeline">Go to the Timeline</a>
+			</div>
+		{/if}
 	{/if}
 </div>
 
 <style>
-	.year-page {
-		padding: 1rem;
-	}
-	.back-link {
-		display: inline-flex;
-		align-items: center;
-		min-height: 48px;
-		margin-bottom: 0.5rem;
-		font-family: var(--font-sans);
-		font-size: 0.9rem;
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
-	}
-	.back-link:hover {
-		text-decoration: underline;
-	}
-	.back-link:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-
 	.year-nav {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem;
-		margin: 0.25rem 0 0.75rem;
+		gap: 8px;
+		margin: 4px 0 0;
 	}
-	.year-title {
-		font-family: var(--font-sans);
-		font-size: 1.4rem;
+	.y {
 		margin: 0;
+		font-family: var(--font-serif);
+		font-size: 36px;
+		font-weight: 700;
 		color: var(--color-ink);
 	}
-	.year-chevron {
-		display: flex;
-		align-items: center;
-		min-height: 48px;
-		padding: 0 0.6rem;
-		font-family: var(--font-sans);
-		font-weight: 600;
-		font-size: 0.95rem;
-		color: var(--color-evergreen-dark);
-		text-decoration: none;
-		border-radius: 8px;
-	}
-	.year-chevron:hover {
-		background: var(--color-chip-bg);
-	}
-	.year-chevron:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-	.year-chevron.disabled {
-		color: var(--color-ink-muted);
-		opacity: 0.5;
-	}
-
-	.book-cta {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 52px;
-		margin: 0 0 1.25rem;
-		padding: 0.6rem 1rem;
-		border-radius: 8px;
-		background: var(--color-evergreen);
-		color: #fff;
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
-		font-weight: 700;
-		text-decoration: none;
-		text-align: center;
-	}
-	.book-cta:hover {
-		background: var(--color-evergreen-dark);
-	}
-	.book-cta:focus-visible {
-		outline: 2px solid var(--color-ink);
-		outline-offset: 2px;
-	}
-
-	.downloads-block {
-		margin: 0.75rem 0 1rem;
-		padding: 0.75rem 0.9rem;
+	.arrow {
+		width: 48px;
+		height: 48px;
+		border-radius: 999px;
+		border: 1px solid var(--color-border);
 		background: var(--color-paper);
-		border: 1px solid var(--color-border);
-		border-radius: 8px;
-	}
-	.downloads-heading {
-		font-family: var(--font-sans);
-		font-size: 0.8rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--color-ink-muted);
-		margin: 0 0 0.4rem;
-	}
-	.downloads-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.pdf-date {
-		font-weight: 400;
-		font-size: 0.78rem;
-		color: var(--color-ink-muted);
-		margin-left: 0.4rem;
-	}
-	.pdf-link {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 44px;
-		margin: -0.5rem 0 1.25rem;
-		font-family: var(--font-sans);
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--color-ink-muted);
-		text-decoration: underline;
-	}
-	.pdf-link:hover {
-		color: var(--color-evergreen-dark);
-	}
-	.pdf-link:focus-visible {
-		outline: 2px solid var(--color-evergreen-dark);
-		outline-offset: 2px;
-	}
-
-	.empty-hint {
-		font-family: var(--font-serif);
-		font-size: 0.95rem;
-		line-height: 1.6;
-		color: var(--color-ink-muted);
-		margin: 0 0 1rem;
-	}
-
-	.year-narrative {
-		background: var(--color-cream);
-		border: 1px solid var(--color-border);
-		border-radius: 10px;
-		padding: 1.1rem 1.25rem;
-		margin: 0 0 1.25rem;
-	}
-	.narrative-label {
-		font-family: var(--font-sans);
-		font-size: 0.75rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--color-amber);
-		margin: 0 0 0.75rem;
-	}
-	.narrative-para {
-		font-family: var(--font-serif);
-		font-style: italic;
-		font-size: 1.05rem;
-		line-height: 1.65;
+		display: grid;
+		place-items: center;
+		font-size: 30px;
+		line-height: 1;
+		padding-bottom: 4px;
 		color: var(--color-ink);
-		margin: 0 0 0.85rem;
+		text-decoration: none;
 	}
-	.narrative-para:last-child {
-		margin-bottom: 0;
+	a.arrow:hover {
+		border-color: var(--color-ink-muted);
+	}
+	.arrow.off {
+		visibility: hidden;
+	}
+	.center {
+		text-align: center;
+		margin: 2px 0 16px;
+	}
+
+	.story {
+		margin-bottom: 14px;
+	}
+	.story > summary {
+		font-family: var(--font-serif);
+		font-size: 20px;
+	}
+	.para {
+		margin: 0 0 12px;
+		font-family: var(--font-serif);
+		font-size: 19px;
+		line-height: 1.7;
+		max-width: 65ch;
+	}
+
+	.downloads {
+		margin-top: 0;
+	}
+	.size {
+		font-weight: 400;
+	}
+	.pdf-note {
+		margin: 6px 0 0;
+		font-size: 15px;
+		color: var(--color-ink-muted);
 	}
 
 	.months {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: 12px;
+	}
+	@media (min-width: 640px) {
+		.months {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+	}
+	@media (min-width: 1024px) {
+		.months {
+			grid-template-columns: repeat(3, minmax(0, 1fr));
+		}
+	}
+	.monthcard {
 		display: flex;
 		flex-direction: column;
-	}
-	.month-empty {
-		margin: -0.75rem 0 1rem;
-		font-family: var(--font-sans);
-		font-size: 0.8rem;
-		color: var(--color-ink-muted);
-		font-style: italic;
-	}
-
-	.empty-state {
 		background: var(--color-paper);
 		border: 1px solid var(--color-border);
-		border-radius: 10px;
-		padding: 1.5rem 1.25rem;
-		text-align: center;
+		border-radius: var(--radius);
+		overflow: hidden;
 	}
-	.empty-state h1 {
-		font-family: var(--font-sans);
-		font-size: 1.25rem;
-		margin: 0 0 0.5rem;
+	.monthcard header {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 4px 14px;
+		background: var(--color-evergreen-soft);
+		color: var(--color-evergreen-dark);
 	}
-	.empty-state p {
-		font-family: var(--font-serif);
-		font-size: 1.05rem;
-		color: var(--color-ink-muted);
-		margin: 0 0 1.25rem;
+	.monthcard h3 {
+		margin: 0;
+		font-size: 19px;
 	}
-	.btn-primary {
+	.monthcard h3 a {
 		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		min-height: 52px;
-		padding: 0.6rem 1.5rem;
-		border-radius: 8px;
-		background: var(--color-evergreen);
-		color: #fff;
-		font-family: var(--font-sans);
-		font-weight: 700;
+		min-height: 44px;
+		color: var(--color-evergreen-dark);
 		text-decoration: none;
 	}
-	.btn-primary:focus-visible {
-		outline: 2px solid var(--color-ink);
-		outline-offset: 2px;
+	.monthcard h3 a:hover {
+		text-decoration: underline;
+	}
+	.meta {
+		margin-left: auto;
+		font-size: 15px;
+		font-weight: 600;
+	}
+	.rows {
+		list-style: none;
+		margin: 0;
+		padding: 2px 14px 0;
+	}
+	.rows li + li {
+		border-top: 1px solid var(--color-border);
+	}
+	.row {
+		display: grid;
+		grid-template-columns: 44px minmax(0, 1fr);
+		gap: 10px;
+		padding: 10px 0;
+		color: inherit;
+		text-decoration: none;
+	}
+	.row:hover .snip {
+		text-decoration: underline;
+	}
+	.d {
+		font-family: var(--font-serif);
+		font-size: 21px;
+		font-weight: 700;
+		color: var(--color-evergreen-dark);
+		text-align: center;
+		line-height: 1.1;
+	}
+	.d small {
+		display: block;
+		font-family: var(--font-sans);
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--color-ink-muted);
+	}
+	.snip {
+		font-family: var(--font-serif);
+		font-size: 17px;
+		line-height: 1.5;
+		overflow-wrap: anywhere;
+	}
+	.monthcard footer {
+		margin-top: auto;
+		padding: 0 14px 6px;
+	}
+	.monthcard footer a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-weight: 700;
+		font-size: 16px;
+		color: var(--color-evergreen);
+	}
+	.not-yet {
+		margin: 14px 0 0;
+		font-size: 16px;
+		color: var(--color-ink-muted);
 	}
 </style>

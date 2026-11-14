@@ -2,8 +2,9 @@ import { query } from '$lib/db';
 import {
 	getAcceptedDaysByMonth,
 	getAdjacentAcceptedYears,
-	getCoverage,
-	getPublishedNarrative
+	getMonthHighlights,
+	getPublishedNarrative,
+	type DayHighlight
 } from '$lib/server/viewer';
 import type { PageServerLoad } from './$types';
 
@@ -23,21 +24,20 @@ export const load: PageServerLoad = async ({ params }) => {
 		return {
 			validYear: false as const,
 			year: params.year,
-			months: [] as Array<{ month: number; acceptedDays: number[] }>,
+			months: [] as Array<{ month: number; count: number; highlights: DayHighlight[] }>,
 			prevYear: null,
 			nextYear: null,
-			coverage: await getCoverage(),
 			narrative: null as string | null,
-			pdfExports: [] as Array<{ mode: string; byteSize: number }>
+			pdfExports: [] as Array<{ mode: string; byteSize: number; createdAt: string }>
 		};
 	}
 
 	const year = Number(params.year);
 
-	const [byMonth, adjacent, coverage, narrative, pdfExportRes] = await Promise.all([
+	const [byMonth, highlights, adjacent, narrative, pdfExportRes] = await Promise.all([
 		getAcceptedDaysByMonth(year),
+		getMonthHighlights(year),
 		getAdjacentAcceptedYears(year),
-		getCoverage(),
 		getPublishedNarrative('year', String(year)),
 		// Latest export per content mode for this year — feeds the
 		// "Print & download" block (Gaylon, 2026-07-23) listing every
@@ -51,9 +51,11 @@ export const load: PageServerLoad = async ({ params }) => {
 		)
 	]);
 
+	// V3 Slice 2: month cards with up to three highlight days each.
 	const months = Array.from({ length: 12 }, (_, i) => ({
 		month: i + 1,
-		acceptedDays: byMonth.get(i + 1) ?? []
+		count: byMonth.get(i + 1)?.length ?? 0,
+		highlights: highlights.get(i + 1) ?? []
 	}));
 
 	// BIGINT comes back from node-pg as a string — Number() here only for
@@ -74,7 +76,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		months,
 		prevYear: adjacent.prev,
 		nextYear: adjacent.next,
-		coverage,
 		narrative,
 		pdfExports
 	};

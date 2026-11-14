@@ -112,7 +112,10 @@ export function formatHumanDateNoYear(entryDate: string): string {
  * `/app/year/[year]` and the Phase F book reader (`/app/book/year/[key]`),
  * which surfaces the same year narrative as its opening section.
  */
-export async function getPublishedNarrative(scope: 'year', scopeKey: string): Promise<string | null> {
+export async function getPublishedNarrative(
+	scope: 'year',
+	scopeKey: string
+): Promise<string | null> {
 	const res = await query<{ summary_text: string }>(
 		`SELECT summary_text FROM narrative_summaries
 		  WHERE scope = $1 AND scope_key = $2 AND is_published = true`,
@@ -361,7 +364,9 @@ export interface MonthDayCount extends MonthDay {
  * fallback (Gaylon, mockup review 2026-11-07). Distance wraps around the
  * year; ties go to the later date. Returns null when nothing is accepted.
  */
-export async function getNearestMonthDayWithEntries(target: MonthDay): Promise<MonthDayCount | null> {
+export async function getNearestMonthDayWithEntries(
+	target: MonthDay
+): Promise<MonthDayCount | null> {
 	const res = await query<{ month: number; day: number; count: number }>(
 		`SELECT EXTRACT(MONTH FROM entry_date)::int AS month,
 		        EXTRACT(DAY FROM entry_date)::int AS day,
@@ -442,5 +447,204 @@ export async function getLatestSavedStory(): Promise<SavedStorySummary | null> {
 		  LIMIT 1`
 	);
 	const r = res.rows[0];
-	return r ? { id: r.id, question: r.question, dayCount: r.day_count, createdAt: r.created_at } : null;
+	return r
+		? { id: r.id, question: r.question, dayCount: r.day_count, createdAt: r.created_at }
+		: null;
+}
+
+// ── V3 Slice 2: Timeline, Year highlights, Today extras ─────────────────
+
+/**
+ * Highlight ranking, shared by the Timeline line and the Year page's month
+ * cards (plan §Slice 2: "deterministic, ranked by human tags and memories
+ * with a date tie-breaker"). Order: has a memory from Madonna, then the
+ * number of family-visible tags (VISIBLE_DAY_TAGS), then the number of
+ * people/places mentioned, then the earliest date. Days with no text never
+ * qualify.
+ */
+const HIGHLIGHT_ORDER = `d.has_memory DESC, COALESCE(tc.n, 0) DESC, COALESCE(ec.n, 0) DESC, d.entry_date`;
+
+/**
+ * CTEs `tc` and `ec` (tag and entity counts) over the candidate set `d`,
+ * which the caller defines first as `days` with the accepted predicate.
+ */
+const HIGHLIGHT_COUNTS = `
+	tc AS (SELECT vt.day_id, COUNT(*)::int AS n
+	         FROM ${VISIBLE_DAY_TAGS} vt
+	         JOIN days ON days.id = vt.day_id
+	        GROUP BY vt.day_id),
+	ec AS (SELECT de.day_id, COUNT(DISTINCT de.entity_id)::int AS n
+	         FROM day_entities de
+	         JOIN days ON days.id = de.day_id
+	        GROUP BY de.day_id)`;
+
+export interface TimelineYear {
+	year: number;
+	/** Accepted days per month, Jan..Dec. */
+	months: number[];
+	accepted: number;
+	/** Story first line, if the year has a published story. */
+	storyLine: string | null;
+	/** Otherwise, the year's top highlight (first sentence). */
+	highlight: string | null;
+}
+
+/**
+ * Every year that has at least one ingested day, ascending, with accepted
+ * counts per month (the density strip) and a one-line excerpt. Years with
+ * ingested but no accepted days come back with accepted = 0 ("Not
+ * transcribed yet"); the ingested count itself is an aggregate, the same
+ * publication exception as getCoverage().
+ */
+export async function getTimelineYears(): Promise<TimelineYear[]> {
+	const [countsRes, highlightRes, stories] = await Promise.all([
+		query<{ year: number; month: number; accepted: number }>(
+			`SELECT EXTRACT(YEAR FROM entry_date)::int AS year,
+			        EXTRACT(MONTH FROM entry_date)::int AS month,
+			        COUNT(*) FILTER (WHERE correction_status = 'accepted')::int AS accepted
+			   FROM calendar_days
+			  GROUP BY 1, 2`
+		),
+		query<{ year: number; corrected_text: string }>(
+			`WITH days AS (
+			   SELECT id, entry_date, corrected_text,
+			          (day_narrative IS NOT NULL AND btrim(day_narrative) <> '') AS has_memory
+			     FROM calendar_days
+			    WHERE correction_status = 'accepted'
+			      AND btrim(COALESCE(corrected_text, '')) <> ''
+			 ),
+			 ${HIGHLIGHT_COUNTS}
+			 SELECT DISTINCT ON (EXTRACT(YEAR FROM d.entry_date))
+			        EXTRACT(YEAR FROM d.entry_date)::int AS year, d.corrected_text
+			   FROM days d
+			   LEFT JOIN tc ON tc.day_id = d.id
+			   LEFT JOIN ec ON ec.day_id = d.id
+			  ORDER BY EXTRACT(YEAR FROM d.entry_date), ${HIGHLIGHT_ORDER}`
+		),
+		getPublishedYearStories()
+	]);
+
+	const byYear = new Map<number, TimelineYear>();
+	for (const r of countsRes.rows) {
+		let y = byYear.get(r.year);
+		if (!y) {
+			y = {
+				year: r.year,
+				months: Array(12).fill(0),
+				accepted: 0,
+				storyLine: null,
+				highlight: null
+			};
+			byYear.set(r.year, y);
+		}
+		y.months[r.month - 1] = r.accepted;
+		y.accepted += r.accepted;
+	}
+	for (const r of highlightRes.rows) {
+		const y = byYear.get(r.year);
+		if (y) y.highlight = firstSentences(r.corrected_text, 1, 120);
+	}
+	for (const s of stories) {
+		const y = byYear.get(s.year);
+		if (y && y.accepted > 0) y.storyLine = firstSentences(s.text, 1, 120);
+	}
+	return [...byYear.values()].sort((a, b) => a.year - b.year);
+}
+
+export interface DayHighlight {
+	entryDate: string;
+	snippet: string;
+	hasMemory: boolean;
+}
+
+/** Up to `perMonth` highlight days for each month of `year`, by month (1-12), in date order. */
+export async function getMonthHighlights(
+	year: number,
+	perMonth = 3
+): Promise<Map<number, DayHighlight[]>> {
+	const res = await query<{ entry_date: string; corrected_text: string; has_memory: boolean }>(
+		`WITH days AS (
+		   SELECT id, entry_date, corrected_text,
+		          (day_narrative IS NOT NULL AND btrim(day_narrative) <> '') AS has_memory
+		     FROM calendar_days
+		    WHERE correction_status = 'accepted'
+		      AND entry_date >= make_date($1, 1, 1) AND entry_date < make_date($1 + 1, 1, 1)
+		      AND btrim(COALESCE(corrected_text, '')) <> ''
+		 ),
+		 ${HIGHLIGHT_COUNTS},
+		 ranked AS (
+		   SELECT d.entry_date, d.corrected_text, d.has_memory,
+		          row_number() OVER (PARTITION BY EXTRACT(MONTH FROM d.entry_date)
+		                             ORDER BY ${HIGHLIGHT_ORDER}) AS rn
+		     FROM days d
+		     LEFT JOIN tc ON tc.day_id = d.id
+		     LEFT JOIN ec ON ec.day_id = d.id
+		 )
+		 SELECT entry_date::text AS entry_date, corrected_text, has_memory
+		   FROM ranked
+		  WHERE rn <= $2
+		  ORDER BY entry_date`,
+		[year, perMonth]
+	);
+	const out = new Map<number, DayHighlight[]>();
+	for (const r of res.rows) {
+		const month = Number(r.entry_date.slice(5, 7));
+		const item = {
+			entryDate: r.entry_date,
+			snippet: firstSentences(r.corrected_text, 2, 140),
+			hasMemory: r.has_memory
+		};
+		const list = out.get(month);
+		if (list) list.push(item);
+		else out.set(month, [item]);
+	}
+	return out;
+}
+
+export interface RecentDay {
+	entryDate: string;
+	snippet: string;
+}
+
+/** The most recently transcribed (accepted) days, newest first — Today's "Recently added". */
+export async function getRecentlyAccepted(limit = 5): Promise<RecentDay[]> {
+	const res = await query<{ entry_date: string; corrected_text: string | null }>(
+		`SELECT entry_date::text AS entry_date, corrected_text
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted' AND corrected_at IS NOT NULL
+		  ORDER BY corrected_at DESC, entry_date DESC
+		  LIMIT $1`,
+		[limit]
+	);
+	return res.rows.map((r) => ({
+		entryDate: r.entry_date,
+		snippet: firstSentences(r.corrected_text ?? '', 1, 100)
+	}));
+}
+
+/** One accepted day at random ("Surprise me"), or null when nothing is accepted yet. */
+export async function getRandomAcceptedDate(): Promise<string | null> {
+	const res = await query<{ entry_date: string }>(
+		`SELECT entry_date::text AS entry_date
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted'
+		  ORDER BY random()
+		  LIMIT 1`
+	);
+	return res.rows[0]?.entry_date ?? null;
+}
+
+/** Other accepted days with the same month and day as `entryDate`, oldest first. */
+export async function getSameDateOtherYears(entryDate: string): Promise<string[]> {
+	const res = await query<{ entry_date: string }>(
+		`SELECT entry_date::text AS entry_date
+		   FROM calendar_days
+		  WHERE correction_status = 'accepted'
+		    AND EXTRACT(MONTH FROM entry_date) = EXTRACT(MONTH FROM $1::date)
+		    AND EXTRACT(DAY FROM entry_date) = EXTRACT(DAY FROM $1::date)
+		    AND entry_date <> $1::date
+		  ORDER BY entry_date`,
+		[entryDate]
+	);
+	return res.rows.map((r) => r.entry_date);
 }

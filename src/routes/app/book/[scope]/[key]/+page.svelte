@@ -62,7 +62,7 @@
 
 {#if !data.available}
 	<div class="book-page">
-		<a href="/app/browse" class="exit-btn standalone" aria-label="Back to Browse">&times;</a>
+		<a href="/app/timeline" class="exit-btn standalone" aria-label="Back to the Timeline">&times;</a>
 		<div class="unavailable-card">
 			<h1>Not available yet</h1>
 			<p>
@@ -72,7 +72,7 @@
 					That doesn't look like a valid year to read as a book.
 				{/if}
 			</p>
-			<a href="/app/browse" class="btn-primary">Back to Browse</a>
+			<a href="/app/timeline" class="btn-primary">Back to the Timeline</a>
 		</div>
 	</div>
 {:else}

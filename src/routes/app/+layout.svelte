@@ -3,13 +3,14 @@
 	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import { afterNavigate } from '$app/navigation';
+	import NavProgress from '$lib/components/viewer/NavProgress.svelte';
 
 	let { children, data } = $props();
 
 	type TabKey = 'today' | 'timeline' | 'people' | 'stories' | 'search';
 	const tabs: { key: TabKey; label: string; href: string }[] = [
 		{ key: 'today', label: 'Today', href: '/app' },
-		{ key: 'timeline', label: 'Timeline', href: '/app/browse' },
+		{ key: 'timeline', label: 'Timeline', href: '/app/timeline' },
 		{ key: 'people', label: 'People', href: '/app/people' },
 		{ key: 'stories', label: 'Stories', href: '/app/stories' },
 		{ key: 'search', label: 'Search', href: '/app/search' }
@@ -55,6 +56,7 @@
 </script>
 
 <div class="app-shell" class:immersive>
+	<NavProgress />
 	{#if !immersive}
 		<header class="topbar">
 			<a class="brand" href="/app">

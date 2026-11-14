@@ -65,6 +65,8 @@
 			: `${what} ${verb} transcribed yet, so Previous skips back.`;
 	}
 
+	const monthDayLabel = $derived(fmt(data.entryDate, { month: 'long', day: 'numeric' }));
+
 	let zoom: ImageZoom | undefined = $state();
 	let imgFailed = $state(false);
 	async function openZoom() {
@@ -171,6 +173,24 @@
 						<p class="skip-note">{note}</p>
 					{/if}
 				{/each}
+
+				{#if data.otherYears.length > 0}
+					<section class="other-years" aria-labelledby="oy-h">
+						<h2 id="oy-h">{monthDayLabel} in other years</h2>
+						<ul class="v-chips">
+							{#each data.otherYears as d (d)}
+								<li>
+									<a class="v-chip" href={withFrom(`/app/day/${d}`, here)}>
+										<span class="v-chip-label">{d.slice(0, 4)}</span>
+									</a>
+								</li>
+							{/each}
+						</ul>
+						<a class="see-all" href="/app?date={data.entryDate.slice(5, 10)}"
+							>Read them together on one page ▸</a
+						>
+					</section>
+				{/if}
 			</div>
 
 			<div class="day-side">
@@ -315,5 +335,23 @@
 		color: var(--color-ink-muted);
 		margin: 6px 0 0;
 		text-align: center;
+	}
+	.other-years {
+		margin-top: 26px;
+		padding-top: 14px;
+		border-top: 1px solid var(--color-border);
+	}
+	.other-years h2 {
+		margin: 0;
+		font-size: 18px;
+		color: var(--color-ink);
+	}
+	.see-all {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		margin-top: 6px;
+		font-weight: 700;
+		color: var(--color-evergreen);
 	}
 </style>
