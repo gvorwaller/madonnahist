@@ -31,6 +31,14 @@ export interface YearCount {
 	count: number;
 }
 
+export interface RelatedEntity {
+	slug: string;
+	name: string;
+	entityType: EntityType;
+	/** Accepted days on which both are mentioned. */
+	days: number;
+}
+
 export interface EntityProfile {
 	displayName: string;
 	entityType: EntityType;
@@ -40,6 +48,55 @@ export interface EntityProfile {
 	lastYear: number | null;
 	yearCounts: YearCount[];
 	days: EntityDay[];
+	/** People and places mentioned on the same accepted days (V3 Slice 4). */
+	related: { people: RelatedEntity[]; places: RelatedEntity[] };
+}
+
+const RELATED_PER_TYPE = 8;
+
+/**
+ * Co-mentions (V3 Slice 4, plan CODEX #6): canonical people and places
+ * named on the same accepted days as the entity group `groupIds`, counted
+ * as distinct days, aliases resolved, the entity itself excluded. Top
+ * RELATED_PER_TYPE of each type, most shared days first.
+ */
+async function getRelatedEntities(
+	canonicalId: number,
+	groupIds: number[]
+): Promise<{ people: RelatedEntity[]; places: RelatedEntity[] }> {
+	const res = await query<{ slug: string; display_name: string; entity_type: EntityType; days: number }>(
+		`WITH my_days AS (
+		   SELECT DISTINCT de.day_id
+		     FROM day_entities de
+		     JOIN calendar_days cd ON cd.id = de.day_id
+		    WHERE de.entity_id = ANY($1::bigint[])
+		      AND cd.correction_status = 'accepted'
+		 ), counted AS (
+		   SELECT canon.slug, canon.display_name, canon.entity_type,
+		          COUNT(DISTINCT md.day_id)::int AS days
+		     FROM my_days md
+		     JOIN day_entities de ON de.day_id = md.day_id
+		     JOIN entities e ON e.id = de.entity_id
+		     JOIN entities canon ON canon.id = COALESCE(e.alias_of_entity_id, e.id)
+		    WHERE canon.id <> $2
+		      AND canon.entity_type IN ('person', 'place')
+		    GROUP BY canon.id, canon.slug, canon.display_name, canon.entity_type
+		 )
+		 SELECT slug, display_name, entity_type, days
+		   FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY entity_type
+		                                     ORDER BY days DESC, display_name) AS rn
+		           FROM counted) ranked
+		  WHERE rn <= $3
+		  ORDER BY entity_type, days DESC, display_name`,
+		[groupIds, canonicalId, RELATED_PER_TYPE]
+	);
+	const people: RelatedEntity[] = [];
+	const places: RelatedEntity[] = [];
+	for (const r of res.rows) {
+		const item = { slug: r.slug, name: r.display_name, entityType: r.entity_type, days: r.days };
+		(r.entity_type === 'person' ? people : places).push(item);
+	}
+	return { people, places };
 }
 
 /**
@@ -91,15 +148,18 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 	// DISTINCT requires every ORDER BY expression to appear (verbatim) in the
 	// select list — ordering by the unqualified `entry_date` alias rather
 	// than the cast `cd.entry_date::text` expression satisfies that.
-	const daysRes = await query<{ entry_date: string; corrected_text: string | null }>(
-		`SELECT DISTINCT cd.entry_date::text AS entry_date, cd.corrected_text
-		   FROM day_entities de
-		   JOIN calendar_days cd ON cd.id = de.day_id
-		  WHERE de.entity_id = ANY($1::bigint[])
-		    AND cd.correction_status = 'accepted'
-		  ORDER BY entry_date`,
-		[groupIds]
-	);
+	const [daysRes, related] = await Promise.all([
+		query<{ entry_date: string; corrected_text: string | null }>(
+			`SELECT DISTINCT cd.entry_date::text AS entry_date, cd.corrected_text
+			   FROM day_entities de
+			   JOIN calendar_days cd ON cd.id = de.day_id
+			  WHERE de.entity_id = ANY($1::bigint[])
+			    AND cd.correction_status = 'accepted'
+			  ORDER BY entry_date`,
+			[groupIds]
+		),
+		getRelatedEntities(canonicalId, groupIds)
+	]);
 
 	const days: EntityDay[] = daysRes.rows.map((r) => ({
 		entryDate: r.entry_date,
@@ -126,7 +186,8 @@ export async function loadEntityProfile(entityType: EntityType, slug: string): P
 		firstYear: yearCounts[0]?.year ?? null,
 		lastYear: yearCounts.length > 0 ? yearCounts[yearCounts.length - 1].year : null,
 		yearCounts,
-		days
+		days,
+		related
 	};
 }
 

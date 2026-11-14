@@ -2,11 +2,12 @@
 	/**
 	 * Person / place profile (V3 Slice 1): stat strip, mentions by year,
 	 * earliest and most recent, and every day grouped by year with a
-	 * snippet. Back returns to wherever the reader came from (?from=).
+	 * snippet. Slice 4 adds co-mentions: "Often mentioned with" and
+	 * "Places linked to …" on a person, "Who was here" on a place. Back returns to wherever the reader came from (?from=).
 	 * Accepted-only data comes from loadEntityProfile().
 	 */
 	import { page } from '$app/state';
-	import type { EntityProfile, EntityDay } from '$lib/server/entities';
+	import type { EntityProfile, EntityDay, RelatedEntity } from '$lib/server/entities';
 	import { backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { profile, kind }: { profile: EntityProfile | null; kind: 'person' | 'place' } = $props();
@@ -51,6 +52,25 @@
 		});
 	const n = (x: number) => x.toLocaleString('en-US');
 	const searchParam = $derived(kind === 'person' ? 'person' : 'place');
+	const relHref = (r: RelatedEntity) => withFrom(`/app/${r.entityType}/${r.slug}`, here);
+	// Slice 4: a person shows who they're often mentioned with and the places
+	// linked to them; a place shows who was there (plan: AGY2 #7).
+	const relatedSections = $derived.by(() => {
+		if (!profile) return [];
+		const out: { id: string; title: string; items: RelatedEntity[]; together: boolean }[] = [];
+		if (kind === 'person') {
+			out.push({ id: 'with-h', title: 'Often mentioned with', items: profile.related.people, together: true });
+			out.push({
+				id: 'places-h',
+				title: `Places linked to ${profile.displayName}`,
+				items: profile.related.places,
+				together: false
+			});
+		} else {
+			out.push({ id: 'who-h', title: 'Who was here', items: profile.related.people, together: false });
+		}
+		return out.filter((s) => s.items.length > 0);
+	});
 </script>
 
 <div class="v-page wide">
@@ -91,7 +111,7 @@
 			<div class="profile-grid">
 				<div>
 					<div class="v-section-h">
-						<h2>{kind === 'person' ? 'Mentions' : 'Days'} by year</h2>
+						<h2>{kind === 'person' ? 'Mentions' : 'Visits'} by year</h2>
 					</div>
 					<ul class="v-card bars">
 						{#each profile.yearCounts as yc (yc.year)}
@@ -105,6 +125,29 @@
 							</li>
 						{/each}
 					</ul>
+
+					{#each relatedSections as sec (sec.id)}
+						<section aria-labelledby={sec.id}>
+							<div class="v-section-h"><h2 id={sec.id}>{sec.title}</h2></div>
+							<ul class="v-card with">
+								{#each sec.items as r, i (r.entityType + r.slug)}
+									<li>
+										<a href={relHref(r)}>
+											<span class="who"
+												><span aria-hidden="true">{r.entityType === 'person' ? '👤' : '📍'}</span>
+												{r.name}</span
+											>
+											<span class="cnt"
+												>{n(r.days)}{i === 0 && sec.together
+													? ` ${r.days === 1 ? 'day' : 'days'} together`
+													: ` ${r.days === 1 ? 'day' : 'days'}`}</span
+											>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						</section>
+					{/each}
 
 					<div class="v-section-h"><h2>First and latest</h2></div>
 					{#if earliest}
@@ -222,6 +265,37 @@
 	.bars .num {
 		text-align: right;
 		font-weight: 700;
+	}
+	ul.with {
+		list-style: none;
+		margin: 0;
+		padding: 2px 16px;
+	}
+	.with li + li {
+		border-top: 1px solid var(--color-border);
+	}
+	.with a {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 48px;
+		color: inherit;
+		text-decoration: none;
+	}
+	.with a:hover .who {
+		text-decoration: underline;
+	}
+	.with .who {
+		flex: 1;
+		min-width: 0;
+		font-weight: 700;
+		color: var(--color-evergreen-dark);
+		overflow-wrap: anywhere;
+	}
+	.with .cnt {
+		flex: none;
+		font-size: 15px;
+		color: var(--color-ink-muted);
 	}
 	.hl {
 		display: flex;

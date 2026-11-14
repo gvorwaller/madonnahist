@@ -339,19 +339,17 @@ async function main() {
 		record('?tag=<undecided> finds nothing', !sr.includes(M1), '');
 		sr = (await getHtml(viewer, `/app/search?tag=${T.hide[0]}`)).html;
 		record('?tag=<hidden AI> finds nothing', !sr.includes(M1), '');
-		const dropdown = (await getHtml(viewer, '/app/search')).html;
+		// Slice 4: the tag list comes from the typeahead, not a dropdown.
+		const dropdown = (await getHtml(viewer, '/app/search/suggest?q=qvtag')).html;
+		const has = (slug) => dropdown.includes(`"slug":"${slug}"`);
 		record(
-			'tag dropdown lists approved + human names',
-			dropdown.includes(`value="${T.approve[0]}"`) &&
-				dropdown.includes(`value="${T.illness[0]}"`) &&
-				dropdown.includes(`value="${T.humanHidden[0]}"`),
-			''
+			'typeahead lists approved + human names',
+			has(T.approve[0]) && has(T.illness[0]) && has(T.humanHidden[0]),
+			dropdown.slice(0, 200)
 		);
 		record(
-			'tag dropdown omits undecided, hidden and merged names',
-			!dropdown.includes(`value="${T.undecided[0]}"`) &&
-				!dropdown.includes(`value="${T.hide[0]}"`) &&
-				!dropdown.includes(`value="${T.sick[0]}"`),
+			'typeahead omits undecided, hidden and merged names',
+			!has(T.undecided[0]) && !has(T.hide[0]) && !has(T.sick[0]),
 			''
 		);
 

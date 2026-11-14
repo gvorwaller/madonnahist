@@ -419,7 +419,7 @@ too many tags anyway. Gaylon approved deciding **per tag name**, not per day.
 list, with the grid dropped. On the laptop, the day page goes side by side. Share as quote plus
 link.
 
-*Slice 3 built 2026-11-14 (uncommitted):*
+*Slice 3 built 2026-11-14, shipped 2026-11-14 (f4e9244):*
 - Month page: the page photo is the navigator. Accepted days get a green outline with a ✓ and
   link to the day; other days get a hatched cream wash and are inert (position only, never text).
   Cells come from `crop_bounds` against the served image's size (warped when there is one) and are
@@ -440,6 +440,20 @@ link.
 (a place shows who was there; a person shows who they're often mentioned with), a mentions-by-year
 bar chart, and days grouped by year. Search gets typeahead with removable chips and the year range
 (separate `person` and `place` params kept).
+
+*Slice 4 built 2026-11-14 (uncommitted):*
+- Person and place pages: co-mentions from accepted `day_entities` joins (aliases resolved,
+  distinct days, self excluded, top 8 per type). A person shows "Often mentioned with" and "Places
+  linked to {Name}"; a place shows "Who was here" and "Visits by year". The People/Places index,
+  year chart and year folds were already in from Slice 1. Maps stay with td-085e19.
+- Search: one box with typeahead from `/app/search/suggest` (people, places and family-visible tags
+  whose name contains the text, alias names included; accepted-only). Picking one adds it as a
+  filter; Enter or the last option searches the words. Active filters are removable chips with
+  "Clear filters". Year range `from_year`/`to_year` (inclusive, swapped when reversed); old `year=`
+  links still work as a one-year range, and a range alone counts as a search. Results show the
+  date, highlighted words, the memory flag and people/place chips. The four dropdowns and their
+  option lists are gone. Chip labels show a name only when it has an accepted mention.
+- Tests: viewer 90 (14 new or rewritten), tags 35 (dropdown checks moved to the typeahead).
 
 **Tracking.** After approval, create a td epic "Family Viewer V3" with one task per slice, plus a
 standalone task for the AI-tag hiding and the memory relabel. Link td-ed1751 (Slice 3) and td-ae212d

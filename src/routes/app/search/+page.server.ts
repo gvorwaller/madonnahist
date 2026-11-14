@@ -1,12 +1,11 @@
 import { query } from '$lib/db';
 import {
 	formatHumanDate,
-	getAcceptedTagOptions,
 	getAcceptedYears,
 	resolveCanonicalTagSlug,
 	visibleTagExistsClause
 } from '$lib/server/viewer';
-import { getAcceptedEntityOptions } from '$lib/server/entities';
+import { getEntityFilterLabel, getResultChips, getTagFilterLabel, type ResultChip } from '$lib/server/search';
 import { isValidTagSlug } from '$lib/server/tags';
 import type { PageServerLoad } from './$types';
 
@@ -44,12 +43,41 @@ function fallbackSnippet(text: string, maxChars = 160): string {
 	return trimmed.slice(0, maxChars).trim() + '…';
 }
 
+const MIN_YEAR = 1800; // sanity bound only; the year menus list the archive's real years
+const MAX_YEAR = 2100;
+
+function parseYear(v: string | null): number | null {
+	if (!v || !/^\d{4}$/.test(v)) return null;
+	const n = Number(v);
+	return n >= MIN_YEAR && n <= MAX_YEAR ? n : null;
+}
+
+export interface SearchResult {
+	entryDate: string;
+	dateLabel: string;
+	segments: SearchSegment[];
+	hasMemory: boolean;
+	chips: ResultChip[];
+}
+
+/**
+ * Search (V3 Slice 4). One box with typeahead (./suggest), active filters
+ * as removable chips, and a year range.
+ *
+ * Params: q, tag, person, place, from_year, to_year (inclusive, validated,
+ * swapped when reversed), page. The old `year=` param still works as a
+ * one-year range, so shared links keep working. A year range alone counts
+ * as a search (plan: CODEX #4). Filter option lists are no longer loaded
+ * here; the typeahead asks for matches as the reader types (GROK #8).
+ */
 export const load: PageServerLoad = async ({ url }) => {
 	const rawQ = (url.searchParams.get('q') ?? '').slice(0, MAX_QUERY_LENGTH);
 	const q = rawQ.trim();
 
-	const yearParam = url.searchParams.get('year');
-	const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : null;
+	const legacyYear = parseYear(url.searchParams.get('year'));
+	let fromYear = parseYear(url.searchParams.get('from_year')) ?? legacyYear;
+	let toYear = parseYear(url.searchParams.get('to_year')) ?? legacyYear;
+	if (fromYear !== null && toYear !== null && fromYear > toYear) [fromYear, toYear] = [toYear, fromYear];
 
 	const tagParam = url.searchParams.get('tag');
 	// Canonicalized so an old link to a since-merged tag name (e.g.
@@ -70,41 +98,39 @@ export const load: PageServerLoad = async ({ url }) => {
 	const pageParam = Number(url.searchParams.get('page') ?? '1');
 	const pageNum = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 
-	const [years, tagOptions, personOptions, placeOptions] = await Promise.all([
+	const [years, tagLabel, personLabel, placeLabel] = await Promise.all([
 		getAcceptedYears(),
-		getAcceptedTagOptions(),
-		getAcceptedEntityOptions('person'),
-		getAcceptedEntityOptions('place')
+		tag ? getTagFilterLabel(tag) : null,
+		person ? getEntityFilterLabel('person', person) : null,
+		place ? getEntityFilterLabel('place', place) : null
 	]);
 
-	const searched = q !== '' || tag !== null || person !== null || place !== null;
+	const base = {
+		q,
+		fromYear,
+		toYear,
+		tag,
+		person,
+		place,
+		labels: { tag: tagLabel, person: personLabel, place: placeLabel },
+		page: pageNum,
+		pageSize: PAGE_SIZE,
+		years
+	};
+
+	const searched =
+		q !== '' || tag !== null || person !== null || place !== null || fromYear !== null || toYear !== null;
 
 	if (!searched) {
-		return {
-			q: '',
-			year,
-			tag,
-			person,
-			place,
-			page: pageNum,
-			pageSize: PAGE_SIZE,
-			total: 0,
-			totalPages: 0,
-			results: [] as Array<{ entryDate: string; dateLabel: string; segments: SearchSegment[] }>,
-			years,
-			tagOptions,
-			personOptions,
-			placeOptions,
-			searched: false
-		};
+		return { ...base, total: 0, totalPages: 0, results: [] as SearchResult[], searched: false };
 	}
 
 	const offset = (pageNum - 1) * PAGE_SIZE;
 
-	// Entity EXISTS clause, shared by both branches below — alias-resolves
-	// both sides via COALESCE(alias_of_entity_id, id) so a mention recorded
-	// against an alias entity still matches a filter selected by its
-	// canonical slug (or vice versa, for a stale/direct URL).
+	// Entity EXISTS clause — alias-resolves both sides via
+	// COALESCE(alias_of_entity_id, id) so a mention recorded against an alias
+	// entity still matches a filter selected by its canonical slug (or vice
+	// versa, for a stale/direct URL).
 	const entityExistsClause = (paramIndex: number, entityType: 'person' | 'place') => `(
 		$${paramIndex}::text IS NULL OR EXISTS (
 			SELECT 1
@@ -118,145 +144,102 @@ export const load: PageServerLoad = async ({ url }) => {
 		)
 	)`;
 
-	// Tag/entity filter with no search text: a plain chronological (not
-	// ranked) listing of matching accepted days, newest first — no FTS
-	// involved. Per Phase C deliverable 4, extended in Phase D to also
-	// accept person/place filters using the same no-query-text shape.
+	// Shared filters, params $1..$5: tag, from_year, to_year, person, place.
+	// The accepted-day predicate is applied directly in every query.
+	const filters = `cd.correction_status = 'accepted'
+		AND ($2::int IS NULL OR cd.entry_date >= make_date($2::int, 1, 1))
+		AND ($3::int IS NULL OR cd.entry_date < make_date($3::int + 1, 1, 1))
+		AND ($1::text IS NULL OR ${visibleTagExistsClause('cd.id', '$1')})
+		AND ${entityExistsClause(4, 'person')}
+		AND ${entityExistsClause(5, 'place')}`;
+	const filterParams = [tag, fromYear, toYear, person, place];
+
+	let total: number;
+	let rows: Array<{ entry_date: string; corrected_text: string | null; has_memory: boolean; headline: string | null }>;
+
 	if (q === '') {
+		// Filters only: a plain chronological listing, newest first.
 		const countRes = await query<{ total: number }>(
-			`SELECT COUNT(*)::int AS total
-			   FROM calendar_days cd
-			  WHERE cd.correction_status = 'accepted'
-			    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-			    AND ($1::text IS NULL OR ${visibleTagExistsClause('cd.id', '$1')})
-			    AND ${entityExistsClause(3, 'person')}
-			    AND ${entityExistsClause(4, 'place')}`,
-			[tag, year, person, place]
+			`SELECT COUNT(*)::int AS total FROM calendar_days cd WHERE ${filters}`,
+			filterParams
 		);
-		const total = countRes.rows[0]?.total ?? 0;
-		const totalPages = Math.ceil(total / PAGE_SIZE);
-
-		const rowsRes = await query<{ entry_date: string; corrected_text: string | null }>(
-			`SELECT cd.entry_date::text AS entry_date, cd.corrected_text
+		total = countRes.rows[0]?.total ?? 0;
+		const rowsRes = await query<{
+			entry_date: string;
+			corrected_text: string | null;
+			has_memory: boolean;
+			headline: null;
+		}>(
+			`SELECT cd.entry_date::text AS entry_date, cd.corrected_text,
+			        (cd.day_narrative IS NOT NULL AND btrim(cd.day_narrative) <> '') AS has_memory,
+			        NULL AS headline
 			   FROM calendar_days cd
-			  WHERE cd.correction_status = 'accepted'
-			    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-			    AND ($1::text IS NULL OR ${visibleTagExistsClause('cd.id', '$1')})
-			    AND ${entityExistsClause(3, 'person')}
-			    AND ${entityExistsClause(4, 'place')}
+			  WHERE ${filters}
 			  ORDER BY cd.entry_date DESC
-			  LIMIT $5 OFFSET $6`,
-			[tag, year, person, place, PAGE_SIZE, offset]
+			  LIMIT $6 OFFSET $7`,
+			[...filterParams, PAGE_SIZE, offset]
 		);
-
-		const results = rowsRes.rows.map((row) => ({
-			entryDate: row.entry_date,
-			dateLabel: formatHumanDate(row.entry_date),
-			segments: [{ text: fallbackSnippet(row.corrected_text ?? ''), highlight: false }] as SearchSegment[]
-		}));
-
-		return {
-			q: '',
-			year,
-			tag,
-			person,
-			place,
-			page: pageNum,
-			pageSize: PAGE_SIZE,
-			total,
-			totalPages,
-			results,
-			years,
-			tagOptions,
-			personOptions,
-			placeOptions,
-			searched: true
-		};
+		rows = rowsRes.rows;
+	} else {
+		// Best match first (Gaylon, mockup review 2026-11-07). The tsquery is
+		// parsed once per query, in a CTE (Phase B).
+		const countRes = await query<{ total: number }>(
+			`WITH parsed AS (SELECT websearch_to_tsquery('english', $6) AS tsq)
+			 SELECT COUNT(*)::int AS total
+			   FROM calendar_days cd, parsed p
+			  WHERE ${filters} AND cd.fts @@ p.tsq`,
+			[...filterParams, q]
+		);
+		total = countRes.rows[0]?.total ?? 0;
+		const rowsRes = await query<{
+			entry_date: string;
+			corrected_text: string | null;
+			has_memory: boolean;
+			headline: string;
+		}>(
+			`WITH parsed AS (SELECT websearch_to_tsquery('english', $6) AS tsq),
+			 matched AS (
+			   SELECT cd.entry_date, cd.corrected_text,
+			          (cd.day_narrative IS NOT NULL AND btrim(cd.day_narrative) <> '') AS has_memory,
+			          ts_rank(cd.fts, p.tsq) AS rank,
+			          ts_headline(
+			            'english',
+			            replace(coalesce(cd.corrected_text, '') || ' ' || coalesce(cd.day_narrative, ''), $9, $10),
+			            p.tsq,
+			            'StartSel=' || $9 || ', StopSel=' || $9 || ', MaxFragments=2, MinWords=10, MaxWords=30, ShortWord=3, HighlightAll=false'
+			          ) AS headline
+			     FROM calendar_days cd, parsed p
+			    WHERE ${filters} AND cd.fts @@ p.tsq
+			 )
+			 SELECT entry_date::text AS entry_date, corrected_text, has_memory, headline
+			   FROM matched
+			  ORDER BY rank DESC, entry_date ASC
+			  LIMIT $7 OFFSET $8`,
+			[...filterParams, q, PAGE_SIZE, offset, SENTINEL, SENTINEL_LOOKALIKE]
+		);
+		rows = rowsRes.rows;
 	}
 
-	// The tsquery is parsed exactly once per query call, in a CTE, and reused
-	// by both the count and the ranked/highlighted result set below —
-	// per Phase B of docs/2026-07-21-next-phases-search-viewer-narrative-plan.md.
-	// The accepted-day predicate is applied directly in both queries. The
-	// optional tag/year/person/place filters are all EXISTS clauses, same
-	// pattern, so a null value is a no-op.
-	const countRes = await query<{ total: number }>(
-		`WITH parsed AS (
-		   SELECT websearch_to_tsquery('english', $1) AS tsq
-		 )
-		 SELECT COUNT(*)::int AS total
-		   FROM calendar_days cd, parsed p
-		  WHERE cd.correction_status = 'accepted'
-		    AND cd.fts @@ p.tsq
-		    AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-		    AND ($3::text IS NULL OR ${visibleTagExistsClause('cd.id', '$3')})
-		    AND ${entityExistsClause(4, 'person')}
-		    AND ${entityExistsClause(5, 'place')}`,
-		[q, year, tag, person, place]
-	);
-	const total = countRes.rows[0]?.total ?? 0;
-	const totalPages = Math.ceil(total / PAGE_SIZE);
-
-	const rowsRes = await query<{
-		entry_date: string;
-		corrected_text: string | null;
-		headline: string;
-	}>(
-		`WITH parsed AS (
-		   SELECT websearch_to_tsquery('english', $1) AS tsq
-		 ),
-		 matched AS (
-		   SELECT cd.entry_date, cd.corrected_text,
-		          ts_rank(cd.fts, p.tsq) AS rank,
-		          ts_headline(
-		            'english',
-		            replace(coalesce(cd.corrected_text, '') || ' ' || coalesce(cd.day_narrative, ''), $8, $9),
-		            p.tsq,
-		            'StartSel=' || $8 || ', StopSel=' || $8 || ', MaxFragments=2, MinWords=10, MaxWords=30, ShortWord=3, HighlightAll=false'
-		          ) AS headline
-		     FROM calendar_days cd, parsed p
-		    WHERE cd.correction_status = 'accepted'
-		      AND cd.fts @@ p.tsq
-		      AND ($2::int IS NULL OR EXTRACT(YEAR FROM cd.entry_date)::int = $2)
-		      AND ($3::text IS NULL OR ${visibleTagExistsClause('cd.id', '$3')})
-		      AND ${entityExistsClause(4, 'person')}
-		      AND ${entityExistsClause(5, 'place')}
-		 )
-		 SELECT entry_date::text AS entry_date, corrected_text, headline
-		   FROM matched
-		  ORDER BY rank DESC, entry_date ASC
-		  LIMIT $6 OFFSET $7`,
-		[q, year, tag, person, place, PAGE_SIZE, offset, SENTINEL, SENTINEL_LOOKALIKE]
-	);
-
-	const results = rowsRes.rows.map((row) => {
-		const segments = buildSegments(row.headline);
-		const hasHighlight = segments.some((s) => s.highlight);
-		const finalSegments = hasHighlight
+	const chips = await getResultChips(rows.map((r) => r.entry_date));
+	const results: SearchResult[] = rows.map((row) => {
+		const segments = row.headline !== null ? buildSegments(row.headline) : [];
+		const finalSegments = segments.some((seg) => seg.highlight)
 			? segments
 			: [{ text: fallbackSnippet(row.corrected_text ?? ''), highlight: false }];
 		return {
 			entryDate: row.entry_date,
 			dateLabel: formatHumanDate(row.entry_date),
-			segments: finalSegments
+			segments: finalSegments,
+			hasMemory: row.has_memory,
+			chips: chips.get(row.entry_date) ?? []
 		};
 	});
 
 	return {
-		q,
-		year,
-		tag,
-		person,
-		place,
-		page: pageNum,
-		pageSize: PAGE_SIZE,
+		...base,
 		total,
-		totalPages,
+		totalPages: Math.ceil(total / PAGE_SIZE),
 		results,
-		years,
-		tagOptions,
-		personOptions,
-		placeOptions,
 		searched: true
 	};
 };
