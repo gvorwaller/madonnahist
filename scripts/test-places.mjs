@@ -16,12 +16,18 @@
 //     the worker role has no access to place_locations
 //   - only places with an accepted mention are looked up; generic and
 //     possessive names are never searched
-//   - auto (near home, or an obvious far place), several, needs_review,
-//     not_found, and the Utah/Florida choice by date
+//   - auto (near home; far away only towns/states/countries), several,
+//     needs_review, not_found, and the Utah/Florida choice by date
+//     (the rule's edge cases are in scripts/test-place-rules.ts)
+//   - rows decided by an older rule version are re-decided from their
+//     stored results on the next run, unless an admin decided them
 //   - place pages show Map / Apple Maps / Directions only for auto and
 //     confirmed locations
-//   - Use this, Search again, Looks right, Wrong place, No map and Undo
-//     work and write audit rows
+//   - Use this, Search again, Looks right, Wrong place, Don't show a map
+//     and Undo work and write audit rows
+//   - the map picker: its lookups are admin-only (search, dropped pin,
+//     tapped business), and "Save this location" sets a confirmed point,
+//     refusing bad input
 //   - a renamed place is looked up again, unless an admin decided it
 //
 // Usage: node scripts/test-places.mjs [baseUrl]   (or: npm run test:places)
@@ -88,6 +94,10 @@ const P = {
 	possessive: ['zqxmap-s-place', "Zqxmap's Place", 'fl'],
 	generic: ['zqxmap-the-mall', 'The Mall', 'fl'],
 	rename: ['zqxmap-old-name', 'Zqxmap Old Name', 'fl'],
+	oneword: ['zqxmapone', 'Zqxmapone', 'fl'],
+	trip: ['zqxmap-twin-city', 'Zqxmap Twin City', 'fl'],
+	stale: ['zqxmap-stale-chain', 'Zqxmap Stale Chain', 'fl'],
+	staleKept: ['zqxmap-stale-kept', 'Zqxmap Stale Kept', 'fl'],
 	pending: ['zqxmap-pending-place', 'Zqxmap Riverside Park Pending', 'pending']
 };
 const DAYS = { fl: '1907-04-10', ut: '1985-03-10', pending: '1907-04-11' };
@@ -221,6 +231,23 @@ async function main() {
 		const admin = await login(ADMIN_USERNAME);
 		const viewer = await login(VIEWER_USERNAME);
 
+		// Rows decided by rule v1 (before 2026-11-14): a chain shown by mistake,
+		// and the same mistake that an admin has since confirmed.
+		const JAX = { lat: 30.3322, lon: -81.6557 };
+		const chain = (name) => [
+			{ name, address: '1 A St, Jacksonville, FL', lat: JAX.lat + 0.02, lon: JAX.lon, placeId: 'stub-stale-1', types: ['restaurant'], score: 1 },
+			{ name, address: '2 B St, Jacksonville, FL', lat: JAX.lat + 0.021, lon: JAX.lon + 0.001, placeId: 'stub-stale-2', types: ['restaurant'], score: 1 }
+		];
+		for (const [key, decidedBy] of [['stale', null], ['staleKept', adminId]]) {
+			const c = chain(P[key][1]);
+			await pool.query(
+				`INSERT INTO place_locations (entity_id, status, lat, lon, google_place_id, matched_name, address, region,
+				   query, looked_up_name, score, candidates, decided_by, decided_at, rule_version)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, 'florida', $6, $6, 1, $8::jsonb, $9, CASE WHEN $9::int IS NULL THEN NULL ELSE NOW() END, 1)`,
+				[ids[key], decidedBy ? 'confirmed' : 'auto', c[0].lat, c[0].lon, c[0].placeId, P[key][1], c[0].address, JSON.stringify(c), decidedBy]
+			);
+		}
+
 		const get = async (cookie, url) => {
 			const res = await fetchNoRedirect(`${BASE_URL}${url}`, { headers: cookie ? { Cookie: cookie } : {} });
 			return { status: res.status, html: await res.text() };
@@ -284,7 +311,17 @@ async function main() {
 		record('chain / common name → no map (several)', r.burger?.status === 'no_location' && r.burger?.reason === 'several');
 		record('weaker match → needs a look', r.cove?.status === 'needs_review');
 		record('strong but far, ordinary kind → needs a look', r.outlet?.status === 'needs_review');
-		record('strong, far, obvious kind (vacation) → auto', r.falls?.status === 'auto');
+		record('strong, far natural feature → needs a look (only towns/states/countries far away)', r.falls?.status === 'needs_review');
+		record('far town with a two-word name (a trip) → auto', r.trip?.status === 'auto' && r.trip?.google_place_id === 'stub-twin');
+		record('one-word name matching part of a business name → needs a look', r.oneword?.status === 'needs_review');
+		const stale = await pool.query(`SELECT status, reason, rule_version, lat FROM place_locations WHERE entity_id = $1`, [ids.stale]);
+		record(
+			'old-rule automatic row is re-decided from stored results (chain → no map)',
+			stale.rows[0]?.status === 'no_location' && stale.rows[0]?.reason === 'several' && stale.rows[0]?.rule_version >= 2 && stale.rows[0]?.lat === null,
+			JSON.stringify(stale.rows[0])
+		);
+		const kept = await pool.query(`SELECT status, rule_version FROM place_locations WHERE entity_id = $1`, [ids.staleKept]);
+		record('old-rule row an admin decided is never re-decided', kept.rows[0]?.status === 'confirmed' && kept.rows[0]?.rule_version === 1, JSON.stringify(kept.rows[0]));
 		record('nothing found → no map (not_found)', r.nowhere?.status === 'no_location' && r.nowhere?.reason === 'not_found');
 		record('possessive name never searched → no map (general)', r.possessive?.status === 'no_location' && r.possessive?.reason === 'general' && r.possessive?.query === null);
 		record('generic word never searched → no map (general)', r.generic?.status === 'no_location' && r.generic?.reason === 'general' && r.generic?.query === null);
@@ -313,8 +350,8 @@ async function main() {
 		a = await act('again', { entity_id: id('riverside') });
 		record('Undo looks it up again (auto, shown)', a.type === 'success' && (await row('riverside')).status === 'auto' && hasLinks(await placePage('riverside')));
 
-		a = await act('confirm', { entity_id: id('falls') });
-		record('Looks right confirms an automatic match', a.type === 'success' && (await row('falls')).status === 'confirmed');
+		a = await act('confirm', { entity_id: id('canyon') });
+		record('Looks right confirms an automatic match', a.type === 'success' && (await row('canyon')).status === 'confirmed');
 		a = await act('confirm', { entity_id: id('outlet') });
 		record('Looks right on a non-automatic match is refused', a.type === 'failure');
 
@@ -324,10 +361,63 @@ async function main() {
 		a = await act('nomap', { entity_id: id('pending') });
 		record('actions on a place with no accepted day are refused', a.type === 'failure');
 
+		// ── Map picker ──
+		const locate = async (cookie, body) => {
+			const res = await fetchNoRedirect(`${BASE_URL}/admin/places/locate`, {
+				method: 'POST',
+				headers: { ...(cookie ? { Cookie: cookie } : {}), 'Content-Type': 'application/json', Origin: BASE_URL },
+				body: JSON.stringify(body)
+			});
+			let json = null;
+			try {
+				json = await res.json();
+			} catch {
+				/* not JSON */
+			}
+			return { status: res.status, json };
+		};
+		record('viewer cannot use the map lookups', (await locate(viewer, { entity_id: ids.riverside, q: 'zqxmap riverside park' })).status === 403);
+		let l = await locate(admin, { entity_id: ids.riverside, q: 'Zqxmap Riverside Park' });
+		record('picker search returns results', l.status === 200 && l.json?.results?.length === 1 && l.json.results[0].placeId === 'stub-riverside', JSON.stringify(l.json).slice(0, 120));
+		l = await locate(admin, { lat: 30.3, lon: -81.6 });
+		record('picker: dropped pin gets the nearest address', l.status === 200 && l.json?.spot?.address?.includes('Pin Rd'), JSON.stringify(l.json).slice(0, 120));
+		l = await locate(admin, { place_id: 'stub-tap_1' });
+		record('picker: tapped business is looked up by id', l.status === 200 && l.json?.spot?.name === 'Zqxmap Tapped Place');
+		l = await locate(admin, { place_id: 'bad id!' });
+		record('picker: malformed place id is refused', l.status === 400);
+		l = await locate(admin, { entity_id: ids.pending, q: 'anything' });
+		record('picker: search for a place with no accepted day is refused', l.status === 404);
+
+		a = await act('pin', { entity_id: id('nowhere'), lat: '30.35', lon: '-81.61', place_id: 'stub-pin', name: 'Zqxmap Pinned Spot', address: '2 Pin Rd, Jacksonville, FL, USA' });
+		const pinned = (await pool.query(`SELECT status, reason, lat, lon, google_place_id, matched_name, decided_by FROM place_locations WHERE entity_id = $1`, [ids.nowhere])).rows[0];
+		record(
+			'Save this location sets a confirmed point (from no map)',
+			a.type === 'success' && pinned?.status === 'confirmed' && pinned.reason === null && pinned.lat === 30.35 && pinned.google_place_id === 'stub-pin' && Number(pinned.decided_by) === adminId,
+			JSON.stringify(pinned)
+		);
+		record('pinned place page shows the map links', (await placePage('nowhere')).includes('query_place_id=stub-pin'));
+		a = await act('pin', { entity_id: id('riverside'), lat: '30.4', lon: '-81.5', place_id: '', name: '', address: '' });
+		const moved = (await pool.query(`SELECT status, lat, google_place_id, matched_name FROM place_locations WHERE entity_id = $1`, [ids.riverside])).rows[0];
+		record(
+			'a dropped pin with no Google id moves an automatic match',
+			a.type === 'success' && moved.status === 'confirmed' && moved.lat === 30.4 && moved.google_place_id === null && moved.matched_name === P.riverside[1],
+			JSON.stringify(moved)
+		);
+		a = await act('pin', { entity_id: id('generic'), lat: '30.31', lon: '-81.62', place_id: '', name: 'Zqxmap Mall Pin', address: '' });
+		record('a never-searched general name can still be pinned', a.type === 'success' && (await row('generic')).status === 'confirmed');
+		a = await act('pin', { entity_id: id('cove'), lat: '95', lon: '-81.6' });
+		record('a point off the map is refused', a.type === 'failure');
+		a = await act('pin', { entity_id: id('cove'), lat: '', lon: '' });
+		record('saving with no point is refused', a.type === 'failure');
+		a = await act('pin', { entity_id: id('cove'), lat: '30.3', lon: '-81.6', place_id: 'x"><script>' });
+		record('a malformed Google id is refused', a.type === 'failure');
+		a = await act('pin', { entity_id: id('pending'), lat: '30.3', lon: '-81.6' });
+		record('pinning a place with no accepted day is refused', a.type === 'failure');
+
 		const audits = (
 			await pool.query(`SELECT action FROM audit_log WHERE user_id = $1 AND entity_type = 'place_locations' ORDER BY id`, [adminId])
 		).rows.map((x) => x.action);
-		const want = ['place_lookup_run', 'place_location_search', 'place_location_choose', 'place_location_wrong', 'place_location_undo', 'place_location_confirm', 'place_location_no_map'];
+		const want = ['place_lookup_run', 'place_location_search', 'place_location_choose', 'place_location_wrong', 'place_location_undo', 'place_location_confirm', 'place_location_no_map', 'place_location_pin'];
 		record('each admin action writes an audit row', want.every((w) => audits.includes(w)), audits.join(','));
 
 		// ── Renames ──

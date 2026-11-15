@@ -1,5 +1,5 @@
 import { query } from '$lib/db';
-import { isGeocodeConfigured } from '$lib/server/geocode';
+import { getBrowserMapConfig, isGeocodeConfigured } from '$lib/server/geocode';
 import {
 	chooseCandidate,
 	confirmAuto,
@@ -11,7 +11,9 @@ import {
 	markNoMap,
 	markWrong,
 	runState,
+	regionCentre,
 	searchAgain,
+	setPin,
 	startLookups
 } from '$lib/server/places';
 import { error, fail } from '@sveltejs/kit';
@@ -27,6 +29,8 @@ import type { Actions, PageServerLoad } from './$types';
  */
 
 const MAX_QUERY = 200;
+const MAX_LABEL = 300;
+const PLACE_ID = /^[A-Za-z0-9_-]{1,300}$/;
 
 function requireAdmin(locals: App.Locals): number {
 	if (!locals.user || locals.user.role !== 'admin') error(403, 'Admin access required');
@@ -57,8 +61,20 @@ function entityIdFrom(data: FormData): number | null {
 export const load: PageServerLoad = async ({ locals, depends }) => {
 	requireAdmin(locals);
 	depends('admin:places');
-	const [rows, pending, configured] = await Promise.all([listForAdmin(), countPending(), isGeocodeConfigured()]);
-	return { rows, pending, configured, run: runState() };
+	const [rows, pending, configured, maps] = await Promise.all([
+		listForAdmin(),
+		countPending(),
+		isGeocodeConfigured(),
+		getBrowserMapConfig()
+	]);
+	return {
+		rows,
+		pending,
+		configured,
+		maps,
+		centres: { utah: regionCentre('utah'), florida: regionCentre('florida') },
+		run: runState()
+	};
 };
 
 /** Shared shape for the per-place actions: admin, a real actionable place, an audit row. */
@@ -147,6 +163,24 @@ export const actions: Actions = {
 						? `Nothing found for “${text}”`
 						: `${r.count} ${r.count === 1 ? 'match' : 'matches'} for “${text}”`
 			};
+		}),
+
+	// The map picker: a point chosen by search, a tapped business, or a dropped pin.
+	pin: ({ request, locals }) =>
+		onPlace(request, locals, async (place, data, userId) => {
+			const lat = Number(data.get('lat'));
+			const lon = Number(data.get('lon'));
+			const fail = (error: string) => ({ ok: false, action: '', message: '', error });
+			if (!data.get('lat') || !data.get('lon') || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+				return fail('Choose a spot on the map first.');
+			}
+			if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return fail('That point is not on the map.');
+			const placeId = String(data.get('place_id') ?? '').trim();
+			if (placeId && !PLACE_ID.test(placeId)) return fail('That place could not be saved.');
+			const name = String(data.get('name') ?? '').trim().slice(0, MAX_LABEL) || place.name;
+			const address = String(data.get('address') ?? '').trim().slice(0, MAX_LABEL);
+			await setPin(place, { lat, lon, placeId: placeId || null, name, address }, userId);
+			return { ok: true, action: 'place_location_pin', message: 'Location saved' };
 		}),
 
 	again: ({ request, locals }) =>

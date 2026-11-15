@@ -15,137 +15,31 @@
  */
 import { query } from '$lib/db';
 import { env } from '$env/dynamic/private';
-import { isGeocodeConfigured, isGeocodeStub, searchPlaces, type Candidate } from '$lib/server/geocode';
+import { isGeocodeConfigured, isGeocodeStub, searchPlaces } from '$lib/server/geocode';
+import {
+	CENTRES,
+	RULE_VERSION,
+	decide,
+	isGeneralName,
+	nameScore,
+	redecide,
+	type Candidate,
+	type Decision,
+	type LocationStatus,
+	type NoMapReason,
+	type Region,
+	type StoredCandidate
+} from '$lib/server/place-rules';
 
-export type Region = 'utah' | 'florida';
-export type LocationStatus = 'auto' | 'confirmed' | 'needs_review' | 'no_location';
-export type NoMapReason = 'general' | 'several' | 'not_found' | 'admin';
+export { decide, isGeneralName, nameScore };
+export type { Decision, LocationStatus, NoMapReason, Region, StoredCandidate };
 
-const CENTRES: Record<Region, { lat: number; lon: number }> = {
-	utah: { lat: 40.7608, lon: -111.891 }, // Salt Lake City
-	florida: { lat: 30.3322, lon: -81.6557 } // Jacksonville
-};
 const BIAS_RADIUS_M = 60_000;
-const NEAR_KM = 150;
-const STRONG = 0.8;
-const WEAK = 0.5;
-const SAME_SPOT_KM = 2;
 const GAP_MS = 250;
 
 /** Accepted-day predicate for the Utah years, as SQL over `cd.entry_date`. */
 const UTAH_DAYS = `(cd.entry_date BETWEEN DATE '1976-08-01' AND DATE '1979-05-31'
 	OR cd.entry_date BETWEEN DATE '1984-05-01' AND DATE '1986-05-31')`;
-
-// Kinds of place that are obvious wherever they are (cities, states, parks,
-// landmarks), so a far-away strong match is still trusted: vacations.
-const OBVIOUS_TYPES = new Set([
-	'locality',
-	'administrative_area_level_1',
-	'administrative_area_level_2',
-	'country',
-	'colloquial_area',
-	'natural_feature',
-	'park',
-	'national_park',
-	'amusement_park',
-	'tourist_attraction',
-	'university',
-	'zoo',
-	'museum',
-	'stadium'
-]);
-const AREA_TYPES = new Set(['locality', 'administrative_area_level_1', 'administrative_area_level_2', 'country', 'colloquial_area']);
-
-// Words that never identify one spot on their own.
-const GENERIC_WORDS = new Set([
-	'a', 'the', 'my', 'our', 'beach', 'house', 'home', 'mall', 'park', 'church', 'chapel', 'temple',
-	'library', 'school', 'store', 'stores', 'shop', 'work', 'office', 'seminary', 'hospital', 'doctor',
-	'dentist', 'lake', 'pool', 'gym', 'market', 'restaurant', 'ward', 'stake', 'center', 'centre',
-	'building', 'class', 'camp', 'cabin', 'farm', 'river', 'downtown', 'airport',
-	'station', 'apartment', 'apartments', 'motel', 'hotel', 'bank', 'post', 'gas', 'job', 'clinic',
-	'theater', 'theatre', 'movies', 'show', 'party', 'meeting', 'yard', 'garden', 'kitchen', 'cafeteria',
-	'institute', 'college', 'university', 'grocery', 'groceries', 'cemetery', 'mountains', 'mountain',
-	'canyon', 'zoo', 'museum', 'beach house', 'school house'
-]);
-
-function normalize(s: string): string {
-	return s
-		.normalize('NFKD')
-		.replace(/[̀-ͯ]/g, '')
-		.toLowerCase()
-		.replace(/&/g, ' and ')
-		.replace(/[’']/g, "'");
-}
-
-function tokens(s: string): string[] {
-	return normalize(s)
-		.replace(/'s\b/g, '')
-		.split(/[^a-z0-9]+/)
-		.filter((t) => t && t !== 'the');
-}
-
-/** Generic words or a possessive ("Grandma's", "Vorwaller's"): never looked up. */
-export function isGeneralName(name: string): boolean {
-	const n = normalize(name).trim();
-	if (/\w's\b/.test(n)) return true;
-	const t = n.split(/[^a-z0-9]+/).filter(Boolean);
-	if (t.length === 0) return true;
-	if (GENERIC_WORDS.has(t.join(' '))) return true;
-	return t.every((w) => GENERIC_WORDS.has(w));
-}
-
-/** 0..1: how much of the place name the candidate's name carries (trips backfill nameScore, simplified). */
-export function nameScore(placeName: string, candidateName: string): number {
-	const q = new Set(tokens(placeName));
-	const c = new Set(tokens(candidateName));
-	if (q.size === 0 || c.size === 0) return 0;
-	let shared = 0;
-	for (const t of q) if (c.has(t)) shared++;
-	return Math.round((0.8 * (shared / q.size) + 0.2 * (shared / c.size)) * 1000) / 1000;
-}
-
-function km(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-	const R = 6371;
-	const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-	const dLon = ((b.lon - a.lon) * Math.PI) / 180;
-	const s =
-		Math.sin(dLat / 2) ** 2 +
-		Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-	return 2 * R * Math.asin(Math.sqrt(s));
-}
-
-export interface StoredCandidate extends Candidate {
-	score: number;
-}
-
-export interface Decision {
-	status: LocationStatus;
-	reason: NoMapReason | null;
-	pick: StoredCandidate | null;
-	candidates: StoredCandidate[];
-}
-
-/** The automatic rule, given search results for a place. Pure, so it is easy to test. */
-export function decide(placeName: string, region: Region, found: Candidate[]): Decision {
-	const candidates = found
-		.map((c) => ({ ...c, score: nameScore(placeName, c.name) }))
-		.sort((a, b) => b.score - a.score);
-	const top = candidates[0];
-	if (!top || top.score < WEAK) return { status: 'no_location', reason: 'not_found', pick: null, candidates };
-	if (top.score >= STRONG) {
-		const isArea = top.types.some((t) => AREA_TYPES.has(t));
-		// A rival equally strong match somewhere else: a chain or a common name.
-		const rival =
-			!isArea &&
-			candidates.some((c) => c !== top && c.score >= STRONG && c.score >= top.score - 0.05 && km(c, top) > SAME_SPOT_KM);
-		if (rival) return { status: 'no_location', reason: 'several', pick: null, candidates };
-		const near = km(top, CENTRES[region]) <= NEAR_KM;
-		if (near || top.types.some((t) => OBVIOUS_TYPES.has(t))) {
-			return { status: 'auto', reason: null, pick: top, candidates };
-		}
-	}
-	return { status: 'needs_review', reason: null, pick: null, candidates };
-}
 
 // ── Reading ─────────────────────────────────────────────────────────────
 
@@ -170,7 +64,7 @@ export async function getShownLocation(canonicalId: number): Promise<PlaceLocati
 	return { lat: r.lat, lon: r.lon, placeId: r.google_place_id, name: r.matched_name ?? '', address: r.address ?? '' };
 }
 
-interface PendingPlace {
+export interface PendingPlace {
 	id: number;
 	name: string;
 	region: Region;
@@ -215,14 +109,15 @@ async function save(place: PendingPlace, d: Decision, queryText: string | null) 
 	await query(
 		`INSERT INTO place_locations
 		   (entity_id, status, reason, lat, lon, google_place_id, matched_name, address, region,
-		    query, looked_up_name, score, candidates, looked_up_at, decided_by, decided_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, NOW(), NULL, NULL)
+		    query, looked_up_name, score, candidates, looked_up_at, decided_by, decided_at, rule_version)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb, NOW(), NULL, NULL, $14)
 		 ON CONFLICT (entity_id) DO UPDATE SET
 		   status = EXCLUDED.status, reason = EXCLUDED.reason, lat = EXCLUDED.lat, lon = EXCLUDED.lon,
 		   google_place_id = EXCLUDED.google_place_id, matched_name = EXCLUDED.matched_name,
 		   address = EXCLUDED.address, region = EXCLUDED.region, query = EXCLUDED.query,
 		   looked_up_name = EXCLUDED.looked_up_name, score = EXCLUDED.score,
-		   candidates = EXCLUDED.candidates, looked_up_at = NOW(), decided_by = NULL, decided_at = NULL`,
+		   candidates = EXCLUDED.candidates, looked_up_at = NOW(), decided_by = NULL, decided_at = NULL,
+		   rule_version = EXCLUDED.rule_version`,
 		[
 			place.id,
 			d.status,
@@ -236,9 +131,61 @@ async function save(place: PendingPlace, d: Decision, queryText: string | null) 
 			queryText,
 			place.name,
 			d.pick?.score ?? d.candidates[0]?.score ?? null,
-			JSON.stringify(d.candidates)
+			JSON.stringify(d.candidates),
+			RULE_VERSION
 		]
 	);
+}
+
+/**
+ * Re-decide rows that an older version of the automatic rule decided, from
+ * their stored candidates: no Google calls. Admin decisions (decided_by
+ * set) are never touched. Returns how many rows changed status or match.
+ */
+export async function recheckOutdated(): Promise<number> {
+	const res = await query<{
+		entity_id: number;
+		looked_up_name: string;
+		region: Region | null;
+		status: LocationStatus;
+		reason: NoMapReason | null;
+		google_place_id: string | null;
+		candidates: Candidate[];
+	}>(
+		`SELECT entity_id, looked_up_name, region, status, reason, google_place_id, candidates
+		   FROM place_locations
+		  WHERE decided_by IS NULL AND rule_version < $1`,
+		[RULE_VERSION]
+	);
+	let changed = 0;
+	for (const r of res.rows) {
+		const d = redecide(r.looked_up_name, r.region ?? 'florida', r.candidates ?? []);
+		if (d.status !== r.status || d.reason !== r.reason || (d.pick?.placeId ?? null) !== r.google_place_id) changed++;
+		// decided_by IS NULL again in the WHERE: an admin decision made since the SELECT wins.
+		await query(
+			`UPDATE place_locations
+			    SET status = $2, reason = $3, lat = $4, lon = $5, google_place_id = $6, matched_name = $7,
+			        address = $8, score = $9, candidates = $10::jsonb, rule_version = $11
+			  WHERE entity_id = $1 AND decided_by IS NULL`,
+			[
+				r.entity_id,
+				d.status,
+				d.reason,
+				d.pick?.lat ?? null,
+				d.pick?.lon ?? null,
+				d.pick?.placeId ?? null,
+				d.pick?.name ?? null,
+				d.pick?.address ?? null,
+				d.pick?.score ?? d.candidates[0]?.score ?? null,
+				JSON.stringify(d.candidates),
+				RULE_VERSION
+			]
+		);
+	}
+	if (res.rows.length > 0) {
+		console.log(`[PLACES] re-checked ${res.rows.length} automatic decisions under rule v${RULE_VERSION}: ${changed} changed`);
+	}
+	return changed;
 }
 
 /** Look up one place and store the automatic decision. Returns an error message, or null. */
@@ -286,7 +233,9 @@ export function runState(): RunState {
  * key is configured.
  */
 export async function startLookups(limit: number | null = null): Promise<boolean> {
-	if (state.running || !(await isGeocodeConfigured())) return false;
+	if (state.running) return false;
+	await recheckOutdated();
+	if (!(await isGeocodeConfigured())) return false;
 	const places = await pendingPlaces(limit);
 	Object.assign(state, {
 		running: true,
@@ -336,6 +285,8 @@ export function startPlaceLookupTimer(): void {
 	const tick = () => {
 		startLookups(25).catch((e) => console.error('[PLACES] hourly lookup failed', e));
 	};
+	// Re-check old automatic decisions right away (no Google calls), then look up hourly.
+	recheckOutdated().catch((e) => console.error('[PLACES] re-check failed', e));
 	setTimeout(tick, 5 * 60_000).unref();
 	timer = setInterval(tick, 60 * 60_000);
 	timer.unref();
@@ -497,6 +448,39 @@ export async function confirmAuto(entityId: number, userId: number): Promise<boo
 		[entityId, userId]
 	);
 	return (res.rowCount ?? 0) > 0;
+}
+
+export interface PinnedLocation {
+	lat: number;
+	lon: number;
+	placeId: string | null;
+	name: string;
+	address: string;
+}
+
+/** Set the location by hand (the map picker): confirmed, shown. Works whether or not the place was looked up. */
+export async function setPin(place: PendingPlace, pin: PinnedLocation, userId: number): Promise<void> {
+	await query(
+		`INSERT INTO place_locations
+		   (entity_id, status, reason, lat, lon, google_place_id, matched_name, address, region,
+		    looked_up_name, score, decided_by, decided_at, rule_version)
+		 VALUES ($1, 'confirmed', NULL, $2, $3, $4, $5, $6, $7, $8, NULL, $9, NOW(), $10)
+		 ON CONFLICT (entity_id) DO UPDATE SET
+		   status = 'confirmed', reason = NULL, lat = EXCLUDED.lat, lon = EXCLUDED.lon,
+		   google_place_id = EXCLUDED.google_place_id, matched_name = EXCLUDED.matched_name,
+		   address = EXCLUDED.address, score = NULL, decided_by = EXCLUDED.decided_by, decided_at = NOW()`,
+		[place.id, pin.lat, pin.lon, pin.placeId, pin.name, pin.address, place.region, place.name, userId, RULE_VERSION]
+	);
+}
+
+/** Search for the map picker: up to ten results, biased toward the place's home area. */
+export async function searchForPicker(place: PendingPlace, text: string) {
+	const centre = CENTRES[place.region];
+	return searchPlaces(text, { ...centre, radiusM: BIAS_RADIUS_M }, 10);
+}
+
+export function regionCentre(region: Region): { lat: number; lon: number } {
+	return CENTRES[region];
 }
 
 export async function markNoMap(entityId: number, userId: number): Promise<boolean> {

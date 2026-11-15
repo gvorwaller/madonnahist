@@ -12,22 +12,19 @@
  * MADONNAHIST_LLM_STUB, it must be set before the server process starts.
  */
 import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import { credentialService } from '$lib/credentials';
 
-export interface Candidate {
-	name: string;
-	address: string;
-	lat: number;
-	lon: number;
-	placeId: string | null;
-	types: string[];
-}
+import type { Candidate } from '$lib/server/place-rules';
+
+export type { Candidate };
 
 export type SearchResult =
 	| { ok: true; candidates: Candidate[] }
 	| { ok: false; error: string };
 
 const MAX_CANDIDATES = 5;
+const MAX_PICKER_RESULTS = 10;
 const TIMEOUT_MS = 10_000;
 
 export function isGeocodeStub(): boolean {
@@ -52,11 +49,13 @@ export async function isGeocodeConfigured(): Promise<boolean> {
  */
 export async function searchPlaces(
 	text: string,
-	near: { lat: number; lon: number; radiusM: number }
+	near: { lat: number; lon: number; radiusM: number },
+	limit = MAX_CANDIDATES
 ): Promise<SearchResult> {
+	const max = Math.min(Math.max(1, limit), MAX_PICKER_RESULTS);
 	const q = text.trim().slice(0, 200);
 	if (!q) return { ok: true, candidates: [] };
-	if (isGeocodeStub()) return { ok: true, candidates: stubSearch(q) };
+	if (isGeocodeStub()) return { ok: true, candidates: stubSearch(q).slice(0, max) };
 
 	const key = await getKey();
 	if (!key) return { ok: false, error: 'No Google key configured' };
@@ -105,9 +104,93 @@ export async function searchPlaces(
 			placeId: r.place_id ?? null,
 			types: r.types ?? []
 		});
-		if (candidates.length >= MAX_CANDIDATES) break;
+		if (candidates.length >= max) break;
 	}
 	return { ok: true, candidates };
+}
+
+// ── Map picker: what is at a point, and one place by id ─────────────────
+
+export interface Spot {
+	name: string;
+	address: string;
+	lat: number;
+	lon: number;
+	placeId: string | null;
+}
+
+export type SpotResult = { ok: true; spot: Spot | null } | { ok: false; error: string };
+
+async function googleJson(url: string): Promise<{ ok: true; data: Record<string, unknown> } | { ok: false; error: string }> {
+	try {
+		const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+		if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+		return { ok: true, data: (await res.json()) as Record<string, unknown> };
+	} catch (e) {
+		return { ok: false, error: e instanceof Error ? e.message : 'request failed' };
+	}
+}
+
+function statusError(data: Record<string, unknown>): string | null {
+	const status = typeof data.status === 'string' ? data.status : 'unknown';
+	if (status === 'OK' || status === 'ZERO_RESULTS') return null;
+	return `${status}${typeof data.error_message === 'string' ? `: ${data.error_message}` : ''}`;
+}
+
+/** The street address nearest a dropped pin (Geocoding API). The pin keeps its own point. */
+export async function reverseGeocode(lat: number, lon: number): Promise<SpotResult> {
+	if (isGeocodeStub()) {
+		return { ok: true, spot: { name: 'Zqxmap Dropped Pin', address: '2 Pin Rd, Jacksonville, FL, USA', lat, lon, placeId: 'stub-pin' } };
+	}
+	const key = await getKey();
+	if (!key) return { ok: false, error: 'No Google key configured' };
+	const params = new URLSearchParams({ latlng: `${lat},${lon}`, key });
+	const r = await googleJson(`https://maps.googleapis.com/maps/api/geocode/json?${params}`);
+	if (!r.ok) return r;
+	const err = statusError(r.data);
+	if (err) return { ok: false, error: err };
+	const first = (r.data.results as Array<{ formatted_address?: string; place_id?: string }> | undefined)?.[0];
+	if (!first?.formatted_address) return { ok: true, spot: null };
+	const address = first.formatted_address;
+	return { ok: true, spot: { name: address.split(',')[0].trim(), address, lat, lon, placeId: first.place_id ?? null } };
+}
+
+/** One place by Google id: what the picker uses when a business on the map is tapped. */
+export async function placeDetails(placeId: string): Promise<SpotResult> {
+	if (isGeocodeStub()) {
+		return { ok: true, spot: { name: 'Zqxmap Tapped Place', address: '3 Tap Ave, Jacksonville, FL, USA', lat: 30.34, lon: -81.64, placeId } };
+	}
+	const key = await getKey();
+	if (!key) return { ok: false, error: 'No Google key configured' };
+	const params = new URLSearchParams({ place_id: placeId, fields: 'name,formatted_address,geometry,place_id', key });
+	const r = await googleJson(`https://maps.googleapis.com/maps/api/place/details/json?${params}`);
+	if (!r.ok) return r;
+	const err = statusError(r.data);
+	if (err) return { ok: false, error: err };
+	const p = r.data.result as
+		| { name?: string; formatted_address?: string; place_id?: string; geometry?: { location?: { lat?: number; lng?: number } } }
+		| undefined;
+	const lat = p?.geometry?.location?.lat;
+	const lon = p?.geometry?.location?.lng;
+	if (!p || typeof lat !== 'number' || typeof lon !== 'number') return { ok: true, spot: null };
+	return {
+		ok: true,
+		spot: { name: p.name ?? p.formatted_address ?? '', address: p.formatted_address ?? '', lat, lon, placeId: p.place_id ?? placeId }
+	};
+}
+
+/**
+ * The browser map key and map id for the admin picker: the same shared
+ * key trips/birds/gaylonphotos use (Google restricts it by website).
+ * private_data.api_credentials ('google_maps', 'BROWSER_KEY' / 'MAP_ID'),
+ * else env PUBLIC_GOOGLE_MAPS_API_KEY / PUBLIC_GOOGLE_MAPS_MAP_ID.
+ */
+export async function getBrowserMapConfig(): Promise<{ key: string; mapId: string } | null> {
+	const key =
+		(await credentialService.getCredential('google_maps', 'BROWSER_KEY')) || publicEnv.PUBLIC_GOOGLE_MAPS_API_KEY || '';
+	if (!key) return null;
+	const mapId = (await credentialService.getCredential('google_maps', 'MAP_ID')) || publicEnv.PUBLIC_GOOGLE_MAPS_MAP_ID || '';
+	return { key, mapId };
 }
 
 // ── Test stub ────────────────────────────────────────────────────────────
@@ -145,6 +228,12 @@ const STUB_RESULTS: Record<string, Candidate[]> = {
 	],
 	'zqxmap falls': [
 		c('Zqxmap Falls', { lat: 44.42, lon: -110.58 }, 0, 0, ['natural_feature'], 'Wyoming, USA', 'stub-falls')
+	],
+	'zqxmapone': [
+		c('Zqxmapone Billiards', JAX, 0.02, 0.01, ['establishment', 'point_of_interest'], '4 Cue St, Jacksonville, FL, USA', 'stub-one')
+	],
+	'zqxmap twin city': [
+		c('Zqxmap Twin City', { lat: 42.56, lon: -114.46 }, 0, 0, ['locality', 'political'], 'Zqxmap Twin City, ID, USA', 'stub-twin')
 	],
 	'zqxmap renamed spot': [
 		c('Zqxmap Renamed Spot', JAX, 0.02, -0.02, ['point_of_interest'], 'Jacksonville, FL, USA', 'stub-renamed')

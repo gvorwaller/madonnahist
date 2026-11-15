@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidate } from '$app/navigation';
 	import { googleMapsLink } from '$lib/viewer/maplinks';
+	import LocationPicker from './LocationPicker.svelte';
 	import type { SubmitFunction } from '@sveltejs/kit';
 
 	const { data, form } = $props();
@@ -23,6 +24,8 @@
 	let busy = $state(false);
 	let message = $state('');
 	let failure = $state('');
+	let picking = $state<number | null>(null);
+	const pickingRow = $derived(picking === null ? null : (data.rows.find((r) => r.entityId === picking) ?? null));
 
 	const counts = $derived(Object.fromEntries(TABS.map((t) => [t.id, data.rows.filter(t.test).length])));
 	const shown = $derived.by(() => {
@@ -35,7 +38,7 @@
 		general: 'A general word or someone’s name, so it was never looked up',
 		several: 'Several places share this name (a chain or a common name)',
 		not_found: 'Nothing close was found',
-		admin: 'You chose no map'
+		admin: 'You chose not to show a map'
 	};
 	const regionLabel = (r: Row) => (r.region === 'utah' ? 'Utah years' : r.region === 'florida' ? 'Florida years' : '');
 	const pct = (n: number | null) => (n === null ? '' : `${Math.round(n * 100)}% name match`);
@@ -92,6 +95,9 @@
 				</button>
 			</form>
 			<p class="note">New places are also looked up automatically every hour.</p>
+			{#if !data.maps}
+				<p class="note">The map for setting a location by hand needs the browser map key.</p>
+			{/if}
 			{#if data.run.finishedAt && data.run.total > 0}
 				<p class="note">
 					Last run: {data.run.done} looked up{data.run.failed ? `, ${data.run.failed} failed (${data.run.lastError})` : ''}.
@@ -173,6 +179,11 @@
 					{/if}
 
 					<div class="actions">
+						{#if data.maps}
+							<button type="button" class="btn" disabled={busy} onclick={() => (picking = r.entityId)}>
+								{r.status === 'auto' || r.status === 'confirmed' ? 'Change on map' : 'Find on map'}
+							</button>
+						{/if}
 						{#if r.status === 'auto'}
 							<form method="POST" action="/admin/places?/confirm" use:enhance={submit}>
 								<input type="hidden" name="entity_id" value={r.entityId} />
@@ -188,7 +199,7 @@
 						{#if !(r.status === 'no_location' && r.reason === 'admin')}
 							<form method="POST" action="/admin/places?/nomap" use:enhance={submit}>
 								<input type="hidden" name="entity_id" value={r.entityId} />
-								<button type="submit" class="btn" disabled={busy}>No map for this place</button>
+								<button type="submit" class="btn" disabled={busy}>Don’t show a map</button>
 							</form>
 						{/if}
 						{#if r.status !== null}
@@ -217,6 +228,19 @@
 		</ul>
 	{/if}
 </div>
+
+{#if pickingRow && data.maps}
+	<LocationPicker
+		place={pickingRow}
+		maps={data.maps}
+		centre={data.centres[pickingRow.region ?? 'florida']}
+		onclose={() => (picking = null)}
+		onsaved={(m) => {
+			message = m;
+			failure = '';
+		}}
+	/>
+{/if}
 
 <style>
 	.page {
