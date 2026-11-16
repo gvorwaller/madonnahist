@@ -27,6 +27,11 @@
 //   - returnTo keeps the query; evil returnTo values fall back to landing
 //   - About text: default, admin edit, reset; viewer can't edit
 //   - "Your name": rename saves + audits; blank refused
+//   - "Your password": wrong/blank current, mismatch, too short and same
+//     password refused with nothing changed; success keeps this device
+//     signed in (new session), signs other devices out, retires the old
+//     password, cancels an open link, audits without secrets; 6th try in
+//     15 min answers 429, and new-password typos don't use up tries
 //
 // Usage: node scripts/test-invites.mjs [baseUrl]   (or: npm run test:invites)
 
@@ -89,8 +94,11 @@ const INVITEES = [
 	'_inv_reissue',
 	'_inv_expired',
 	'_inv_limit',
-	'_inv_reset'
+	'_inv_reset',
+	'_inv_pw'
 ];
+const PW_LIMIT_USERNAME = '_inv_pwlimit';
+const CHANGED_PASSWORD = 'ChangedPass!2026';
 const ARGON2_OPTS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const ABOUT_MARKER = 'QVABOUTMARKER';
 
@@ -176,7 +184,7 @@ async function action(url, fields, cookie) {
 	} catch {
 		// not JSON (e.g. hooks 403 text)
 	}
-	return { httpStatus: res.status, json, text };
+	return { httpStatus: res.status, json, text, setCookie: sessionCookie(res)?.cookie ?? null };
 }
 
 const TOKEN_IN = /\/invite\/([A-Za-z0-9_-]{43})/;
@@ -234,7 +242,7 @@ async function main() {
 		password: process.env.PGPASSWORD,
 		database: process.env.PGDATABASE
 	});
-	const everyone = [ADMIN_USERNAME, VIEWER_USERNAME, ...INVITEES];
+	const everyone = [ADMIN_USERNAME, VIEWER_USERNAME, PW_LIMIT_USERNAME, ...INVITEES];
 	const aboutBefore = (await pool.query(`SELECT value FROM app_state WHERE key = 'viewer_about'`))
 		.rows[0]?.value;
 
@@ -825,6 +833,168 @@ async function main() {
 					(st.html.includes('No year stories yet') || st.html.includes('class="v-fold decade'))
 			);
 		}
+		// ── Your password ──
+		{
+			// A viewer created by invite (so a link is still open), then given a
+			// known password and signed in on two devices.
+			const inv = await adminInvite(admin, '_inv_pw', 'Password Tester');
+			const pwId = (await pool.query(`SELECT id FROM users WHERE username = '_inv_pw'`)).rows[0]
+				?.id;
+			record('password: test viewer invited', !!inv.token && !!pwId);
+			await pool.query(`UPDATE users SET password_hash = $2 WHERE id = $1`, [
+				pwId,
+				await argon2.hash(TEST_PASSWORD, ARGON2_OPTS)
+			]);
+			const devA = await loginCookie('_inv_pw');
+			const devB = await loginCookie('_inv_pw');
+			const hashOf = async () =>
+				(await pool.query(`SELECT password_hash FROM users WHERE id = $1`, [pwId])).rows[0]
+					.password_hash;
+			const hash0 = await hashOf();
+			const change = (fields, cookie = devA) => action('/app/account?/password', fields, cookie);
+			const good = {
+				currentPassword: TEST_PASSWORD,
+				newPassword: CHANGED_PASSWORD,
+				confirmPassword: CHANGED_PASSWORD
+			};
+
+			const page = await getPage('/app/account', devA);
+			record(
+				'password: account page has the form (current + new-password fields)',
+				page.status === 200 &&
+					page.html.includes('Change your password') &&
+					page.html.includes('action="/app/account?/password"') &&
+					page.html.includes('autocomplete="current-password"') &&
+					page.html.includes('autocomplete="new-password"') &&
+					page.html.includes('autocomplete="username"')
+			);
+
+			const signedOut = await action('/app/account?/password', good);
+			record(
+				'password: signed out is refused',
+				signedOut.httpStatus === 401 || signedOut.httpStatus === 303,
+				String(signedOut.httpStatus)
+			);
+			const blank = await change({ ...good, currentPassword: '' });
+			record(
+				'password: blank current refused',
+				blank.json?.status === 400 && blank.text.includes('current password')
+			);
+			const mismatch = await change({ ...good, confirmPassword: 'Different!2026' });
+			record(
+				'password: mismatch refused',
+				mismatch.json?.status === 400 && mismatch.text.includes("don't match")
+			);
+			const short = await change({ ...good, newPassword: 'short', confirmPassword: 'short' });
+			record(
+				'password: under 8 characters refused',
+				short.json?.status === 400 && short.text.includes('at least 8')
+			);
+			const wrong = await change({ ...good, currentPassword: 'NotMine!2026' });
+			record(
+				'password: wrong current refused',
+				wrong.json?.status === 400 && wrong.text.includes("isn't your current")
+			);
+			const same = await change({
+				...good,
+				newPassword: TEST_PASSWORD,
+				confirmPassword: TEST_PASSWORD
+			});
+			record(
+				'password: same as current refused',
+				same.json?.status === 400 && same.text.includes('same as your current')
+			);
+			record('password: refusals changed nothing', (await hashOf()) === hash0);
+
+			const ok = await change(good);
+			record('password: change succeeds', ok.json?.type === 'success', ok.text.slice(0, 200));
+			const hash1 = await hashOf();
+			record(
+				'password: hash changed and is argon2id',
+				hash1 !== hash0 && hash1.startsWith('$argon2id$')
+			);
+			const newA = ok.setCookie;
+			record(
+				'password: this device gets a new session cookie',
+				!!newA && newA !== devA,
+				newA ? 'set' : 'none'
+			);
+			if (newA) {
+				const still = await getPage('/app/account', newA);
+				record('password: this device stays signed in', still.status === 200, String(still.status));
+			}
+			const oldA = await getPage('/app/account', devA);
+			const otherB = await getPage('/app/account', devB);
+			record(
+				'password: old session on this device is retired',
+				oldA.status === 303,
+				String(oldA.status)
+			);
+			record('password: other device is signed out', otherB.status === 303, String(otherB.status));
+			const oldLogin = await login('_inv_pw', TEST_PASSWORD);
+			record(
+				'password: old password no longer signs in',
+				!sessionCookie(oldLogin),
+				String(oldLogin.status)
+			);
+			const newLogin = await login('_inv_pw', CHANGED_PASSWORD);
+			record(
+				'password: new password signs in',
+				newLogin.status === 303 && !!sessionCookie(newLogin),
+				String(newLogin.status)
+			);
+			const link = (
+				await pool.query(`SELECT revoked_at FROM user_invites WHERE user_id = $1`, [pwId])
+			).rows;
+			record('password: open invite link cancelled', link.length === 1 && !!link[0].revoked_at);
+			const audits = (
+				await pool.query(
+					`SELECT * FROM audit_log WHERE action = 'password_change' AND entity_id = $1`,
+					[pwId]
+				)
+			).rows;
+			const auditText = JSON.stringify(audits);
+			record(
+				'password: change audited once, without the password or hash',
+				audits.length === 1 &&
+					audits[0].user_id === pwId &&
+					!auditText.includes(CHANGED_PASSWORD) &&
+					!auditText.includes(TEST_PASSWORD) &&
+					!auditText.includes('$argon2'),
+				String(audits.length)
+			);
+
+			// Tries limit: typos in the new password are free; wrong current
+			// passwords count, and the 6th try in the window answers 429.
+			await provisionUser(pool, PW_LIMIT_USERNAME, 'viewer');
+			const lim = await loginCookie(PW_LIMIT_USERNAME);
+			const limTry = (fields) =>
+				action('/app/account?/password', { ...good, ...fields }, lim);
+			let typoOk = true;
+			for (let i = 0; i < 3; i++) {
+				const t = await limTry({ confirmPassword: 'Nope!20260' });
+				typoOk &&= t.json?.status === 400;
+			}
+			let wrongOk = true;
+			for (let i = 0; i < 5; i++) {
+				const t = await limTry({ currentPassword: `Wrong!${i}2026` });
+				wrongOk &&= t.json?.status === 400 && t.text.includes("isn't your current");
+			}
+			record('password: 3 typos then 5 wrong tries each answer 400', typoOk && wrongOk);
+			const sixth = await limTry({});
+			record(
+				'password: 6th try (even the right password) answers 429',
+				sixth.json?.status === 429 && sixth.text.includes('wait 15 minutes'),
+				String(sixth.json?.status)
+			);
+			const limHash = (
+				await pool.query(`SELECT password_hash FROM users WHERE username = $1`, [
+					PW_LIMIT_USERNAME
+				])
+			).rows[0].password_hash;
+			record('password: limited account unchanged', await argon2.verify(limHash, TEST_PASSWORD));
+		}
+
 		void joCookie;
 	} finally {
 		try {
