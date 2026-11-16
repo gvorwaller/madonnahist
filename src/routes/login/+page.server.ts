@@ -60,7 +60,8 @@ export const actions: Actions = {
 		}
 
 		const ok = await verifyPassword(user.password_hash, password);
-		if (!ok) {
+		// A removed account gets the same answer as a wrong password.
+		if (!ok || user.removed_at) {
 			return fail(401, { username, error: 'Username or password is incorrect.', returnTo });
 		}
 

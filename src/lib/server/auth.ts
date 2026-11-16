@@ -27,11 +27,12 @@ export interface DbUser {
 	role: 'admin' | 'corrector' | 'viewer';
 	password_hash: string;
 	last_login_at: string | null;
+	removed_at: string | null;
 }
 
 export async function findUserByUsername(username: string): Promise<DbUser | null> {
 	const res = await query<DbUser>(
-		`SELECT id, username, display_name, role, password_hash, last_login_at
+		`SELECT id, username, display_name, role, password_hash, last_login_at, removed_at::text
 		   FROM users WHERE username = $1`,
 		[username]
 	);

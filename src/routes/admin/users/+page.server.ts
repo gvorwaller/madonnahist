@@ -31,27 +31,57 @@ interface UserRow {
 	role: Role;
 	created_at: string;
 	last_login_at: string | null;
+	removed_at: string | null;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 	const usersRes = await query<UserRow>(
-		`SELECT id, username, display_name, role, created_at::text, last_login_at::text
+		`SELECT id, username, display_name, role, created_at::text, last_login_at::text,
+		        removed_at::text
 		   FROM users ORDER BY role, username`
 	);
 	const invites = await outstandingInvites();
+	const selfId = Number(locals.user!.id);
+	const activeAdmins = usersRes.rows.filter((u) => u.role === 'admin' && !u.removed_at).length;
+	const rows = usersRes.rows.map((u) => {
+		const inv = invites.get(u.id);
+		return {
+			...u,
+			isSelf: u.id === selfId,
+			// Invites are onboarding only: a viewer who has never signed in.
+			canInvite: !u.removed_at && u.role === 'viewer' && u.last_login_at === null,
+			invite: inv && !u.removed_at ? { expiresAt: inv.expiresAt, expired: inv.expired } : null,
+			// Mirrors the server guards in removeAccess (never yourself, never
+			// the last admin who can still sign in).
+			canRemove: u.id !== selfId && !(u.role === 'admin' && activeAdmins <= 1)
+		};
+	});
 	return {
-		users: usersRes.rows.map((u) => {
-			const inv = invites.get(u.id);
-			return {
-				...u,
-				// Invites are onboarding only: a viewer who has never signed in.
-				canInvite: u.role === 'viewer' && u.last_login_at === null,
-				invite: inv ? { expiresAt: inv.expiresAt, expired: inv.expired } : null
-			};
-		})
+		users: rows.filter((u) => !u.removed_at),
+		removed: rows.filter((u) => u.removed_at)
 	};
 };
+
+const ACTIVE_ADMIN_SQL = `SELECT id FROM users WHERE role = 'admin' AND removed_at IS NULL ORDER BY id FOR UPDATE`;
+
+// What a refused permanent delete was blocked by, in plain words. The
+// database decides (FK NO ACTION from each content table); this only names it.
+const CONTENT_WORDS: Record<string, string> = {
+	day_corrections: 'corrections',
+	calendar_days: 'corrected days',
+	correction_sessions: 'correction sessions',
+	crop_templates: 'crop templates',
+	notation_key: 'shorthand entries',
+	tag_vocabulary: 'tag decisions',
+	adhoc_narratives: 'saved stories',
+	pdf_exports: 'PDFs',
+	place_locations: 'place map decisions'
+};
+
+function isFkViolation(err: unknown): err is { code: string; table?: string } {
+	return !!err && typeof err === 'object' && 'code' in err && err.code === '23503';
+}
 
 // Usernames are what people type to sign in: keep them simple.
 const USERNAME_RE = /^[a-z0-9_][a-z0-9._-]{1,31}$/;
@@ -64,12 +94,19 @@ async function lockInvitable(
 	client: pg.PoolClient,
 	userId: number
 ): Promise<{ username: string } | { error: string; status: number }> {
-	const res = await client.query<{ username: string; role: string; last_login_at: string | null }>(
-		`SELECT username, role, last_login_at::text FROM users WHERE id = $1 FOR UPDATE`,
+	const res = await client.query<{
+		username: string;
+		role: string;
+		last_login_at: string | null;
+		removed: boolean;
+	}>(
+		`SELECT username, role, last_login_at::text, removed_at IS NOT NULL AS removed
+		   FROM users WHERE id = $1 FOR UPDATE`,
 		[userId]
 	);
 	const u = res.rows[0];
 	if (!u) return { error: 'User not found', status: 404 };
+	if (u.removed) return { error: `"${u.username}" has no access. Restore it first.`, status: 409 };
 	if (u.role !== 'viewer') return { error: 'Invite links are only for family (viewer) accounts', status: 400 };
 	if (u.last_login_at)
 		return {
@@ -261,10 +298,13 @@ export const actions: Actions = {
 			return fail(400, { error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
 		}
 
-		const before = await query<{ username: string; role: string }>(
-			`SELECT username, role FROM users WHERE id = $1`, [targetId]
+		const before = await query<{ username: string; role: string; removed: boolean }>(
+			`SELECT username, role, removed_at IS NOT NULL AS removed FROM users WHERE id = $1`, [targetId]
 		);
 		if (!before.rows[0]) return fail(404, { error: 'User not found' });
+		if (before.rows[0].removed) {
+			return fail(409, { error: `"${before.rows[0].username}" has no access. Restore it first.` });
+		}
 
 		const newHash = await hashPassword(newPassword);
 
@@ -291,5 +331,139 @@ export const actions: Actions = {
 			cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
 			redirect(303, '/login');
 		}
+	},
+
+	// Remove access: the account stays (everything they added keeps their
+	// name) but can't sign in. Reversible with restoreAccess.
+	removeAccess: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const adminId = Number(locals.user!.id);
+		const targetId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(targetId)) return fail(400, { error: 'Invalid user ID' });
+		if (targetId === adminId) return fail(400, { error: "You can't remove your own access." });
+
+		type Outcome = { ok: true } | { error: string; status: number };
+		const result = await withTransaction(async (client): Promise<Outcome> => {
+			// Lock every active admin first (same order for every caller), so
+			// two admins removing each other can't leave none.
+			const admins = (await client.query<{ id: number }>(ACTIVE_ADMIN_SQL)).rows;
+			const u = (
+				await client.query<{ username: string; display_name: string; role: string; removed: boolean }>(
+					`SELECT username, display_name, role, removed_at IS NOT NULL AS removed
+					   FROM users WHERE id = $1 FOR UPDATE`,
+					[targetId]
+				)
+			).rows[0];
+			if (!u) return { error: 'User not found', status: 404 };
+			if (u.removed) return { error: `"${u.username}" already has no access.`, status: 409 };
+			if (u.role === 'admin' && admins.length <= 1) {
+				return { error: "That's the last admin who can sign in.", status: 409 };
+			}
+			await client.query(`UPDATE users SET removed_at = NOW(), removed_by = $2 WHERE id = $1`, [
+				targetId,
+				adminId
+			]);
+			await client.query(`DELETE FROM sessions WHERE user_id = $1`, [targetId]);
+			await revokeInvite(client, targetId);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, 'user_remove', 'users', $2, $3::jsonb, NULL, $4)`,
+				[
+					adminId,
+					targetId,
+					JSON.stringify({ username: u.username, display_name: u.display_name, role: u.role }),
+					`Removed access for "${u.username}" (${u.role}); signed out everywhere`
+				]
+			);
+			return { ok: true };
+		});
+		if ('error' in result) return fail(result.status, { error: result.error });
+		return { removed: true };
+	},
+
+	restoreAccess: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const adminId = Number(locals.user!.id);
+		const targetId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(targetId)) return fail(400, { error: 'Invalid user ID' });
+
+		type Outcome = { ok: true } | { error: string; status: number };
+		const result = await withTransaction(async (client): Promise<Outcome> => {
+			const u = (
+				await client.query<{ username: string; role: string; removed: boolean }>(
+					`SELECT username, role, removed_at IS NOT NULL AS removed FROM users WHERE id = $1 FOR UPDATE`,
+					[targetId]
+				)
+			).rows[0];
+			if (!u) return { error: 'User not found', status: 404 };
+			if (!u.removed) return { error: `"${u.username}" already has access.`, status: 409 };
+			await client.query(`UPDATE users SET removed_at = NULL, removed_by = NULL WHERE id = $1`, [
+				targetId
+			]);
+			await client.query(
+				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+				 VALUES ($1, 'user_restore', 'users', $2, NULL, NULL, $3)`,
+				[adminId, targetId, `Restored access for "${u.username}" (${u.role})`]
+			);
+			return { ok: true };
+		});
+		if ('error' in result) return fail(result.status, { error: result.error });
+		return { restored: true };
+	},
+
+	// Delete permanently: only an account whose access was removed first,
+	// and only if it never added anything. The database decides the second
+	// part: content tables keep a plain FK to users, so deleting an author
+	// fails (23503) and nothing changes.
+	deleteAccount: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const adminId = Number(locals.user!.id);
+		const targetId = Number((await request.formData()).get('userId'));
+		if (!Number.isInteger(targetId)) return fail(400, { error: 'Invalid user ID' });
+		if (targetId === adminId) return fail(400, { error: "You can't delete your own account." });
+
+		const u = (
+			await query<{ username: string; display_name: string; role: string; removed: boolean }>(
+				`SELECT username, display_name, role, removed_at IS NOT NULL AS removed FROM users WHERE id = $1`,
+				[targetId]
+			)
+		).rows[0];
+		if (!u) return fail(404, { error: 'User not found' });
+		if (!u.removed) return fail(409, { error: `Remove access for "${u.username}" first.` });
+
+		try {
+			const outcome = await withTransaction(async (client) => {
+				const locked = await client.query(
+					`SELECT 1 FROM users WHERE id = $1 AND removed_at IS NOT NULL FOR UPDATE`,
+					[targetId]
+				);
+				if (locked.rowCount !== 1) return 'changed' as const;
+				// The record of who it was outlives the account.
+				await client.query(
+					`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
+					 VALUES ($1, 'user_delete', 'users', $2, $3::jsonb, NULL, $4)`,
+					[
+						adminId,
+						targetId,
+						JSON.stringify({ username: u.username, display_name: u.display_name, role: u.role }),
+						`Permanently deleted "${u.username}" (${u.display_name}, ${u.role})`
+					]
+				);
+				await client.query(`DELETE FROM users WHERE id = $1`, [targetId]);
+				return 'deleted' as const;
+			});
+			if (outcome === 'changed') {
+				return fail(409, { error: `"${u.username}" changed meanwhile. Please try again.` });
+			}
+		} catch (err) {
+			if (isFkViolation(err)) {
+				const what = (err.table && CONTENT_WORDS[err.table]) || 'records';
+				return fail(409, {
+					error: `"${u.username}" has added to the history (${what}), so it can only have access removed.`
+				});
+			}
+			throw err;
+		}
+		return { deleted: u.username };
 	}
 };

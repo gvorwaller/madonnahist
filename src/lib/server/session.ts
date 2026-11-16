@@ -35,9 +35,11 @@ export async function validateSession(token: string): Promise<SessionUser | null
 		username: string;
 		role: string;
 		display_name: string;
+		removed: boolean;
 	}>(
 		`SELECT s.id AS sid, s.expires_at,
-		        u.id AS uid, u.username, u.role, u.display_name
+		        u.id AS uid, u.username, u.role, u.display_name,
+		        u.removed_at IS NOT NULL AS removed
 		   FROM sessions s
 		   JOIN users u ON u.id = s.user_id
 		  WHERE s.id = $1`,
@@ -47,7 +49,9 @@ export async function validateSession(token: string): Promise<SessionUser | null
 	const row = res.rows[0];
 	if (!row) return null;
 
-	if (new Date(row.expires_at).getTime() <= Date.now()) {
+	// A removed account's sessions are deleted when access is removed; this
+	// also covers any that slip past (belt and braces).
+	if (row.removed || new Date(row.expires_at).getTime() <= Date.now()) {
 		await query('DELETE FROM sessions WHERE id = $1', [token]);
 		return null;
 	}

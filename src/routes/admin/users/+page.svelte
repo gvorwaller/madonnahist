@@ -17,6 +17,39 @@
 	let actionError = $state('');
 
 	let resetTarget = $state<{ id: number; username: string } | null>(null);
+
+	// Remove access / delete permanently (2026-11-15). Both confirm in a modal.
+	type Target = { id: number; username: string; display_name: string };
+	let removeTarget = $state<Target | null>(null);
+	let deleteTarget = $state<Target | null>(null);
+	let notice = $state('');
+
+	// Shared enhance handler for remove / restore / delete.
+	function accountResult(done: (data: Record<string, unknown> | undefined) => string) {
+		return () =>
+			async ({
+				result,
+				update
+			}: {
+				result: import('@sveltejs/kit').ActionResult;
+				update: (opts?: { reset?: boolean }) => Promise<void>;
+			}) => {
+				// Build the message while the confirmed target is still set.
+				const message = result.type === 'success' ? done(result.data) : '';
+				removeTarget = null;
+				deleteTarget = null;
+				if (result.type === 'failure') {
+					notice = '';
+					actionError = (result.data as { error?: string })?.error ?? 'That did not work';
+					return;
+				}
+				if (result.type === 'success') {
+					actionError = '';
+					notice = message;
+				}
+				await update();
+			};
+	}
 	let resetPassword = $state('');
 
 	function startAddUser() {
@@ -108,6 +141,8 @@
 <svelte:window onkeydown={(e) => {
 	if (e.key === 'Escape') {
 		if (resetTarget) cancelReset();
+		if (removeTarget) removeTarget = null;
+		if (deleteTarget) deleteTarget = null;
 		if (addingUser) cancelAddUser();
 		if (confirmInvite) confirmInvite = null;
 		if (inviting) inviting = false;
@@ -117,13 +152,18 @@
 <div class="page">
 	<header>
 		<h1>User Accounts</h1>
-		<p class="subtitle">Create family accounts and reset passwords. No self-registration — every account is admin-created.</p>
+		<p class="subtitle">Create family accounts, reset passwords, and remove access. No self-registration — every account is admin-created.</p>
 	</header>
 
 	{#if actionError}
 		<div class="error-banner" role="alert">
 			{actionError}
 			<button class="error-dismiss" onclick={() => actionError = ''}>Dismiss</button>
+		</div>
+	{:else if notice}
+		<div class="notice-banner" role="status">
+			{notice}
+			<button class="error-dismiss notice-dismiss" onclick={() => (notice = '')}>Dismiss</button>
 		</div>
 	{/if}
 
@@ -177,6 +217,16 @@
 								{/if}
 							{/if}
 							<button class="btn btn-sm btn-secondary" onclick={() => startReset(u)}>Reset password</button>
+							{#if u.canRemove}
+								<button
+									class="btn btn-sm btn-danger"
+									onclick={() =>
+										(removeTarget = { id: u.id, username: u.username, display_name: u.display_name })}
+									>Remove access</button
+								>
+							{:else if u.isSelf}
+								<span class="self-tag">You</span>
+							{/if}
 						</td>
 					</tr>
 				{/each}
@@ -240,7 +290,107 @@
 			</tbody>
 		</table>
 	</section>
+
+	{#if data.removed.length > 0}
+		<details class="section removed">
+			<summary>Removed accounts ({data.removed.length})</summary>
+			<p class="hint">
+				These can't sign in. Everything they added stays in the history under their name. Delete
+				permanently only works for an account that never added anything.
+			</p>
+			<table class="data-table">
+				<thead>
+					<tr>
+						<th>Username</th>
+						<th>Display Name</th>
+						<th>Role</th>
+						<th>Removed</th>
+						<th class="col-actions">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.removed as u (u.id)}
+						<tr>
+							<td class="token">{u.username}</td>
+							<td>{u.display_name}</td>
+							<td class="role-cell">
+								<span class="role-badge role-{u.role}">{roleLabels[u.role] ?? u.role}</span>
+								<span class="role-badge role-removed">No access</span>
+							</td>
+							<td class="date-cell">{u.removed_at}</td>
+							<td class="col-actions">
+								<form
+									method="POST"
+									action="/admin/users?/restoreAccess"
+									use:enhance={accountResult(() => `Restored access for ${u.username}.`)}
+									class="inline"
+								>
+									<input type="hidden" name="userId" value={u.id} />
+									<button type="submit" class="btn btn-sm btn-secondary">Restore</button>
+								</form>
+								<button
+									class="btn btn-sm btn-danger"
+									onclick={() =>
+										(deleteTarget = { id: u.id, username: u.username, display_name: u.display_name })}
+									>Delete permanently</button
+								>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</details>
+	{/if}
 </div>
+
+<!-- Remove access confirmation -->
+{#if removeTarget}
+	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rm-h">
+		<div class="modal">
+			<h2 id="rm-h">Remove access for {removeTarget.username}?</h2>
+			<p>
+				<strong>{removeTarget.display_name}</strong> will be signed out everywhere and won't be able
+				to sign in again. Everything they've added stays in the history. You can restore access later.
+			</p>
+			<form
+				method="POST"
+				action="/admin/users?/removeAccess"
+				use:enhance={accountResult(() => `Removed access for ${removeTarget?.username ?? 'the account'}.`)}
+			>
+				<input type="hidden" name="userId" value={removeTarget.id} />
+				<div class="modal-actions">
+					<button type="button" class="btn btn-secondary" onclick={() => (removeTarget = null)}>Cancel</button>
+					<button type="submit" class="btn btn-danger">Remove access</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete permanently confirmation -->
+{#if deleteTarget}
+	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="del-h">
+		<div class="modal">
+			<h2 id="del-h">Permanently delete {deleteTarget.username}?</h2>
+			<p>
+				The account <strong>{deleteTarget.username}</strong> ({deleteTarget.display_name}) will be
+				deleted. This can't be undone, and the username becomes free to reuse. If it ever added to
+				the history, the delete is refused and nothing changes.
+			</p>
+			<form
+				method="POST"
+				action="/admin/users?/deleteAccount"
+				use:enhance={accountResult((d) => `Deleted ${(d?.deleted as string) ?? 'the account'} permanently.`)}
+			>
+				<input type="hidden" name="userId" value={deleteTarget.id} />
+				<div class="modal-actions">
+					<button type="button" class="btn btn-secondary" onclick={() => (deleteTarget = null)}>Cancel</button>
+					<button type="submit" class="btn btn-danger">Delete permanently</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{/if}
 
 <!-- New invite link: shown once, kept until dismissed -->
 {#if link}
@@ -419,6 +569,45 @@
 		color: #14431a;
 		background: #e8f5e9;
 		border-color: #14431a;
+	}
+	.role-removed {
+		color: #3d3d3d;
+		background: #eeeeee;
+		border-color: #3d3d3d;
+		margin-left: 0.25rem;
+	}
+	.self-tag {
+		display: inline-block;
+		margin-left: 0.4rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: #444;
+	}
+	/* Keeps the native disclosure arrow (a flex summary would hide it). */
+	.removed summary {
+		cursor: pointer;
+		font-weight: 600;
+		padding: 0.75rem 0;
+		line-height: 1.4;
+	}
+	.role-cell {
+		white-space: nowrap;
+	}
+	.notice-banner {
+		padding: 0.6rem 1rem;
+		background: #e8f5e9;
+		border: 1px solid #14431a;
+		border-radius: 4px;
+		color: #14431a;
+		font-size: 0.85rem;
+		font-weight: 600;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
+	.notice-dismiss {
+		color: #14431a;
 	}
 
 	.btn {

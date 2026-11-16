@@ -118,7 +118,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const rows = rowsRes.rows.map((r) => ({
 		id: r.id,
 		occurredAtDisplay: formatTimestampInAppTz(r.occurred_at),
-		userDisplayName: r.user_display_name ?? '—',
+		// No person: a system action, or (on a line about an account) one
+		// that was later deleted permanently.
+		userDisplayName:
+			r.user_display_name ??
+			(r.user_id === null && r.entity_type === 'users' ? 'Deleted account' : '—'),
 		action: r.action,
 		entityType: r.entity_type,
 		entityId: r.entity_id,

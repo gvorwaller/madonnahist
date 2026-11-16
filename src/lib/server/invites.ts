@@ -82,19 +82,20 @@ interface InviteRow {
 	display_name: string;
 	role: string;
 	last_login_at: string | null;
+	removed_at: string | null;
 }
 
 const INVITE_SELECT = `
 	SELECT i.id::int AS id, i.user_id, i.expires_at::text, i.used_at::text, i.revoked_at::text,
 	       i.expires_at <= NOW() AS expired,
-	       u.username, u.display_name, u.role, u.last_login_at::text
+	       u.username, u.display_name, u.role, u.last_login_at::text, u.removed_at::text
 	  FROM user_invites i
 	  JOIN users u ON u.id = i.user_id`;
 
 function classify(row: InviteRow | undefined): InviteLookup {
 	if (!row) return { status: 'invalid' };
 	if (row.used_at) return { status: 'used' };
-	if (row.revoked_at) return { status: 'revoked' };
+	if (row.revoked_at || row.removed_at) return { status: 'revoked' };
 	if (row.expired) return { status: 'expired' };
 	if (row.role !== 'viewer') return { status: 'invalid' };
 	// Signed in some other way (e.g. an admin password reset): the account
