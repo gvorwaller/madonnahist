@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import MemoryList from '$lib/components/viewer/MemoryList.svelte';
 	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { data } = $props();
@@ -120,6 +121,26 @@
 			</details>
 		{/if}
 
+		{#if data.memories.length > 0}
+			<section class="mems" aria-labelledby="mem-h">
+				<div class="v-section-h"><h2 id="mem-h">Memories from {data.year}</h2></div>
+				<MemoryList memories={data.memories} of="this year" {here} />
+				{#if data.canWrite}
+					<a
+						class="v-btn secondary v-add-memory"
+						href={withFrom(`/app/memories/new?year=${data.year}`, here)}
+						>+ Add a memory of this year</a
+					>
+				{/if}
+			</section>
+		{:else if data.canWrite && totalDays > 0}
+			<div class="v-actions">
+				<a class="v-btn secondary" href={withFrom(`/app/memories/new?year=${data.year}`, here)}
+					>+ Add a memory of this year</a
+				>
+			</div>
+		{/if}
+
 		{#if totalDays > 0}
 			<div class="v-actions downloads">
 				<a class="v-btn secondary" href="/app/book/year/{data.year}"
@@ -189,13 +210,30 @@
 				<div class="icon" aria-hidden="true">✍️</div>
 				<h2>No days from {data.year} yet</h2>
 				<p>Check back as Madonna works through the calendars.</p>
-				<a class="v-btn primary" href="/app/timeline">Go to the Timeline</a>
+				<div class="v-actions center">
+					{#if data.canWrite && data.memories.length === 0}
+						<a class="v-btn primary" href={withFrom(`/app/memories/new?year=${data.year}`, here)}
+							>+ Add a memory of this year</a
+						>
+					{/if}
+					<a
+						class="v-btn {data.canWrite && data.memories.length === 0 ? 'secondary' : 'primary'}"
+						href="/app/timeline">Go to the Timeline</a
+					>
+				</div>
 			</div>
 		{/if}
 	{/if}
 </div>
 
 <style>
+	.mems {
+		margin: 16px 0 8px;
+		max-width: 62ch;
+	}
+	.v-actions.center {
+		justify-content: center;
+	}
 	.year-nav {
 		display: flex;
 		align-items: center;

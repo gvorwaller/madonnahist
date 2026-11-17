@@ -368,6 +368,34 @@ body:has(.app-shell) {
 	font-weight: 600;
 	color: var(--color-ink-muted);
 }
+/* Memories (2026-11-17): a draft is visible only to its author and says so
+   in words, an icon and a dashed border, not color alone (AGY2 #7). */
+.app-shell .v-memory.draft {
+	background: var(--color-paper);
+	border: 2px dashed var(--color-ink-muted);
+	border-left-width: 4px;
+}
+.app-shell .v-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	font-size: 15px;
+	font-weight: 700;
+}
+.app-shell .v-badge.shared {
+	background: var(--color-evergreen-soft); /* evergreen-dark text 11.9:1 */
+	color: var(--color-evergreen-dark);
+}
+.app-shell .v-badge.draft {
+	background: var(--color-paper);
+	border: 1px dashed var(--color-ink-muted);
+	color: var(--color-ink-muted); /* 9.3:1 on paper */
+}
+.app-shell .v-add-memory {
+	margin-top: 14px;
+}
 .app-shell .v-provenance {
 	font-size: 15px;
 	color: var(--color-ink-muted);
@@ -453,6 +481,7 @@ body:has(.app-shell) {
 	font-weight: 700;
 }
 .app-shell .v-field input,
+.app-shell .v-field select,
 .app-shell .v-field textarea {
 	width: 100%;
 	min-height: 52px;
@@ -465,6 +494,7 @@ body:has(.app-shell) {
 	font-size: 18px;
 }
 .app-shell .v-field input:focus-visible,
+.app-shell .v-field select:focus-visible,
 .app-shell .v-field textarea:focus-visible {
 	outline: 3px solid var(--color-evergreen);
 	outline-offset: 1px;

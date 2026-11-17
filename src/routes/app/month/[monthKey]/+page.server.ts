@@ -1,5 +1,7 @@
 import { query } from '$lib/db';
 import { getAdjacentCapturedMonths, getMonthPhoto, getMonthReading } from '$lib/server/viewer';
+import { getPeriodMemories, getWriterForUser, viewerIdOf } from '$server/memories';
+import type { MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -27,7 +29,7 @@ function parseMonthKey(monthKey: string | undefined): { year: number; month: num
 	return { year, month };
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const parsed = parseMonthKey(params.monthKey);
 
 	// Malformed/out-of-range month keys get the same friendly "nothing here"
@@ -38,11 +40,24 @@ export const load: PageServerLoad = async ({ params }) => {
 		return {
 			found: false as const,
 			reason: 'invalid' as const,
-			monthKey: params.monthKey
+			monthKey: params.monthKey,
+			memories: [] as MemoryView[],
+			canWrite: false
 		};
 	}
 
 	const { year, month } = parsed;
+	const key = (m: { year: number; month: number } | null) =>
+		m ? `${m.year}-${String(m.month).padStart(2, '0')}` : null;
+
+	// Month memories are independent of the captured page (plan §4): an
+	// uncaptured month still shows them. They never widen the calendar data.
+	const viewerId = viewerIdOf(locals);
+	const [memories, writer] = await Promise.all([
+		getPeriodMemories('month', params.monthKey, viewerId),
+		getWriterForUser(viewerId)
+	]);
+	const canWrite = !!writer;
 
 	const pageRes = await query<{ id: number }>(
 		`SELECT id FROM calendar_pages WHERE year = $1 AND month = $2`,
@@ -51,12 +66,20 @@ export const load: PageServerLoad = async ({ params }) => {
 	const pageRow = pageRes.rows[0];
 
 	if (!pageRow) {
+		// With memories, keep the header chevrons; the photo column is
+		// omitted by the page (AGY2 #4).
+		const adjacent =
+			memories.length > 0 ? await getAdjacentCapturedMonths(year, month) : { prev: null, next: null };
 		return {
 			found: false as const,
 			reason: 'missing' as const,
 			monthKey: params.monthKey,
 			year,
-			month
+			month,
+			memories,
+			canWrite,
+			prevMonth: key(adjacent.prev),
+			nextMonth: key(adjacent.next)
 		};
 	}
 
@@ -68,9 +91,6 @@ export const load: PageServerLoad = async ({ params }) => {
 		getAdjacentCapturedMonths(year, month)
 	]);
 
-	const key = (m: { year: number; month: number } | null) =>
-		m ? `${m.year}-${String(m.month).padStart(2, '0')}` : null;
-
 	return {
 		found: true as const,
 		monthKey: params.monthKey,
@@ -79,7 +99,9 @@ export const load: PageServerLoad = async ({ params }) => {
 		days,
 		photo,
 		prevMonth: key(adjacent.prev),
-		nextMonth: key(adjacent.next)
+		nextMonth: key(adjacent.next),
+		memories,
+		canWrite
 	};
 };
 

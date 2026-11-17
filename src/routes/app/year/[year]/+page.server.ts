@@ -6,6 +6,8 @@ import {
 	getPublishedNarrative,
 	type DayHighlight
 } from '$lib/server/viewer';
+import { getPeriodMemories, getWriterForUser, viewerIdOf } from '$server/memories';
+import type { MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
 const MIN_YEAR = 1900;
@@ -17,7 +19,7 @@ function isValidYearParam(s: string | undefined): s is string {
 	return y >= MIN_YEAR && y <= MAX_YEAR;
 }
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	// Malformed/out-of-range years get the same friendly "nothing here" state
 	// as a real year with zero accepted days — no format leak, no 404 page.
 	if (!isValidYearParam(params.year)) {
@@ -28,11 +30,19 @@ export const load: PageServerLoad = async ({ params }) => {
 			prevYear: null,
 			nextYear: null,
 			narrative: null as string | null,
-			pdfExports: [] as Array<{ mode: string; byteSize: number; createdAt: string }>
+			pdfExports: [] as Array<{ mode: string; byteSize: number; createdAt: string }>,
+			memories: [] as MemoryView[],
+			canWrite: false
 		};
 	}
 
 	const year = Number(params.year);
+	// Year memories (plan §4): shared ones plus your own drafts.
+	const viewerId = viewerIdOf(locals);
+	const [memories, writer] = await Promise.all([
+		getPeriodMemories('year', params.year, viewerId),
+		getWriterForUser(viewerId)
+	]);
 
 	const [byMonth, highlights, adjacent, narrative, pdfExportRes] = await Promise.all([
 		getAcceptedDaysByMonth(year),
@@ -77,6 +87,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		prevYear: adjacent.prev,
 		nextYear: adjacent.next,
 		narrative,
-		pdfExports
+		pdfExports,
+		memories,
+		canWrite: !!writer
 	};
 };

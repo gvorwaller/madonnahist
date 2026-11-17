@@ -76,7 +76,9 @@ const CONTENT_WORDS: Record<string, string> = {
 	tag_vocabulary: 'tag decisions',
 	adhoc_narratives: 'saved stories',
 	pdf_exports: 'PDFs',
-	place_locations: 'place map decisions'
+	place_locations: 'place map decisions',
+	memories: 'memories',
+	memory_revisions: 'memories'
 };
 
 function isFkViolation(err: unknown): err is { code: string; table?: string } {
@@ -457,7 +459,21 @@ export const actions: Actions = {
 			}
 		} catch (err) {
 			if (isFkViolation(err)) {
-				const what = (err.table && CONTENT_WORDS[err.table]) || 'records';
+				// The writer link is checked before memories, so name the
+				// memories when there are any; otherwise say what the link is.
+				let table = err.table;
+				if (table === 'writers') {
+					const wrote = await query(`SELECT 1 FROM memories WHERE created_by = $1 LIMIT 1`, [
+						targetId
+					]);
+					if (wrote.rowCount === 0) {
+						return fail(409, {
+							error: `"${u.username}" is set up to write memories, so it can only have access removed.`
+						});
+					}
+					table = 'memories';
+				}
+				const what = (table && CONTENT_WORDS[table]) || 'records';
 				return fail(409, {
 					error: `"${u.username}" has added to the history (${what}), so it can only have access removed.`
 				});

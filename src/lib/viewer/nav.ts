@@ -79,6 +79,8 @@ export function backLabel(href: string): string {
 	if (path === '/app/stories') return 'Stories';
 	if (path.startsWith('/app/stories/')) return 'The story';
 	if (path.startsWith('/app/person/') || path.startsWith('/app/place/')) return 'Back';
+	if (path === '/app/memories') return 'My memories';
+	if (path.startsWith('/app/memories/')) return 'Your memory';
 	if (path === '/app') return 'On this day';
 	return 'Back';
 }

@@ -2,6 +2,7 @@
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import ImageZoom from '$lib/components/viewer/ImageZoom.svelte';
+	import MemoryList from '$lib/components/viewer/MemoryList.svelte';
 	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { data } = $props();
@@ -15,8 +16,11 @@
 	const backText = $derived(backLabel(backHref));
 
 	const monthName = $derived(data.found || data.reason === 'missing' ? MONTHS[data.month - 1] : '');
-	const monthTitle = $derived(data.found ? `${monthName} ${data.year}` : null);
+	const monthTitle = $derived(
+		data.found || data.reason === 'missing' ? `${monthName} ${data.year}` : null
+	);
 	const here = $derived(`/app/month/${data.monthKey}`);
+	const addHref = $derived(withFrom(`/app/memories/new?month=${data.monthKey}`, here));
 
 	/** Day of this month the reader came from, outlined in amber on the photo. */
 	const currentDay = $derived.by(() => {
@@ -120,7 +124,7 @@
 <div class="v-page wide">
 	<a class="v-back" href={backHref}>◂ {backText}</a>
 
-	{#if !data.found}
+	{#if !data.found && (data.reason === 'invalid' || data.memories.length === 0)}
 		<div class="v-empty">
 			<div class="icon" aria-hidden="true">🗓️</div>
 			<h1 class="v-title">{data.reason === 'invalid' ? 'Not a valid month' : 'Not captured yet'}</h1>
@@ -132,7 +136,15 @@
 					{data.year} hasn't been photographed yet. Check back later.
 				{/if}
 			</p>
-			<a class="v-btn primary" href={backHref}>◂ {backText}</a>
+			<div class="v-actions center">
+				{#if data.canWrite && data.reason === 'missing'}
+					<a class="v-btn primary" href={addHref}>+ Add a memory of this month</a>
+				{/if}
+				<a
+					class="v-btn {data.canWrite && data.reason === 'missing' ? 'secondary' : 'primary'}"
+					href={backHref}>◂ {backText}</a
+				>
+			</div>
 		</div>
 	{:else}
 		<nav class="month-nav" aria-label="Other months">
@@ -157,7 +169,9 @@
 			{/if}
 		</nav>
 		<p class="v-sub center">
-			{#if data.days.length > 0}
+			{#if !data.found}
+				The page for {monthTitle} hasn't been photographed yet.
+			{:else if data.days.length > 0}
 				{data.days.length}
 				{data.days.length === 1 ? 'day' : 'days'} to read
 			{:else}
@@ -165,6 +179,21 @@
 			{/if}
 		</p>
 
+		{#if data.memories.length > 0}
+			<section class="mems" aria-labelledby="mem-h">
+				<div class="v-section-h"><h2 id="mem-h">Memories from {monthTitle}</h2></div>
+				<MemoryList memories={data.memories} of="this month" {here} />
+				{#if data.canWrite}
+					<a class="v-btn secondary v-add-memory" href={addHref}>+ Add a memory of this month</a>
+				{/if}
+			</section>
+		{:else if data.canWrite}
+			<div class="mems">
+				<a class="v-btn secondary" href={addHref}>+ Add a memory of this month</a>
+			</div>
+		{/if}
+
+		{#if data.found}
 		<div class="layout">
 			<div class="photo-col">
 				{#if imgFailed}
@@ -239,6 +268,7 @@
 				{/if}
 			</section>
 		</div>
+		{/if}
 	{/if}
 </div>
 
@@ -252,6 +282,13 @@
 {/if}
 
 <style>
+	.mems {
+		margin: 14px auto 18px;
+		max-width: 62ch;
+	}
+	.v-actions.center {
+		justify-content: center;
+	}
 	.month-nav {
 		display: flex;
 		align-items: center;

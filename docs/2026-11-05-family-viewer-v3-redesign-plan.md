@@ -220,7 +220,7 @@ These answer the questions on each mockup screen; they override the mockup where
 | Today, empty date | **Nearest date with entries** is the main fallback. | Slice 1 |
 | Timeline | **Oldest decade first**, with a sort-order toggle (remembered per viewer). | Slice 2 |
 | Year | The story **starts open and can be folded**. | Slice 2 |
-| Day | The label becomes **"Madonna remembers"** (shipped 2026-11-08 with Slice 1T, on Day and Book). **New requirement:** memories from logged-in family members are planned, so the memory block must allow several authors, and the reader needs a way to include or exclude other family members' memories. Slice 1 builds the display for one author only; the multi-author schema belongs with td-ef00c8 (multi-writer groundwork). | Slice 1 (label); new task (family memories) |
+| Day | The label becomes **"Madonna remembers"** (shipped 2026-11-08 with Slice 1T, on Day and Book). **New requirement:** memories from logged-in family members are planned, so the memory block must allow several authors, and the reader needs a way to include or exclude other family members' memories. Slice 1 builds the display for one author only; the multi-author schema belongs with td-ef00c8 (multi-writer groundwork). **Built 2026-11-17:** writers + memories, see `docs/2026-11-16-writers-and-memories-plan.md`. | Slice 1 (label); new task (family memories) |
 | Day | **Share includes the memory.** | Slice 3 |
 | Day | **Keep** the "N days not transcribed yet" skip note. | Slice 1 |
 | Person | **Add a placeholder button** for the printable personal history (td-ef90ab), disabled and labeled "Coming later". | Slice 1 |

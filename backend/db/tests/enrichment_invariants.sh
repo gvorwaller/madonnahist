@@ -61,6 +61,11 @@ TRUNCATE day_corrections, ocr_runs, llm_draft_runs, day_tags, day_entities,
 INSERT INTO users (username, display_name, role, password_hash)
   VALUES ('test_corrector', 'Test', 'corrector', 'x');
 
+-- The users TRUNCATE cascades to writers (0032); calendar_pages.writer_id
+-- defaults to writer 1 (Madonna), so put it back.
+INSERT INTO writers (id, slug, display_name) VALUES (1, 'madonna', 'Madonna');
+SELECT setval('writers_id_seq', 1);
+
 INSERT INTO calendar_pages (year, month, page_image_path)
   VALUES (1968, 1, 'test/1968-01.tif');
 

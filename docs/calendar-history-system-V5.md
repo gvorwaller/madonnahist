@@ -142,6 +142,53 @@ Everything below is deployed and working in production at `madonnahist.gaylon.ph
 - `job_runs` — PostgreSQL-backed job queue (`SELECT FOR UPDATE SKIP LOCKED`)
 - `audit_log` — every human mutation
 
+### Writers and memories (2026-11-17, migration 0032)
+
+Design for td-ef00c8 (writers groundwork) and the first slice of td-bc2c29 / td-76a40f
+(first-person memories). Full plan and peer reviews:
+`docs/2026-11-16-writers-and-memories-plan.md`.
+
+**Tables**
+- `writers`: one row per voice in the archive. Madonna is id 1 and Gaylon is the second.
+  - `user_id` links a writer to a sign-in account. It is null for someone who isn't a user, such
+    as a relative whose journals get scanned later.
+  - `adds_memories` decides who may add memories in the viewer. Madonna's is off, because her
+    memories come from `/correct`.
+- `calendar_pages.writer_id`: every page so far is writer 1.
+- `memories`: a memory of a day, a month (dated the 1st) or a year (dated January 1).
+  - `writer_id` is whose memory it is. `created_by` is who typed it, so Gaylon can type one Madonna
+    dictates.
+  - `shared_at` null means a draft only its author sees.
+  - `created_by` is a plain FK, so anyone who wrote a memory can't be hard-deleted.
+- `memory_revisions`: a private, append-only copy of the text at every save, share, unshare and
+  delete. The `audit_log` rows for memories hold **metadata only**, because workers and
+  `/admin/audit` can read `audit_log`.
+- **Grants:**
+  - App: `SELECT` on writers; CRUD on memories; `SELECT, INSERT` on revisions.
+  - Worker: nothing on any of them yet.
+
+**Where memories appear:** `/app/memories` (the writer's own list and form), and the Day, Month
+and Year pages.
+- Memories load independently of the calendar, so a memory shows even where Madonna's calendar
+  isn't transcribed or photographed.
+- They never widen what calendar text, tags or images are returned.
+- Madonna's own memories stay in `calendar_days.day_narrative` ("Madonna remembers").
+
+**Deliberately deferred until a second handwritten source actually arrives** (they cost no more
+then, and there is nothing to test them against now):
+- the uniqueness change to `calendar_pages (writer_id, year, month)` and to
+  `calendar_days (writer_id, entry_date)`;
+- writer-aware OCR and cleanup prompts;
+- a many-entries-per-date model for journals;
+- the reader's include/exclude-by-writer toggle (td-76a40f), useful once there is a second writer
+  besides Madonna.
+
+**Next slice (B):**
+- memories in search and in the `has_memory` highlights;
+- Share and the Book view include memories;
+- enrichment reads shared memories;
+- Madonna's pre-1976 memories, typed by Gaylon.
+
 ---
 
 ## 4. What's Not Built Yet

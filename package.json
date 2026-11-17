@@ -30,6 +30,7 @@
 		"test:tags": "node scripts/test-tag-vocabulary.mjs",
 		"test:invites": "node scripts/test-invites.mjs",
 		"test:accounts": "node scripts/test-accounts.mjs",
+		"test:memories": "node scripts/test-memories.mjs",
 		"test:places": "node scripts/test-places.mjs",
 		"test:place-rules": "tsx scripts/test-place-rules.ts",
 		"format": "prettier --write .",

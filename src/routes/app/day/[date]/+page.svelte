@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { tick } from 'svelte';
 	import ImageZoom from '$lib/components/viewer/ImageZoom.svelte';
+	import MemoryList from '$lib/components/viewer/MemoryList.svelte';
 	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
 
 	const { data } = $props();
@@ -117,7 +118,7 @@
 
 <svelte:head>
 	<title
-		>{data.found
+		>{data.found || data.memories.length > 0
 			? fmt(data.entryDate, { month: 'long', day: 'numeric', year: 'numeric' })
 			: 'Not transcribed yet'}
 		— Vorwaller Family History</title
@@ -127,7 +128,7 @@
 <div class="v-page wide">
 	<a class="v-back" href={backHref}>◂ {backText}</a>
 
-	{#if !data.found}
+	{#if !data.found && data.memories.length === 0}
 		<div class="v-empty">
 			<div class="icon" aria-hidden="true">✍️</div>
 			<h1 class="v-title">Not transcribed yet</h1>
@@ -138,7 +139,16 @@
 					This day isn't transcribed yet.
 				{/if}
 			</p>
-			<a class="v-btn primary" href={backHref}>◂ {backText}</a>
+			<div class="v-actions center">
+				{#if data.canWrite && data.dateLabel}
+					<a class="v-btn primary" href={withFrom(`/app/memories/new?date=${data.entryDate}`, here)}
+						>+ Add your memory of this day</a
+					>
+				{/if}
+				<a class="v-btn {data.canWrite && data.dateLabel ? 'secondary' : 'primary'}" href={backHref}
+					>◂ {backText}</a
+				>
+			</div>
 		</div>
 	{:else}
 		<p class="v-eyebrow">{fmt(data.entryDate, { weekday: 'long' })}</p>
@@ -146,18 +156,31 @@
 			{fmt(data.entryDate, { month: 'long', day: 'numeric', year: 'numeric' })}
 		</h1>
 
-		<div class="day-grid">
+		<div class="day-grid" class:solo={!data.found}>
 			<div class="day-main">
-				<p class="v-diary">{data.correctedText}</p>
+				{#if data.found}
+					<p class="v-diary">{data.correctedText}</p>
 
-				{#if data.dayNarrative}
-					<aside class="v-memory" aria-label="Madonna's memory of this day">
-						<p class="who">🗨 Madonna remembers</p>
-						<p class="text">{data.dayNarrative}</p>
-					</aside>
+					{#if data.dayNarrative}
+						<aside class="v-memory" aria-label="Madonna's memory of this day">
+							<p class="who">🗨 Madonna remembers</p>
+							<p class="text">{data.dayNarrative}</p>
+						</aside>
+					{/if}
+				{:else}
+					<p class="not-yet">Madonna's calendar for this day isn't transcribed yet.</p>
 				{/if}
 
-				{#if data.entities.length > 0 || data.tags.length > 0}
+				<MemoryList memories={data.memories} of="this day" {here} />
+				{#if data.canWrite}
+					<a
+						class="v-btn secondary v-add-memory"
+						href={withFrom(`/app/memories/new?date=${data.entryDate}`, here)}
+						>+ Add your memory of this day</a
+					>
+				{/if}
+
+				{#if data.found && (data.entities.length > 0 || data.tags.length > 0)}
 					<ul class="v-chips" aria-label="People, places and tags">
 						{#each data.entities as ent (ent.entityType + ':' + ent.slug)}
 							<li>
@@ -182,11 +205,13 @@
 				{/if}
 
 				<div class="v-actions">
-					<button type="button" class="v-btn secondary" onclick={share}>↗ Share this day</button>
-					{#if data.hasImage && !imgFailed}
-						<button type="button" class="v-btn secondary phone-only" onclick={openZoom}>
-							✍️ See Madonna's handwriting
-						</button>
+					{#if data.found}
+						<button type="button" class="v-btn secondary" onclick={share}>↗ Share this day</button>
+						{#if data.hasImage && !imgFailed}
+							<button type="button" class="v-btn secondary phone-only" onclick={openZoom}>
+								✍️ See Madonna's handwriting
+							</button>
+						{/if}
 					{/if}
 					<a class="v-btn secondary" href={withFrom(`/app/month/${monthKey}`, here)}>
 						📅 {monthLabel} page
@@ -225,7 +250,7 @@
 					{/if}
 				{/each}
 
-				{#if data.otherYears.length > 0}
+				{#if data.found && data.otherYears.length > 0}
 					<section class="other-years" aria-labelledby="oy-h">
 						<h2 id="oy-h">{monthDayLabel} in other years</h2>
 						<ul class="v-chips">
@@ -244,6 +269,7 @@
 				{/if}
 			</div>
 
+			{#if data.found}
 			<div class="day-side">
 				{#if data.hasImage && !imgFailed}
 					<button type="button" class="lap-image" onclick={openZoom}>
@@ -262,6 +288,7 @@
 					</p>
 				{/if}
 			</div>
+			{/if}
 		</div>
 	{/if}
 </div>
@@ -301,6 +328,9 @@
 			grid-template-columns: minmax(0, 62ch) minmax(0, 1fr);
 			align-items: start;
 		}
+		.day-grid.solo {
+			grid-template-columns: minmax(0, 62ch);
+		}
 		.day-side {
 			position: sticky;
 			top: calc(var(--topbar-h) + 16px);
@@ -332,6 +362,17 @@
 			font-size: 15px;
 			color: var(--color-ink-muted);
 		}
+	}
+	.not-yet {
+		margin: 0;
+		padding: 12px 14px;
+		border: 1px dashed var(--color-ink-muted);
+		border-radius: 10px;
+		color: var(--color-ink-muted);
+		max-width: 62ch;
+	}
+	.v-actions.center {
+		justify-content: center;
 	}
 	.img-missing {
 		margin: 0;

@@ -171,6 +171,9 @@
 				<nav aria-label="More">
 					<a href="/app/stories">📚 Books &amp; downloads</a>
 					<a href="/app/about">ℹ️ About this archive</a>
+					{#if data.canWriteMemories}
+						<a href="/app/memories">✍️ My memories</a>
+					{/if}
 					{#if data.user && data.user.id !== '0'}
 						<a href="/app/account">👤 Your account</a>
 					{/if}

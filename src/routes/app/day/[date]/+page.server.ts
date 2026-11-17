@@ -7,18 +7,39 @@ import {
 	VISIBLE_DAY_TAGS
 } from '$lib/server/viewer';
 import { getDayEntityChips } from '$lib/server/entities';
+import { getDayMemories, getWriterForUser, viewerIdOf } from '$server/memories';
+import type { MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const entryDate = params.date;
 
 	// Malformed dates get the same friendly "not transcribed" treatment as a
 	// nonexistent or non-accepted date — no 404 error page, no format leak.
 	if (!isValidEntryDate(entryDate)) {
-		return { found: false as const, entryDate: params.date, dateLabel: null };
+		return {
+			found: false as const,
+			entryDate: params.date,
+			dateLabel: null,
+			memories: [] as MemoryView[],
+			canWrite: false,
+			prevDate: null,
+			nextDate: null
+		};
 	}
 
 	const dateLabel = formatHumanDate(entryDate);
+
+	// Memories are independent of the calendar (plan §4, CODEX #4): loaded
+	// before the "not transcribed" exit, so a shared memory (or your own
+	// draft) still shows on a day Madonna hasn't reached. They never widen
+	// what calendar text, tags, chips or images this page returns.
+	const viewerId = viewerIdOf(locals);
+	const [memories, writer] = await Promise.all([
+		getDayMemories(entryDate, viewerId),
+		getWriterForUser(viewerId)
+	]);
+	const canWrite = !!writer;
 
 	// Publishable-day predicate applied directly in this query — a day that
 	// exists but isn't accepted yet is treated identically to one that
@@ -36,7 +57,18 @@ export const load: PageServerLoad = async ({ params }) => {
 
 	const row = res.rows[0];
 	if (!row) {
-		return { found: false as const, entryDate, dateLabel };
+		// Prev/Next still work on a memory-only day (AGY2 #1).
+		const adjacent =
+			memories.length > 0 ? await getAdjacentAcceptedDates(entryDate) : { prev: null, next: null };
+		return {
+			found: false as const,
+			entryDate,
+			dateLabel,
+			memories,
+			canWrite,
+			prevDate: adjacent.prev,
+			nextDate: adjacent.next
+		};
 	}
 
 	// Predicate re-applied independently here too (rather than trusting the
@@ -66,6 +98,8 @@ export const load: PageServerLoad = async ({ params }) => {
 		entities,
 		prevDate: prev,
 		nextDate: next,
-		otherYears
+		otherYears,
+		memories,
+		canWrite
 	};
 };
