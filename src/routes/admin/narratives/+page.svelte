@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import DecadeFolds from '$lib/components/admin/DecadeFolds.svelte';
 
 	const { data } = $props();
 
@@ -20,6 +21,14 @@
 		} | null;
 		pendingJob: boolean;
 	}
+
+	// Decade sections (Gaylon, 2026-11-18): a decade starts open when it has
+	// something waiting on you: a draft to review, a narrative generating, or
+	// a fully transcribed year with no narrative yet. Remembered per tab.
+	const waiting = (r: NarrativeYearRow) =>
+		r.status === 'draft' || r.pendingJob || (r.status === 'none' && r.percent === 100);
+	const count = (list: NarrativeYearRow[], status: NarrativeYearRow['status']) =>
+		list.filter((r) => r.status === status).length;
 
 	let actionError = $state('');
 	let expandedYear = $state<number | null>(null);
@@ -90,121 +99,138 @@
 	{#if data.years.length === 0}
 		<p class="empty">No years have any accepted days yet.</p>
 	{:else}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Year</th>
-					<th class="col-num">Accepted</th>
-					<th>Status</th>
-					<th>Generated</th>
-					<th class="col-actions">Actions</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each data.years as row (row.year)}
-					<tr>
-						<td>{row.year}</td>
-						<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
-						<td>
-							<span class="status-tag status-{row.status}">{statusLabels[row.status]}</span>
-							{#if row.pendingJob}
-								<span class="pending-tag">generating…</span>
-							{/if}
-						</td>
-						<td class="col-meta">
-							{#if row.narrative}
-								{new Date(row.narrative.generated_at).toLocaleString()} &middot; {row.narrative.generated_by}
-							{:else}
-								&mdash;
-							{/if}
-						</td>
-						<td class="col-actions">
-							{#if row.narrative}
-								<button class="btn btn-sm btn-secondary" onclick={() => toggleExpand(row.year)}>
-									{expandedYear === row.year ? 'Hide' : 'Review'}
-								</button>
-							{/if}
-
-							{#if row.status === 'none' || row.status === 'draft'}
-								<form
-									method="POST"
-									action="?/generate"
-									use:enhance={() => {
-										return ({ result, update }) => {
-											if (result.type === 'failure') {
-												actionError = (result.data as { error?: string })?.error ?? 'Generate failed';
-											}
-											update();
-										};
-									}}
-								>
-									<input type="hidden" name="year" value={row.year} />
-									<button type="submit" class="btn btn-sm btn-primary" disabled={row.pendingJob}>
-										{row.status === 'none' ? 'Generate' : 'Regenerate'}
-									</button>
-								</form>
-							{:else}
-								<button
-									class="btn btn-sm btn-primary"
-									disabled
-									title='Published — use "Unpublish & Regenerate" to replace the visible text'
-								>
-									Regenerate
-								</button>
-							{/if}
-
-							{#if row.status === 'draft'}
-								<button class="btn btn-sm btn-primary" onclick={() => (publishTarget = row.year)}>Publish</button>
-							{:else if row.status === 'published'}
-								<button class="btn btn-sm btn-secondary" onclick={() => (unpublishTarget = row.year)}>
-									Unpublish
-								</button>
-								<button class="btn btn-sm btn-danger" onclick={() => (regenerateTarget = row.year)} disabled={row.pendingJob}>
-									Unpublish &amp; Regenerate
-								</button>
-							{/if}
-						</td>
-					</tr>
-
-					{#if expandedYear === row.year && row.narrative}
-						<tr class="detail-row">
-							<td colspan="5">
-								{#if editingYear === row.year}
-									<form
-										method="POST"
-										action="?/saveEdit"
-										use:enhance={() => {
-											return ({ result, update }) => {
-												if (result.type === 'failure') {
-													actionError = (result.data as { error?: string })?.error ?? 'Save failed';
-												} else {
-													cancelEdit();
-												}
-												update();
-											};
-										}}
-									>
-										<input type="hidden" name="year" value={row.year} />
-										<textarea name="summaryText" bind:value={editText} rows="14" class="edit-textarea"></textarea>
-										<div class="edit-actions">
-											<button type="submit" class="btn btn-sm btn-primary">Save</button>
-											<button type="button" class="btn btn-sm btn-secondary" onclick={cancelEdit}>Cancel</button>
-										</div>
-									</form>
-								{:else}
-									<div class="preview">
-										{#each paragraphs(row.narrative.summary_text) as para, i (i)}
-											<p>{para}</p>
-										{/each}
-									</div>
-									<button class="btn btn-sm btn-secondary" onclick={() => startEdit(row)}>Edit</button>
-								{/if}
-							</td>
+		<DecadeFolds
+			items={data.years as NarrativeYearRow[]}
+			storageKey="admin.narratives.openDecades"
+			startOpen={(list) => list.some(waiting)}
+		>
+			{#snippet summary(list)}
+				{list.length} {list.length === 1 ? 'year' : 'years'} · {count(list, 'published')} published
+				{#if count(list, 'draft') > 0}
+					<span class="status-tag status-draft">{count(list, 'draft')} {count(list, 'draft') === 1 ? 'draft' : 'drafts'} to review</span>
+				{/if}
+				{#if list.some((r) => r.pendingJob)}
+					<span class="pending-tag">generating…</span>
+				{/if}
+			{/snippet}
+			{#snippet children(list)}
+				<table class="data-table">
+					<thead>
+						<tr>
+							<th>Year</th>
+							<th class="col-num">Accepted</th>
+							<th>Status</th>
+							<th>Generated</th>
+							<th class="col-actions">Actions</th>
 						</tr>
-					{/if}
-				{/each}
-			</tbody>
-		</table>
+					</thead>
+					<tbody>
+						{#each list as row (row.year)}
+							<tr>
+								<td>{row.year}</td>
+								<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
+								<td>
+									<span class="status-tag status-{row.status}">{statusLabels[row.status]}</span>
+									{#if row.pendingJob}
+										<span class="pending-tag">generating…</span>
+									{/if}
+								</td>
+								<td class="col-meta">
+									{#if row.narrative}
+										{new Date(row.narrative.generated_at).toLocaleString()} &middot; {row.narrative.generated_by}
+									{:else}
+										&mdash;
+									{/if}
+								</td>
+								<td class="col-actions">
+									{#if row.narrative}
+										<button class="btn btn-sm btn-secondary" onclick={() => toggleExpand(row.year)}>
+											{expandedYear === row.year ? 'Hide' : 'Review'}
+										</button>
+									{/if}
+
+									{#if row.status === 'none' || row.status === 'draft'}
+										<form
+											method="POST"
+											action="?/generate"
+											use:enhance={() => {
+												return ({ result, update }) => {
+													if (result.type === 'failure') {
+														actionError = (result.data as { error?: string })?.error ?? 'Generate failed';
+													}
+													update();
+												};
+											}}
+										>
+											<input type="hidden" name="year" value={row.year} />
+											<button type="submit" class="btn btn-sm btn-primary" disabled={row.pendingJob}>
+												{row.status === 'none' ? 'Generate' : 'Regenerate'}
+											</button>
+										</form>
+									{:else}
+										<button
+											class="btn btn-sm btn-primary"
+											disabled
+											title='Published — use "Unpublish & Regenerate" to replace the visible text'
+										>
+											Regenerate
+										</button>
+									{/if}
+
+									{#if row.status === 'draft'}
+										<button class="btn btn-sm btn-primary" onclick={() => (publishTarget = row.year)}>Publish</button>
+									{:else if row.status === 'published'}
+										<button class="btn btn-sm btn-secondary" onclick={() => (unpublishTarget = row.year)}>
+											Unpublish
+										</button>
+										<button class="btn btn-sm btn-danger" onclick={() => (regenerateTarget = row.year)} disabled={row.pendingJob}>
+											Unpublish &amp; Regenerate
+										</button>
+									{/if}
+								</td>
+							</tr>
+
+							{#if expandedYear === row.year && row.narrative}
+								<tr class="detail-row">
+									<td colspan="5">
+										{#if editingYear === row.year}
+											<form
+												method="POST"
+												action="?/saveEdit"
+												use:enhance={() => {
+													return ({ result, update }) => {
+														if (result.type === 'failure') {
+															actionError = (result.data as { error?: string })?.error ?? 'Save failed';
+														} else {
+															cancelEdit();
+														}
+														update();
+													};
+												}}
+											>
+												<input type="hidden" name="year" value={row.year} />
+												<textarea name="summaryText" bind:value={editText} rows="14" class="edit-textarea"></textarea>
+												<div class="edit-actions">
+													<button type="submit" class="btn btn-sm btn-primary">Save</button>
+													<button type="button" class="btn btn-sm btn-secondary" onclick={cancelEdit}>Cancel</button>
+												</div>
+											</form>
+										{:else}
+											<div class="preview">
+												{#each paragraphs(row.narrative.summary_text) as para, i (i)}
+													<p>{para}</p>
+												{/each}
+											</div>
+											<button class="btn btn-sm btn-secondary" onclick={() => startEdit(row)}>Edit</button>
+										{/if}
+									</td>
+								</tr>
+							{/if}
+						{/each}
+					</tbody>
+				</table>
+			{/snippet}
+		</DecadeFolds>
 	{/if}
 </div>
 
@@ -385,7 +411,7 @@
 		margin-left: 0.4rem;
 		font-size: 0.75rem;
 		font-style: italic;
-		color: #777;
+		color: #4a4a4a;
 	}
 	.detail-row td {
 		background: #fafafa;

@@ -1,75 +1,32 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { readOpenDecades, writeOpenDecades } from '$lib/viewer/prefs';
+	import DecadeFolds from '$lib/components/admin/DecadeFolds.svelte';
 
 	const { data } = $props();
 
 	// Decade sections (Gaylon, 2026-11-18): a decade with pages still to do
-	// starts open, finished ones start closed; what you open or close is
-	// remembered for this tab, as on the Timeline.
-	const OPEN_KEY = 'admin.gridAlign.openDecades';
+	// starts open, finished ones start closed (DecadeFolds).
 
 	const monthNames = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 		'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-	const pagesByYear = $derived(() => {
-		const map = new Map<number, typeof data.pages>();
+	type Page = (typeof data.pages)[number];
+	const isDone = (p: Page) => p.has_warp && p.has_grid;
+
+	const years = $derived.by(() => {
+		const map = new Map<number, Page[]>();
 		for (const p of data.pages) {
 			if (!map.has(p.year)) map.set(p.year, []);
 			map.get(p.year)!.push(p);
 		}
-		return [...map.entries()].sort((a, b) => a[0] - b[0]);
+		return [...map.entries()]
+			.sort((a, b) => a[0] - b[0])
+			.map(([year, pages]) => ({ year, pages, done: pages.filter(isDone).length }));
 	});
+	type YearGroup = (typeof years)[number];
+	const sum = (list: YearGroup[], f: (y: YearGroup) => number) => list.reduce((n, y) => n + f(y), 0);
 
 	// eslint-disable-next-line svelte/valid-compile -- intentional one-time capture of initial data
 	let expandedYears = $state((() => new Set(data.pages.filter(p => !p.has_warp || !p.has_grid).map(p => p.year)))());
-
-	const decades = $derived.by(() => {
-		const out: {
-			decade: number;
-			years: [number, typeof data.pages][];
-			pages: number;
-			done: number;
-		}[] = [];
-		for (const [year, pages] of pagesByYear()) {
-			const decade = Math.floor(year / 10) * 10;
-			let g = out[out.length - 1];
-			if (!g || g.decade !== decade) {
-				g = { decade, years: [], pages: 0, done: 0 };
-				out.push(g);
-			}
-			g.years.push([year, pages]);
-			g.pages += pages.length;
-			g.done += pages.filter((p) => p.has_warp && p.has_grid).length;
-		}
-		return out;
-	});
-
-	// svelte-ignore state_referenced_locally
-	let openDecades = $state<Record<number, boolean>>(
-		Object.fromEntries(
-			data.pages
-				.filter((p) => !p.has_warp || !p.has_grid)
-				.map((p) => [Math.floor(p.year / 10) * 10, true])
-		)
-	);
-
-	onMount(() => {
-		const saved = readOpenDecades(OPEN_KEY);
-		if (saved) openDecades = saved;
-	});
-
-	function decadeToggled(decade: number, e: Event) {
-		const open = (e.currentTarget as HTMLDetailsElement).open;
-		if ((openDecades[decade] ?? false) === open) return;
-		openDecades = { ...openDecades, [decade]: open };
-		writeOpenDecades(OPEN_KEY, openDecades);
-	}
-
-	function setAll(open: boolean) {
-		openDecades = Object.fromEntries(decades.map((g) => [g.decade, open]));
-		writeOpenDecades(OPEN_KEY, openDecades);
-	}
 
 	function toggleYear(year: number) {
 		const next = new Set(expandedYears);
@@ -86,29 +43,22 @@
 	{#if data.pages.length === 0}
 		<p class="empty">No pages ingested yet.</p>
 	{:else}
-		<p class="tools">
-			<button type="button" class="linkbtn" onclick={() => setAll(true)}>Open all</button>
-			<span aria-hidden="true">·</span>
-			<button type="button" class="linkbtn" onclick={() => setAll(false)}>Close all</button>
-		</p>
-		{#each decades as g (g.decade)}
-			<details
-				class="decade"
-				open={openDecades[g.decade] ?? false}
-				ontoggle={(e) => decadeToggled(g.decade, e)}
-			>
-				<summary>
-					<span class="decade-label">{g.decade}s</span>
-					<span class="decade-stats">
-						{g.years.length} {g.years.length === 1 ? 'year' : 'years'} · {g.done}/{g.pages} done
-						{#if g.pages > g.done}
-							<span class="pending-count">{g.pages - g.done} pending</span>
-						{/if}
-					</span>
-				</summary>
+		<DecadeFolds
+			items={years}
+			storageKey="admin.gridAlign.openDecades"
+			startOpen={(list) => list.some((y) => y.done < y.pages.length)}
+		>
+			{#snippet summary(list)}
+				{@const pages = sum(list, (y) => y.pages.length)}
+				{@const done = sum(list, (y) => y.done)}
+				{list.length} {list.length === 1 ? 'year' : 'years'} · {done}/{pages} done
+				{#if pages > done}
+					<span class="pending-count">{pages - done} pending</span>
+				{/if}
+			{/snippet}
+			{#snippet children(list)}
 				<div class="year-list">
-					{#each g.years as [year, pages] (year)}
-						{@const done = pages.filter(p => p.has_warp && p.has_grid).length}
+					{#each list as { year, pages, done } (year)}
 						{@const pending = pages.length - done}
 						<div class="year-section">
 							<button
@@ -147,8 +97,8 @@
 						</div>
 					{/each}
 				</div>
-			</details>
-		{/each}
+			{/snippet}
+		</DecadeFolds>
 	{/if}
 </div>
 
@@ -171,63 +121,6 @@
 		color: #888;
 		text-align: center;
 		padding: 2rem;
-	}
-	.tools {
-		margin: 0 0 0.6rem;
-		font-size: 0.85rem;
-		color: #4a4a4a;
-	}
-	.linkbtn {
-		background: none;
-		border: none;
-		padding: 0.6rem 0.25rem;
-		font: inherit;
-		color: #1f4e8a;
-		text-decoration: underline;
-		cursor: pointer;
-	}
-	.decade {
-		border: 1px solid #d0d0d0;
-		border-radius: 8px;
-		background: #fff;
-	}
-	.decade + .decade {
-		margin-top: 0.6rem;
-	}
-	.decade > summary {
-		list-style: none;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		min-height: 48px;
-		padding: 0.5rem 1rem;
-		font-weight: 700;
-		font-size: 1.05rem;
-		color: #222;
-	}
-	.decade > summary::-webkit-details-marker {
-		display: none;
-	}
-	.decade > summary::after {
-		content: '▸';
-		margin-left: auto;
-		color: #4a4a4a;
-		transition: transform 0.15s;
-	}
-	.decade[open] > summary::after {
-		transform: rotate(90deg);
-	}
-	.decade-label {
-		min-width: 3.5rem;
-	}
-	.decade-stats {
-		font-weight: 400;
-		font-size: 0.85rem;
-		color: #4a4a4a;
-	}
-	.decade > .year-list {
-		padding: 0 0.75rem 0.75rem;
 	}
 	.year-list {
 		display: flex;

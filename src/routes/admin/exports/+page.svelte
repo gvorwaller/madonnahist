@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import DecadeFolds from '$lib/components/admin/DecadeFolds.svelte';
 
 	const { data } = $props();
 
@@ -28,6 +29,13 @@
 		narrative: 'Narrative only',
 		days: 'Days only'
 	};
+
+	// Decade sections (Gaylon, 2026-11-18). Generate: a decade starts open
+	// while one of its PDFs is generating. Existing exports: the decade of
+	// the newest PDF starts open. Both remembered per tab (DecadeFolds).
+	const yearsWithPdf = $derived(new Set(data.exports.map((e) => Number(e.year))));
+	const newestExportId = $derived(data.exports[0]?.id ?? null);
+	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 	let actionError = $state('');
 	let deleteTarget = $state<ExportListRow | null>(null);
@@ -81,49 +89,63 @@
 		{#if data.years.length === 0}
 			<p class="empty">No years have any accepted days yet.</p>
 		{:else}
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th>Year</th>
-						<th class="col-num">Accepted</th>
-						<th class="col-actions">Content &amp; actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.years as row (row.year)}
-						<tr>
-							<td>{row.year}</td>
-							<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
-							<td class="col-actions">
-								<form
-									method="POST"
-									action="?/generate"
-									use:enhance={() => {
-										return ({ result, update }) => {
-											if (result.type === 'failure') {
-												actionError = (result.data as { error?: string })?.error ?? 'Generate failed';
-											}
-											update();
-										};
-									}}
-								>
-									<input type="hidden" name="year" value={row.year} />
-									<select name="contentMode" class="mode-select">
-										<option value="full">{CONTENT_MODE_LABELS.full}</option>
-										<option value="narrative" disabled={!row.hasPublishedNarrative}>
-											{CONTENT_MODE_LABELS.narrative}{row.hasPublishedNarrative ? '' : ' (no published narrative)'}
-										</option>
-										<option value="days">{CONTENT_MODE_LABELS.days}</option>
-									</select>
-									<button type="submit" class="btn btn-sm btn-primary" disabled={row.pending}>
-										{row.pending ? 'Generating…' : 'Generate PDF'}
-									</button>
-								</form>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+			<DecadeFolds
+				items={data.years}
+				storageKey="admin.exports.generate.openDecades"
+				startOpen={(list) => list.some((r) => r.pending)}
+			>
+				{#snippet summary(list)}
+					{plural(list.length, 'year', 'years')} · {list.filter((r) => yearsWithPdf.has(r.year)).length} with a PDF
+					{#if list.some((r) => r.pending)}
+						<span class="generating">generating…</span>
+					{/if}
+				{/snippet}
+				{#snippet children(list)}
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Year</th>
+								<th class="col-num">Accepted</th>
+								<th class="col-actions">Content &amp; actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each list as row (row.year)}
+								<tr>
+									<td>{row.year}</td>
+									<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
+									<td class="col-actions">
+										<form
+											method="POST"
+											action="?/generate"
+											use:enhance={() => {
+												return ({ result, update }) => {
+													if (result.type === 'failure') {
+														actionError = (result.data as { error?: string })?.error ?? 'Generate failed';
+													}
+													update();
+												};
+											}}
+										>
+											<input type="hidden" name="year" value={row.year} />
+											<select name="contentMode" class="mode-select">
+												<option value="full">{CONTENT_MODE_LABELS.full}</option>
+												<option value="narrative" disabled={!row.hasPublishedNarrative}>
+													{CONTENT_MODE_LABELS.narrative}{row.hasPublishedNarrative ? '' : ' (no published narrative)'}
+												</option>
+												<option value="days">{CONTENT_MODE_LABELS.days}</option>
+											</select>
+											<button type="submit" class="btn btn-sm btn-primary" disabled={row.pending}>
+												{row.pending ? 'Generating…' : 'Generate PDF'}
+											</button>
+										</form>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/snippet}
+			</DecadeFolds>
 		{/if}
 	</section>
 
@@ -132,33 +154,44 @@
 		{#if data.exports.length === 0}
 			<p class="empty">No PDFs generated yet.</p>
 		{:else}
-			<table class="data-table">
-				<thead>
-					<tr>
-						<th>Year</th>
-						<th>Content</th>
-						<th class="col-num">Size</th>
-						<th class="col-num">Days</th>
-						<th>Created</th>
-						<th class="col-actions">Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.exports as row (row.id)}
-						<tr>
-							<td>{row.year}</td>
-							<td>{CONTENT_MODE_LABELS[row.contentMode]}</td>
-							<td class="col-num">{formatBytes(row.byteSize)}</td>
-							<td class="col-num">{row.dayCount}</td>
-							<td class="col-meta">{new Date(row.createdAt).toLocaleString()}</td>
-							<td class="col-actions">
-								<a class="btn btn-sm btn-secondary" href="/admin/exports/download/{row.id}">Download</a>
-								<button class="btn btn-sm btn-danger" onclick={() => (deleteTarget = row)}>Delete</button>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+			<DecadeFolds
+				items={data.exports}
+				storageKey="admin.exports.existing.openDecades"
+				startOpen={(list) => list.some((r) => r.id === newestExportId)}
+			>
+				{#snippet summary(list)}
+					{plural(list.length, 'PDF', 'PDFs')} · {formatBytes(list.reduce((n, r) => n + r.byteSize, 0))}
+				{/snippet}
+				{#snippet children(list)}
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Year</th>
+								<th>Content</th>
+								<th class="col-num">Size</th>
+								<th class="col-num">Days</th>
+								<th>Created</th>
+								<th class="col-actions">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each list as row (row.id)}
+								<tr>
+									<td>{row.year}</td>
+									<td>{CONTENT_MODE_LABELS[row.contentMode]}</td>
+									<td class="col-num">{formatBytes(row.byteSize)}</td>
+									<td class="col-num">{row.dayCount}</td>
+									<td class="col-meta">{new Date(row.createdAt).toLocaleString()}</td>
+									<td class="col-actions">
+										<a class="btn btn-sm btn-secondary" href="/admin/exports/download/{row.id}">Download</a>
+										<button class="btn btn-sm btn-danger" onclick={() => (deleteTarget = row)}>Delete</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/snippet}
+			</DecadeFolds>
 		{/if}
 	</section>
 </div>
@@ -262,6 +295,10 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
+	}
+	.generating {
+		font-style: italic;
+		color: #4a4a4a;
 	}
 	.mode-select {
 		font-size: 0.8rem;
