@@ -14,7 +14,7 @@
 		percent: number;
 		pending: boolean;
 		hasPublishedNarrative: boolean;
-		narrative: { by: string; published: boolean } | null;
+		narrative: { by: string; published: boolean; changedAt: string } | null;
 	}
 	interface ExportListRow {
 		id: number;
@@ -53,13 +53,23 @@
 		}
 		return m;
 	});
-	/** For PDFs that contain the days: how far the accepted-day count has moved since. */
-	function staleNote(row: ExportYearRow, e: ExportListRow): string | null {
-		if (e.contentMode === 'narrative') return null;
-		const diff = row.accepted - e.dayCount;
-		if (diff > 0) return `${plural(diff, 'more day', 'more days')} accepted since`;
-		if (diff < 0) return `${plural(-diff, 'fewer accepted day', 'fewer accepted days')} now`;
-		return null;
+	/**
+	 * Why a PDF may no longer match the archive. Days: how far the
+	 * accepted-day count has moved since (not for narrative-only PDFs).
+	 * Story: the year's text, or whether it is published, changed after the
+	 * PDF was made (not for days-only PDFs, which have no story).
+	 */
+	function staleNotes(row: ExportYearRow, e: ExportListRow): string[] {
+		const notes: string[] = [];
+		if (e.contentMode !== 'narrative') {
+			const diff = row.accepted - e.dayCount;
+			if (diff > 0) notes.push(`${plural(diff, 'more day', 'more days')} accepted since`);
+			if (diff < 0) notes.push(`${plural(-diff, 'fewer accepted day', 'fewer accepted days')} now`);
+		}
+		if (e.contentMode !== 'days' && row.narrative && new Date(row.narrative.changedAt) > new Date(e.createdAt)) {
+			notes.push('story changed since');
+		}
+		return notes;
 	}
 	const shortDate = (ts: string) =>
 		new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -166,8 +176,9 @@
 															aria-label="Download the {row.year} {SHORT_MODE_LABELS[mode]} PDF from {shortDate(e.createdAt)}"
 															>Download</a
 														>
-														{@const note = staleNote(row, e)}
-														{#if note}<span class="stale">⚠ {note}</span>{/if}
+														{#each staleNotes(row, e) as note (note)}
+															<span class="stale">⚠ {note}</span>
+														{/each}
 													{/if}
 												</li>
 											{/each}

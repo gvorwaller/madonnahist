@@ -44,10 +44,18 @@ export function findNarrativeModel(id: unknown): NarrativeModel | null {
 /** model_name of a draft saved from the admin's own edit (provider 'human'). */
 export const HAND_EDIT_MODEL_NAME = 'hand-edit';
 
-/** Display label for a stored model name; older names fall through as-is. */
+/**
+ * Labels for models that wrote narratives before td-f1f49b and are no longer
+ * offered. Stored model names stay as written; only the display changes.
+ */
+const RETIRED_MODEL_LABELS: Record<string, string> = {
+	'claude-sonnet-5': 'Claude Sonnet 5'
+};
+
+/** Display label for a stored model name; unknown names fall through as-is. */
 export function narrativeModelLabel(id: string): string {
 	if (id === HAND_EDIT_MODEL_NAME) return 'Edited by hand';
-	return findNarrativeModel(id)?.label ?? id;
+	return findNarrativeModel(id)?.label ?? RETIRED_MODEL_LABELS[id] ?? id;
 }
 
 /** Cap for both the house style and a year's notes. */

@@ -69,8 +69,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// which model wrote it, shown in the row so you needn't check
 		// /admin/narratives (Gaylon, 2026-11-20). One batch query, as in
 		// src/routes/admin/narratives/+page.server.ts's load.
-		query<{ scope_key: string; is_published: boolean; generated_by: string }>(
-			`SELECT scope_key, is_published, generated_by FROM narrative_summaries WHERE scope = 'year'`
+		query<{ scope_key: string; is_published: boolean; generated_by: string; story_changed_at: string }>(
+			`SELECT scope_key, is_published, generated_by, story_changed_at::text AS story_changed_at
+			   FROM narrative_summaries WHERE scope = 'year'`
 		)
 	]);
 
@@ -88,7 +89,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 			hasPublishedNarrative: narrativeByYear.get(String(y.year))?.is_published === true,
 			narrative: (() => {
 				const n = narrativeByYear.get(String(y.year));
-				return n ? { by: narrativeModelLabel(n.generated_by), published: n.is_published } : null;
+				return n
+					? { by: narrativeModelLabel(n.generated_by), published: n.is_published, changedAt: n.story_changed_at }
+					: null;
 			})()
 		}))
 		.sort((a, b) => b.year - a.year);

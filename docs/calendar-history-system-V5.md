@@ -223,6 +223,10 @@ td-f1f49b. Full plan with AGY2's review folded in:
     published text asks for confirmation, and the server checks this too.
   - A year stays on the admin page while it has text or drafts, even if its accepted days are
     reopened (Generate is disabled until it has accepted days again).
+  - `story_changed_at` (migration 0034, trigger-maintained, can't be set by hand) moves whenever
+    the text or its published state changes. `/admin/exports` uses it to flag a Full history or
+    Narrative only PDF made before the story changed, next to the "N more days accepted since"
+    warning.
 
 ---
 

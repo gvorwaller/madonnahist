@@ -250,6 +250,24 @@ out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
 expect_ok "app UPDATE narrative_summaries.source_draft_id → allowed" "UPDATE 1" "$out"
 
 # ─────────────────────────────────────────────────────────────────
+# story_changed_at (0034): moves on text or publish changes only, and
+# can't be set by hand.
+# ─────────────────────────────────────────────────────────────────
+psql_owner -tAc "UPDATE narrative_summaries SET story_changed_at = '2000-01-01' WHERE scope='year' AND scope_key='1970';" >/dev/null 2>&1
+t0=$(psql_owner -tAc "SELECT story_changed_at FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+if [[ "$t0" != 2000-01-01* ]]; then green "story_changed_at can't be set by hand (trigger keeps it)"; else red "story_changed_at was set by hand to $t0"; fi
+psql_app -tAc "UPDATE narrative_summaries SET generated_by = 'other-model' WHERE scope='year' AND scope_key='1970';" >/dev/null
+t1=$(psql_owner -tAc "SELECT story_changed_at FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+if [[ "$t1" == "$t0" ]]; then green "a change that isn't text or publish leaves story_changed_at alone"; else red "story_changed_at moved on a generated_by change ($t0 → $t1)"; fi
+psql_app -tAc "UPDATE narrative_summaries SET summary_text = summary_text || ' more' WHERE scope='year' AND scope_key='1970';" >/dev/null
+t2=$(psql_owner -tAc "SELECT story_changed_at > '$t1'::timestamptz FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+if [[ "$t2" == "t" ]]; then green "a text change moves story_changed_at"; else red "story_changed_at didn't move on a text change"; fi
+t3=$(psql_owner -tAc "SELECT story_changed_at FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+psql_app -tAc "UPDATE narrative_summaries SET is_published = NOT is_published WHERE scope='year' AND scope_key='1970';" >/dev/null
+t4=$(psql_owner -tAc "SELECT story_changed_at > '$t3'::timestamptz FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+if [[ "$t4" == "t" ]]; then green "publishing or unpublishing moves story_changed_at"; else red "story_changed_at didn't move on a publish change"; fi
+
+# ─────────────────────────────────────────────────────────────────
 echo "----"
 echo "PASS: $PASS"
 echo "FAIL: $FAIL"
