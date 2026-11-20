@@ -15,6 +15,7 @@ import { query, withTransaction } from '$lib/db';
 import { error, fail } from '@sveltejs/kit';
 import { getYearCoverage } from '$lib/server/viewer';
 import { deleteObject } from '$lib/ingest/spaces-upload';
+import { narrativeModelLabel } from '$lib/narrative-models';
 import type { Actions, PageServerLoad } from './$types';
 
 function requireAdmin(locals: App.Locals) {
@@ -63,18 +64,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 			`SELECT payload->>'scope_key' AS scope_key FROM job_runs
 			  WHERE job_type = 'pdf_export' AND status IN ('pending', 'in_progress') AND payload->>'scope' = 'year'`
 		),
-		// Which years have a published narrative — feeds the per-year
-		// "Narrative only" option's disabled state below (Gaylon, 2026-07-23).
-		// A direct batch query, same pattern as src/routes/admin/narratives/+page.server.ts's
-		// load rather than N calls to getPublishedNarrative() (that helper is
-		// single-scope_key, viewer-facing; this just needs existence per year).
-		query<{ scope_key: string }>(
-			`SELECT scope_key FROM narrative_summaries WHERE scope = 'year' AND is_published = true`
+		// Each year's current narrative: whether it's published (feeds the
+		// "Narrative only" option's disabled state, Gaylon 2026-07-23) and
+		// which model wrote it, shown in the row so you needn't check
+		// /admin/narratives (Gaylon, 2026-11-20). One batch query, as in
+		// src/routes/admin/narratives/+page.server.ts's load.
+		query<{ scope_key: string; is_published: boolean; generated_by: string }>(
+			`SELECT scope_key, is_published, generated_by FROM narrative_summaries WHERE scope = 'year'`
 		)
 	]);
 
 	const inFlightYears = new Set(inFlightRes.rows.map((r) => r.scope_key));
-	const publishedNarrativeYears = new Set(publishedNarrativesRes.rows.map((r) => r.scope_key));
+	const narrativeByYear = new Map(publishedNarrativesRes.rows.map((r) => [r.scope_key, r]));
 
 	const years = yearCoverage
 		.filter((y) => y.accepted > 0)
@@ -84,7 +85,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 			total: y.total,
 			percent: y.percent,
 			pending: inFlightYears.has(String(y.year)),
-			hasPublishedNarrative: publishedNarrativeYears.has(String(y.year))
+			hasPublishedNarrative: narrativeByYear.get(String(y.year))?.is_published === true,
+			narrative: (() => {
+				const n = narrativeByYear.get(String(y.year));
+				return n ? { by: narrativeModelLabel(n.generated_by), published: n.is_published } : null;
+			})()
 		}))
 		.sort((a, b) => b.year - a.year);
 

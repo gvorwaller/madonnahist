@@ -14,6 +14,7 @@
 		percent: number;
 		pending: boolean;
 		hasPublishedNarrative: boolean;
+		narrative: { by: string; published: boolean } | null;
 	}
 	interface ExportListRow {
 		id: number;
@@ -144,6 +145,14 @@
 									<td class="col-year">{row.year}</td>
 									<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
 									<td class="col-pdfs">
+										<p class="story-line">
+											{#if row.narrative}
+												<span class="pdf-kind">Story in use:</span> {row.narrative.by}
+												&middot; {row.narrative.published ? 'published' : 'not published'}
+											{:else}
+												Story in use: none yet
+											{/if}
+										</p>
 										<ul class="pdf-list" aria-label="PDFs for {row.year}">
 											{#each MODES as mode (mode)}
 												{@const e = latestPdf.get(`${row.year}:${mode}`)}
@@ -213,7 +222,7 @@
 					{plural(list.length, 'PDF', 'PDFs')} · {formatBytes(list.reduce((n, r) => n + r.byteSize, 0))}
 				{/snippet}
 				{#snippet children(list)}
-					<table class="data-table">
+					<table class="data-table exist-table">
 						<thead>
 							<tr>
 								<th>Year</th>
@@ -227,11 +236,11 @@
 						<tbody>
 							{#each list as row (row.id)}
 								<tr>
-									<td>{row.year}</td>
-									<td>{CONTENT_MODE_LABELS[row.contentMode]}</td>
-									<td class="col-num">{formatBytes(row.byteSize)}</td>
-									<td class="col-num">{row.dayCount}</td>
-									<td class="col-meta">{new Date(row.createdAt).toLocaleString()}</td>
+									<td class="col-year">{row.year}</td>
+									<td class="col-content">{CONTENT_MODE_LABELS[row.contentMode]}</td>
+									<td class="col-num" data-label="Size">{formatBytes(row.byteSize)}</td>
+									<td class="col-num" data-label="Days">{row.dayCount}</td>
+									<td class="col-meta" data-label="Created">{new Date(row.createdAt).toLocaleString()}</td>
 									<td class="col-actions">
 										<a class="btn btn-sm btn-secondary" href="/admin/exports/download/{row.id}">Download</a>
 										<button class="btn btn-sm btn-danger" onclick={() => (deleteTarget = row)}>Delete</button>
@@ -350,6 +359,11 @@
 		font-style: italic;
 		color: #4a4a4a;
 	}
+	.story-line {
+		margin: 0 0 0.2rem;
+		font-size: 0.8rem;
+		color: #333;
+	}
 	.pdf-list {
 		list-style: none;
 		margin: 0;
@@ -401,6 +415,41 @@
 		}
 		.gen-table .col-actions form {
 			flex-wrap: wrap;
+		}
+
+		/* Existing exports: year + content as the card's heading, then
+		   labelled size / days / created, then the buttons. */
+		.exist-table thead {
+			display: none;
+		}
+		.exist-table tr {
+			display: block;
+			padding: 0.6rem 0;
+			border-bottom: 1px solid #e5e5e5;
+		}
+		.exist-table td {
+			border: none;
+			padding: 0.15rem 0.6rem;
+			text-align: left;
+			white-space: normal;
+		}
+		.exist-table .col-year,
+		.exist-table .col-content {
+			display: inline-block;
+			font-weight: 700;
+			font-size: 0.95rem;
+			padding-right: 0;
+		}
+		.exist-table td[data-label] {
+			display: block;
+		}
+		.exist-table td[data-label]::before {
+			content: attr(data-label) ': ';
+			color: #4a4a4a;
+		}
+		.exist-table .col-actions {
+			display: block;
+			padding-top: 0.4rem;
 		}
 	}
 	.mode-select {
