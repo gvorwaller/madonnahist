@@ -189,6 +189,41 @@ then, and there is nothing to test them against now):
 - enrichment reads shared memories;
 - Madonna's pre-1976 memories, typed by Gaylon.
 
+### Year narratives: model choice, saved guidance, every draft kept (2026-11-20, migration 0033)
+
+td-f1f49b. Full plan with AGY2's review folded in:
+`docs/2026-11-20-narrative-models-guidance-plan.md`.
+
+- **Models** are listed in `src/lib/narrative-models.ts`: Claude Opus 5.5 (default, effort `high`)
+  and Gemini 3.1 Pro (`gemini-3.1-pro-preview`, REST with the key in a header). Changing a model
+  means a code change and a deploy.
+- **Guidance:**
+  - The house style lives in `app_state.narrative_style_guidance`. It governs voice, tone,
+    structure and length, and never facts.
+  - Notes for each year live in `narrative_guidance`. They are authoritative identifications and
+    corrections, but the writer must not invent scenes from them or tie a note's fact to a date
+    the entries don't support.
+  - Both are copied into each job when it is queued.
+- **`narrative_drafts`** is the append-only list of every version of a year's text.
+  - Each row records its model, mode (`fresh`, `revise`, `edit` for a hand edit, or `imported`
+    for narratives that existed before 0033), the guidance used, the base text for a revision, and
+    token counts.
+  - The worker inserts generated drafts, each tagged with its `job_run_id` (UNIQUE). The draft
+    and the job's completion commit in one transaction, and only while that attempt still owns
+    the job, so a crash or a stale retry can't add a second draft.
+  - The app inserts one draft per hand edit (provider `human`), so the current text is always a
+    draft and replacing it never loses it. Neither role can update or delete a draft.
+- **`narrative_summaries`** is still the one text per year that the family sees.
+  - **The worker can no longer write it** (0033 revoked INSERT/UPDATE). Text changes only through
+    `/admin/narratives`: "Use this" copies a draft across, and Edit by hand saves a new draft and
+    points `source_draft_id` at it.
+  - Every action that writes a year's narrative takes that year's advisory lock first, which also
+    covers a year that has no row yet.
+  - Generating never touches published text, so "Unpublish & Regenerate" is gone. Replacing
+    published text asks for confirmation, and the server checks this too.
+  - A year stays on the admin page while it has text or drafts, even if its accepted days are
+    reopened (Generate is disabled until it has accepted days again).
+
 ---
 
 ## 4. What's Not Built Yet

@@ -25,6 +25,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { getApiKey } from './spaces.js';
+import { findNarrativeModel, type NarrativeModel } from '../../../src/lib/narrative-models.js';
 
 const DEFAULT_MODEL = 'claude-sonnet-5';
 
@@ -148,4 +149,160 @@ export async function completeText(system: string, user: string, maxTokens = 204
 		.map((b) => b.text)
 		.join('\n')
 		.trim();
+}
+
+// ─── Year narratives: several providers (td-f1f49b) ───
+
+export interface NarrativeCompletion {
+	text: string;
+	inputTokens: number | null;
+	outputTokens: number | null;
+}
+
+// Thinking tokens count against max_tokens on Opus 5.5 (thinking is always
+// on) and against maxOutputTokens on Gemini, so the 2048 the old
+// completeText() used would cut a narrative short.
+const NARRATIVE_MAX_TOKENS = 16000;
+const GEMINI_MAX_OUTPUT_TOKENS = 32768;
+const GEMINI_TIMEOUT_MS = 180_000;
+
+/**
+ * One year-narrative completion on whichever registered model was asked for.
+ * Throws on anything other than a complete, non-empty answer (a refusal, a
+ * cut-off, a blocked prompt), so the job fails visibly instead of saving a
+ * partial narrative.
+ *
+ * Stub mode (MADONNAHIST_LLM_STUB=1): returns MADONNAHIST_LLM_STUB_TEXT with
+ * "[model=<id>]" appended so tests can tell candidates apart; with
+ * MADONNAHIST_LLM_STUB_ECHO=1 it also appends the full system and user
+ * prompts, so tests can check what reached the model.
+ */
+export async function completeNarrative(opts: {
+	model: string;
+	system: string;
+	user: string;
+}): Promise<NarrativeCompletion> {
+	const model = findNarrativeModel(opts.model);
+	if (!model) throw new Error(`model not offered for narratives: ${JSON.stringify(opts.model)}`);
+
+	if (isStubMode()) {
+		let text = `${stubPlainText()} [model=${model.id}]`;
+		if (process.env.MADONNAHIST_LLM_STUB_ECHO === '1') {
+			text += `\n\n[[SYSTEM]]\n${opts.system}\n\n[[USER]]\n${opts.user}`;
+		}
+		log(`STUB mode — narrative via ${model.id} (${text.length} chars)`);
+		return { text, inputTokens: opts.system.length + opts.user.length, outputTokens: text.length };
+	}
+
+	return model.provider === 'google'
+		? completeGemini(model, opts.system, opts.user)
+		: completeAnthropic(model, opts.system, opts.user);
+}
+
+async function completeAnthropic(model: NarrativeModel, system: string, user: string): Promise<NarrativeCompletion> {
+	const client = await getClient();
+	// Streamed so a long thinking pass can't hit the SDK's non-streaming
+	// request timeout; finalMessage() gives the complete response.
+	const message = await client.messages
+		.stream({
+			model: model.id,
+			max_tokens: NARRATIVE_MAX_TOKENS,
+			...(model.effort ? { output_config: { effort: model.effort } } : {}),
+			system,
+			messages: [{ role: 'user', content: user }]
+		})
+		.finalMessage();
+
+	if (message.stop_reason !== 'end_turn') {
+		const detail =
+			message.stop_reason === 'refusal' && message.stop_details
+				? ` (${message.stop_details.category ?? 'no category'})`
+				: '';
+		throw new Error(`${model.id} stopped with stop_reason=${message.stop_reason}${detail}`);
+	}
+	const text = message.content
+		.filter((b): b is Anthropic.TextBlock => b.type === 'text')
+		.map((b) => b.text)
+		.join('\n')
+		.trim();
+	if (!text) throw new Error(`${model.id} returned no text`);
+	return { text, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+}
+
+interface GeminiPart {
+	text?: string;
+	thought?: boolean;
+}
+interface GeminiResponse {
+	candidates?: Array<{ content?: { parts?: GeminiPart[] }; finishReason?: string }>;
+	promptFeedback?: { blockReason?: string };
+	usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+}
+
+async function completeGemini(model: NarrativeModel, system: string, user: string): Promise<NarrativeCompletion> {
+	const apiKey = await getApiKey('google_gemini', 'API_KEY', 'GEMINI_API_KEY');
+	// Key goes in a header, never the URL, so a failed request can't leak it
+	// into PM2 logs or job_runs.last_error.
+	const res = await fetch(
+		`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model.id)}:generateContent`,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+			body: JSON.stringify({
+				systemInstruction: { parts: [{ text: system }] },
+				contents: [{ role: 'user', parts: [{ text: user }] }],
+				generationConfig: { maxOutputTokens: GEMINI_MAX_OUTPUT_TOKENS }
+			}),
+			signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS)
+		}
+	);
+	if (!res.ok) {
+		throw new Error(`${model.id} HTTP ${res.status}${await geminiErrorCodes(res)}`);
+	}
+	const data = (await res.json()) as GeminiResponse;
+	const cand = data.candidates?.[0];
+	if (!cand) {
+		throw new Error(`${model.id} returned no candidates (blockReason=${data.promptFeedback?.blockReason ?? 'none'})`);
+	}
+	if (cand.finishReason !== 'STOP') {
+		throw new Error(`${model.id} stopped with finishReason=${cand.finishReason ?? 'missing'}`);
+	}
+	// Thinking models can return their reasoning as parts marked thought:true;
+	// only the answer parts belong in a family narrative.
+	const text = (cand.content?.parts ?? [])
+		.filter((p) => typeof p.text === 'string' && !p.thought)
+		.map((p) => p.text as string)
+		.join('')
+		.trim();
+	if (!text) throw new Error(`${model.id} returned no text`);
+	const u = data.usageMetadata;
+	return {
+		text,
+		inputTokens: u?.promptTokenCount ?? null,
+		// Same basis as Anthropic's output_tokens, which includes thinking.
+		// Unknown (null) when Google sent neither count, not 0.
+		outputTokens:
+			u && (u.candidatesTokenCount != null || u.thoughtsTokenCount != null)
+				? (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0)
+				: null
+	};
+}
+
+/**
+ * A failed Gemini call's error goes into job_runs.last_error and onto the
+ * admin page, so keep only Google's machine codes (e.g. " PERMISSION_DENIED
+ * API_KEY_INVALID"), never the free-text body, which can echo request details.
+ */
+async function geminiErrorCodes(res: Response): Promise<string> {
+	try {
+		const body = (await res.json()) as {
+			error?: { status?: unknown; details?: Array<{ reason?: unknown }> };
+		};
+		const codes = [body.error?.status, ...(body.error?.details ?? []).map((d) => d.reason)].filter(
+			(c): c is string => typeof c === 'string' && /^[A-Z0-9_]{1,64}$/.test(c)
+		);
+		return codes.length > 0 ? ` ${codes.join(' ')}` : '';
+	} catch {
+		return '';
+	}
 }

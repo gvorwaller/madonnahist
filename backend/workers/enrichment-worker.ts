@@ -8,12 +8,18 @@
  *                        people/places/events and suggested topical tags,
  *                        and replaces that day's AI-sourced day_entities /
  *                        day_tags rows in one transaction.
- *   narrative_summary — Phase E of the plan. Payload {scope, scope_key};
- *                        only scope='year' is implemented (decade/person are
- *                        deferred, tracked under td-e25bd4 per Phase E item
- *                        5). Gathers the year's accepted days, asks Claude
- *                        for a faithful narrative, and upserts an
- *                        unpublished draft row in narrative_summaries.
+ *   narrative_summary — Phase E of the plan, reworked by td-f1f49b
+ *                        (docs/2026-11-20-narrative-models-guidance-plan.md).
+ *                        Payload {scope, scope_key, model?, mode?, base_text?,
+ *                        style_guidance?, year_guidance?, requested_by?};
+ *                        only scope='year' is implemented (decade/person
+ *                        deferred, td-e25bd4). Gathers the year's accepted
+ *                        days, asks the chosen model (Claude or Gemini) for a
+ *                        faithful narrative steered by the admin's guidance,
+ *                        and appends one candidate row to narrative_drafts.
+ *                        It never writes narrative_summaries: migration 0033
+ *                        revoked that, and the admin promotes a candidate
+ *                        from /admin/narratives.
  *
  *   pdf_export        — Phase H of the plan. Payload
  *                        {scope: 'year', scope_key, requested_by, content_mode}
@@ -39,19 +45,6 @@
  *                        on the shared droplet, so this is stricter than
  *                        CLAIM_BATCH_CAP below, not just subject to it.
  *
- *                        CRITICAL invariant: the worker never writes to a
- *                        published row, and can never publish one — no force
- *                        override. Enforced twice, independently: (a) this
- *                        file's guard checks is_published BEFORE calling the
- *                        LLM and no-ops (job marked done, LLM never called)
- *                        if the row is already published; (b) at the DB
- *                        layer, migration 0021 grants madonnahist_worker
- *                        UPDATE on summary_text/generated_by/generated_at
- *                        only — is_published is not in that column list, so
- *                        even a buggy worker cannot flip it. Regenerating a
- *                        published year requires an admin to unpublish first
- *                        (src/routes/admin/narratives/+page.server.ts's
- *                        unpublishAndRegenerate action).
  *
  * Cloned from backend/workers/ocr-worker.ts's skeleton (claimJobs via
  * SELECT ... FOR UPDATE SKIP LOCKED, --daemon poll loop, heartbeat via
@@ -77,9 +70,19 @@
  *   --daemon      Run as persistent queue poller (for PM2)
  *   --backfill    Enqueue entity_extract for every currently-accepted day
  *                 that lacks a pending/in_progress job, then exit
+ *   --job-ids=1,2 Only claim these job_runs ids (any type). For tests and
+ *                 for running one specific job by hand; without it, the
+ *                 oldest jobs of each type are claimed as usual.
  */
 import { query, withClient, withTransaction, shutdown } from './lib/db.js';
-import { completeJson, completeText, getEnrichmentModel } from './lib/llm.js';
+import { completeJson, completeNarrative } from './lib/llm.js';
+import {
+	DEFAULT_NARRATIVE_MODEL,
+	MAX_GUIDANCE_LENGTH,
+	MAX_NARRATIVE_LENGTH,
+	findNarrativeModel,
+	isNarrativeMode
+} from '../../src/lib/narrative-models.js';
 import { putObject } from './lib/spaces.js';
 import { slugifyTagLabel, isValidTagLabel, MAX_TAG_LABEL_LENGTH } from '../../src/lib/server/tags.js';
 import { issueRenderToken, RENDER_TOKEN_COOKIE_NAME } from '../../src/lib/server/render-token.js';
@@ -95,6 +98,11 @@ const LIMIT = Number(process.argv.find((a) => a.startsWith('--limit='))?.split('
 const DRY_RUN = process.argv.includes('--dry-run');
 const DAEMON = process.argv.includes('--daemon');
 const BACKFILL = process.argv.includes('--backfill');
+const JOB_IDS_ARG = process.argv.find((a) => a.startsWith('--job-ids='))?.split('=')[1];
+const JOB_IDS: number[] | null = JOB_IDS_ARG === undefined ? null : JOB_IDS_ARG.split(',').filter(Boolean).map(Number);
+if (JOB_IDS && (JOB_IDS.length === 0 || JOB_IDS.some((n) => !Number.isSafeInteger(n) || n <= 0))) {
+	throw new Error(`--job-ids must be a comma-separated list of job ids, got ${JSON.stringify(JOB_IDS_ARG)}`);
+}
 const DAEMON_POLL_MS = 5000;
 
 function log(msg: string) {
@@ -105,6 +113,10 @@ interface ClaimedJob {
 	id: number;
 	job_type: string;
 	payload: Record<string, unknown>;
+	/** job_runs.attempts after this claim: identifies this attempt, so a
+	 *  stale attempt (reclaimed after the stale timeout) can't finish a job
+	 *  that a newer attempt now owns. */
+	attempt: number;
 }
 
 // ─── Job claiming ───
@@ -122,15 +134,31 @@ async function claimJobs(jobType: string, staleMinutes: number, maxBatchOverride
 	return withClient(async (client) => {
 		await client.query('BEGIN');
 
-		const res = await client.query<{ id: number; job_type: string; payload: Record<string, unknown> }>(
-			`SELECT id, job_type, payload FROM job_runs
+		// A job whose last allowed attempt went stale (the worker died or hung
+		// mid-job) can never be claimed again; mark it failed so it stops
+		// looking "in progress" to the admin pages, which would otherwise
+		// refuse to queue that work again.
+		const gaveUp = await client.query(
+			`UPDATE job_runs
+			    SET status = 'failed', completed_at = NOW(),
+			        last_error = 'gave up after ' || attempts || ' attempts: the last one stopped without finishing (worker crash or timeout)'
+			  WHERE job_type = $2 AND status = 'in_progress' AND attempts >= $1
+			    AND started_at < NOW() - ($3 * INTERVAL '1 minute')
+			    AND ($4::bigint[] IS NULL OR id = ANY($4))`,
+			[MAX_ATTEMPTS, jobType, staleMinutes, JOB_IDS]
+		);
+		if ((gaveUp.rowCount ?? 0) > 0) log(`Marked ${gaveUp.rowCount} exhausted ${jobType} job(s) failed`);
+
+		const res = await client.query<{ id: number; job_type: string; payload: Record<string, unknown>; attempts: number }>(
+			`SELECT id, job_type, payload, attempts FROM job_runs
 			  WHERE job_type = $2
 			    AND ((status = 'pending') OR (status = 'in_progress' AND started_at < NOW() - ($3 * INTERVAL '1 minute')))
 			    AND attempts < $1
+			    AND ($4::bigint[] IS NULL OR id = ANY($4))
 			  ORDER BY enqueued_at
 			  LIMIT ${batchSize}
 			  FOR UPDATE SKIP LOCKED`,
-			[MAX_ATTEMPTS, jobType, staleMinutes]
+			[MAX_ATTEMPTS, jobType, staleMinutes, JOB_IDS]
 		);
 
 		if (res.rows.length === 0) {
@@ -144,7 +172,7 @@ async function claimJobs(jobType: string, staleMinutes: number, maxBatchOverride
 			[res.rows.map((r) => r.id)]
 		);
 		await client.query('COMMIT');
-		return res.rows;
+		return res.rows.map(({ attempts, ...r }) => ({ ...r, attempt: attempts + 1 }));
 	});
 }
 
@@ -431,8 +459,14 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 }
 
 // ─── narrative_summary ───
+//
+// td-f1f49b (docs/2026-11-20-narrative-models-guidance-plan.md): each job
+// produces one candidate in narrative_drafts, on the model the admin chose,
+// steered by the house style and the year's notes. The worker never writes
+// narrative_summaries (0033 revoked that); the admin promotes a candidate
+// with "Use this" on /admin/narratives.
 
-const YEAR_NARRATIVE_SYSTEM = `You are writing a warm, faithful year-summary narrative for a private family history archive spanning roughly the 1960s to the present. The source material is a set of daily calendar-entry transcriptions for one year, each written by a family member at the time.
+const YEAR_NARRATIVE_BASE = `You are writing a warm, faithful year-summary narrative for a private family history archive spanning roughly the 1960s to the present. The source material is a set of daily calendar-entry transcriptions for one year, each written by a family member at the time.
 
 You will be given every accepted day's transcribed text for one calendar year, grouped by month.
 
@@ -440,10 +474,44 @@ Write a single flowing narrative (roughly 400-800 words) that:
 - Reads in a warm, personal, family-history voice — as if written for the family, not a stranger.
 - References months and seasons to give the reader a sense of the year's shape and passage of time.
 - Draws out recurring people, places, and themes that actually appear in the entries.
-- Is strictly faithful to the source material: never invent a fact, event, name, date, or detail that is not present in the entries. If the entries are sparse or repetitive, say so plainly rather than embellishing.
-- Is plain prose — no markdown headings, no bullet lists, no code fences.
+- Is strictly faithful to the source material: never invent a fact, event, name, date, or detail that is not present in the entries or stated explicitly in the editor's notes. If the entries are sparse or repetitive, say so plainly rather than embellishing.`;
 
-Respond with ONLY the narrative text itself — no preamble, no title, no commentary about the task.`;
+const YEAR_NARRATIVE_OUTPUT_RULES = `Output rules (these always apply): write plain prose — no markdown headings, no bullet lists, no code fences. Respond with ONLY the narrative text itself — no preamble, no title, no commentary about the task.`;
+
+/**
+ * Keep typed or transcribed text from closing or opening the prompt's own
+ * tags. Applied to everything interpolated into a tag: guidance, the
+ * current narrative, and the day entries themselves.
+ */
+function stripPromptTags(text: string): string {
+	return text.replace(/<\/?\s*(house_style|editor_notes|current_narrative|entries)\b[^>]*>/gi, '');
+}
+
+function buildYearNarrativeSystem(opts: {
+	year: string;
+	styleGuidance: string;
+	yearGuidance: string;
+	revise: boolean;
+}): string {
+	const parts = [YEAR_NARRATIVE_BASE];
+	if (opts.styleGuidance) {
+		parts.push(
+			`The family editor has set a house style, below. It governs voice, tone, structure, and length only — it never adds facts, people, places, or events. Where it differs from the defaults above on tone, structure, or length, follow it, within the output rules at the end.\n<house_style>\n${stripPromptTags(opts.styleGuidance)}\n</house_style>`
+		);
+	}
+	if (opts.yearGuidance) {
+		parts.push(
+			`The family editor has written notes for ${opts.year}, below. Treat them as authoritative: they identify people, explain shorthand, and correct how the entries should be read. You may state background facts the notes give explicitly, and use them to interpret the entries. Do not build scenes or details beyond what the notes literally say, and do not tie a fact from the notes to a particular month or date unless that month's or date's entries support it. Where the notes ask for a different emphasis or approach, follow them within these rules.\n<editor_notes year="${opts.year}">\n${stripPromptTags(opts.yearGuidance)}\n</editor_notes>`
+		);
+	}
+	if (opts.revise) {
+		parts.push(
+			`You are revising an existing narrative, given in the user message inside <current_narrative>. It is a draft, not a source: it may contain mistakes. Make the changes the editor's notes and house style ask for. Keep the rest of it only where the entries or the editor's notes support it, and remove or correct anything they don't.`
+		);
+	}
+	parts.push(YEAR_NARRATIVE_OUTPUT_RULES);
+	return parts.join('\n\n');
+}
 
 const MONTH_NAMES = [
 	'January', 'February', 'March', 'April', 'May', 'June',
@@ -461,7 +529,7 @@ function isValidYearScopeKey(s: unknown): s is string {
 }
 
 /** Builds the per-month-grouped prompt body fed to the year-narrative system prompt. */
-function buildYearNarrativePrompt(scopeKey: string, days: AcceptedDayRow[]): string {
+function buildYearNarrativePrompt(scopeKey: string, days: AcceptedDayRow[], baseText: string | null): string {
 	const byMonth = new Map<number, AcceptedDayRow[]>();
 	for (const d of days) {
 		const month = Number(d.entry_date.slice(5, 7));
@@ -475,58 +543,152 @@ function buildYearNarrativePrompt(scopeKey: string, days: AcceptedDayRow[]): str
 		sections.push(`## ${MONTH_NAMES[month - 1]}`);
 		for (const r of rows) {
 			const text = [r.corrected_text ?? '', r.day_narrative ?? ''].filter((s) => s.trim() !== '').join(' — ');
-			if (text.trim() !== '') sections.push(`${r.entry_date}: ${text}`);
+			if (text.trim() !== '') sections.push(`${r.entry_date}: ${stripPromptTags(text)}`);
 		}
 	}
-	return `YEAR: ${scopeKey}\n\n${sections.join('\n')}`;
+	let prompt = `YEAR: ${scopeKey}\n\n<entries year="${scopeKey}">\n${sections.join('\n')}\n</entries>`;
+	if (baseText) {
+		prompt +=
+			`\n\n<current_narrative>\n${stripPromptTags(baseText)}\n</current_narrative>\n\n` +
+			`Revise the narrative above as instructed, using the entries as the source of truth.`;
+	}
+	return prompt;
+}
+
+interface NarrativeJobSpec {
+	scope: 'year';
+	scopeKey: string;
+	model: NonNullable<ReturnType<typeof findNarrativeModel>>;
+	mode: 'fresh' | 'revise';
+	baseText: string | null;
+	/** null for a job queued before td-f1f49b: read the saved guidance instead. */
+	guidance: { style: string; year: string } | null;
+	requestedBy: number | null;
+}
+
+/**
+ * Validate a job's payload before any paid call. Two shapes are accepted:
+ * the admin page's (td-f1f49b: model, mode, guidance copies, requester),
+ * and the plain {scope, scope_key} of jobs queued before it, which run as
+ * the default model in fresh mode with the saved guidance. Anything else —
+ * including a half-formed modern payload — fails rather than falling back.
+ */
+function parseNarrativePayload(raw: unknown): NarrativeJobSpec | string {
+	// JSONB NOT NULL still allows a JSON null, array, or scalar.
+	if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+		return `payload must be a JSON object, got ${raw === null ? 'null' : Array.isArray(raw) ? 'an array' : typeof raw}`;
+	}
+	const p = raw as Record<string, unknown>;
+	if (p.scope !== 'year') {
+		return `scope not implemented: ${JSON.stringify(p.scope)} (only 'year' is implemented; decade/person are deferred, td-e25bd4)`;
+	}
+	const scopeKey = p.scope_key;
+	if (!isValidYearScopeKey(scopeKey)) {
+		return `invalid scope_key for scope='year': ${JSON.stringify(scopeKey)} (expected a 4-digit year string)`;
+	}
+	const extra = Object.keys(p).filter((k) => k !== 'scope' && k !== 'scope_key');
+	if (extra.length === 0) {
+		return {
+			scope: 'year',
+			scopeKey,
+			model: findNarrativeModel(DEFAULT_NARRATIVE_MODEL)!,
+			mode: 'fresh',
+			baseText: null,
+			guidance: null,
+			requestedBy: null
+		};
+	}
+
+	const known = new Set(['model', 'mode', 'base_text', 'style_guidance', 'year_guidance', 'requested_by']);
+	const unknown = extra.filter((k) => !known.has(k));
+	if (unknown.length > 0) return `unexpected payload field(s): ${unknown.join(', ')}`;
+	const model = typeof p.model === 'string' ? findNarrativeModel(p.model) : undefined;
+	if (!model) return `model not offered for narratives: ${JSON.stringify(p.model)}`;
+	if (!isNarrativeMode(p.mode)) return `invalid mode: ${JSON.stringify(p.mode)} (expected 'fresh' or 'revise')`;
+	const mode = p.mode;
+	for (const k of ['style_guidance', 'year_guidance'] as const) {
+		const v = p[k];
+		if (typeof v !== 'string') return `${k} must be a string`;
+		if (v.length > MAX_GUIDANCE_LENGTH) return `${k} is longer than ${MAX_GUIDANCE_LENGTH} characters`;
+	}
+	let baseText: string | null = null;
+	if (mode === 'revise') {
+		if (typeof p.base_text !== 'string' || !p.base_text.trim()) return 'revise job has no base_text to revise';
+		if (p.base_text.length > MAX_NARRATIVE_LENGTH) return `base_text is longer than ${MAX_NARRATIVE_LENGTH} characters`;
+		baseText = p.base_text.trim();
+	} else if (p.base_text !== undefined) {
+		return 'base_text is only allowed on a revise job';
+	}
+	const rb = p.requested_by;
+	if (!(typeof rb === 'number' && Number.isInteger(rb) && rb > 0 && rb <= 2_147_483_647)) {
+		return `invalid requested_by: ${JSON.stringify(rb)}`;
+	}
+	return {
+		scope: 'year',
+		scopeKey,
+		model,
+		mode,
+		baseText,
+		guidance: { style: (p.style_guidance as string).trim(), year: (p.year_guidance as string).trim() },
+		requestedBy: rb
+	};
+}
+
+/** The guidance saved now, for a job queued before td-f1f49b (which carries none). */
+async function readSavedGuidance(scopeKey: string): Promise<{ style: string; year: string }> {
+	const [styleRes, yearRes] = await Promise.all([
+		query<{ value: { text?: unknown } }>(`SELECT value FROM app_state WHERE key = 'narrative_style_guidance'`),
+		query<{ guidance_text: string }>(
+			`SELECT guidance_text FROM narrative_guidance WHERE scope = 'year' AND scope_key = $1`,
+			[scopeKey]
+		)
+	]);
+	const styleText = styleRes.rows[0]?.value?.text;
+	return {
+		style: typeof styleText === 'string' ? styleText.trim() : '',
+		year: yearRes.rows[0]?.guidance_text.trim() ?? ''
+	};
+}
+
+/**
+ * Finish a narrative job, but only while this attempt still owns it: a
+ * stale attempt (one the claim query reclaimed after the stale timeout) must
+ * not overwrite the newer attempt's outcome. Returns false if superseded.
+ */
+async function finishNarrativeJob(job: ClaimedJob, status: 'done' | 'failed', note: string): Promise<boolean> {
+	const res = await query(
+		`UPDATE job_runs SET status = $3, last_error = $4, completed_at = NOW()
+		  WHERE id = $1 AND attempts = $2 AND status = 'in_progress'`,
+		[job.id, job.attempt, status, note]
+	);
+	return res.rowCount === 1;
+}
+
+async function failNarrativeJob(job: ClaimedJob, reason: string): Promise<void> {
+	await finishNarrativeJob(job, 'failed', reason);
+	log(`  job ${job.id}: FAILED (${reason})`);
 }
 
 async function processNarrativeSummary(job: ClaimedJob): Promise<void> {
-	const scope = job.payload.scope;
-	const scopeKey = job.payload.scope_key;
-
-	if (scope !== 'year') {
-		await query(
-			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
-			[job.id, `scope not implemented: ${JSON.stringify(scope)} (only 'year' is implemented in Phase E; decade/person are deferred, td-e25bd4)`]
-		);
-		log(`  job ${job.id}: FAILED (scope not implemented: ${JSON.stringify(scope)})`);
-		return;
-	}
-
-	if (!isValidYearScopeKey(scopeKey)) {
-		await query(
-			`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`,
-			[job.id, `invalid scope_key for scope='year': ${JSON.stringify(scopeKey)} (expected a 4-digit year string)`]
-		);
-		log(`  job ${job.id}: FAILED (invalid scope_key: ${JSON.stringify(scopeKey)})`);
-		return;
-	}
-
+	let label = `job ${job.id}`;
 	try {
-		// CRITICAL guard, checked FIRST, before anything else including the
-		// dry-run branch: a published row is never touched and the LLM is
-		// never called for one. This is the worker-side half of the
-		// "no force override" invariant; migration 0021's column-scoped grant
-		// (UPDATE on summary_text/generated_by/generated_at only, excluding
-		// is_published) is the DB-layer half that holds even if this guard
-		// had a bug.
-		const existingRes = await query<{ is_published: boolean }>(
-			`SELECT is_published FROM narrative_summaries WHERE scope = $1 AND scope_key = $2`,
-			[scope, scopeKey]
-		);
-		if (existingRes.rows[0]?.is_published) {
-			await query(
-				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
-				[job.id, 'skipped: published — unpublish first']
-			);
-			log(`  scope=year scope_key=${scopeKey}: SKIPPED (already published)`);
+		const spec = parseNarrativePayload(job.payload);
+		if (typeof spec === 'string') {
+			await failNarrativeJob(job, spec);
 			return;
 		}
+		const { scopeKey, model, mode, baseText } = spec;
+		label = `scope=year scope_key=${scopeKey} model=${model.id} mode=${mode}`;
 
 		if (DRY_RUN) {
-			log(`  [DRY] scope=year scope_key=${scopeKey} would generate narrative`);
-			await query(`UPDATE job_runs SET status='pending', started_at=NULL WHERE id=$1`, [job.id]);
+			// Hand the job back exactly as it was: undo this claim's attempt,
+			// and only if this attempt still owns it.
+			log(`  [DRY] ${label} would generate a candidate`);
+			await query(
+				`UPDATE job_runs SET status = 'pending', started_at = NULL, attempts = attempts - 1
+				  WHERE id = $1 AND attempts = $2 AND status = 'in_progress'`,
+				[job.id, job.attempt]
+			);
 			return;
 		}
 
@@ -538,60 +700,91 @@ async function processNarrativeSummary(job: ClaimedJob): Promise<void> {
 			[Number(scopeKey)]
 		);
 		const days = daysRes.rows;
-
 		if (days.length === 0) {
-			await query(
-				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
-				[job.id, `skipped: no accepted days for ${scopeKey}`]
-			);
-			log(`  scope=year scope_key=${scopeKey}: SKIPPED (no accepted days)`);
+			await finishNarrativeJob(job, 'done', `skipped: no accepted days for ${scopeKey}`);
+			log(`  ${label}: SKIPPED (no accepted days)`);
 			return;
 		}
 
-		const user = buildYearNarrativePrompt(scopeKey, days);
-		const summaryText = await completeText(YEAR_NARRATIVE_SYSTEM, user, 2048);
-		const model = getEnrichmentModel();
+		const guidance = spec.guidance ?? (await readSavedGuidance(scopeKey));
+		const system = buildYearNarrativeSystem({
+			year: scopeKey,
+			styleGuidance: guidance.style,
+			yearGuidance: guidance.year,
+			revise: mode === 'revise'
+		});
+		const user = buildYearNarrativePrompt(scopeKey, days, baseText);
+		const result = await completeNarrative({ model: model.id, system, user });
 
-		// Upsert draft: (scope, scope_key) is UNIQUE, so a regenerate is
-		// ON CONFLICT DO UPDATE. is_published is set explicitly FALSE only on
-		// the INSERT branch (a brand-new row always starts as an unpublished
-		// draft) and is absent from the DO UPDATE SET list — matching
-		// migration 0021's column-scoped grant exactly, so this statement
-		// succeeds under the worker role's actual privileges rather than
-		// merely under app-role testing.
-		// CODEX1 review finding 2 (2026-07-24): the is_published pre-check runs
-		// BEFORE the LLM call; an admin publishing during generation would have
-		// had the now-published text overwritten by this upsert. The WHERE on
-		// the DO UPDATE closes the window — zero affected rows means a publish
-		// won the race and this generation is discarded as skipped.
-		const upsert = await query(
-			`INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, generated_at, is_published)
-			 VALUES ($1, $2, $3, $4, NOW(), FALSE)
-			 ON CONFLICT (scope, scope_key) DO UPDATE
-			   SET summary_text = EXCLUDED.summary_text,
-			       generated_by = EXCLUDED.generated_by,
-			       generated_at = NOW()
-			 WHERE narrative_summaries.is_published = FALSE`,
-			[scope, scopeKey, summaryText, model]
-		);
-		if ((upsert.rowCount ?? 0) === 0) {
-			await query(
-				`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
-				[job.id, `skipped: published during generation — text untouched`]
+		// The draft and the job's completion commit together: a crash can't
+		// leave a draft behind a job that will run (and be paid for) again.
+		const draftId = await withTransaction(async (client) => {
+			const live = await client.query(
+				`SELECT 1 FROM job_runs WHERE id = $1 AND attempts = $2 AND status = 'in_progress' FOR UPDATE`,
+				[job.id, job.attempt]
 			);
-			log(`  scope=year scope_key=${scopeKey}: SKIPPED (published during generation)`);
+			if (live.rowCount !== 1) return null;
+			// The draft is kept even if the requester's account was deleted
+			// while the job ran: a SAVEPOINT lets the insert retry without the
+			// requester instead of losing the paid result to an FK error.
+			const insertDraft = (requester: number | null) =>
+				client.query<{ id: string }>(
+					`INSERT INTO narrative_drafts
+					   (scope, scope_key, model_name, provider, mode, base_text, style_guidance, year_guidance,
+					    draft_text, day_count, input_tokens, output_tokens, requested_by, job_run_id)
+					 VALUES ('year', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+					 ON CONFLICT (job_run_id) DO NOTHING
+					 RETURNING id`,
+					[
+						scopeKey,
+						model.id,
+						model.provider,
+						mode,
+						baseText,
+						guidance.style || null,
+						guidance.year || null,
+						result.text,
+						days.length,
+						result.inputTokens,
+						result.outputTokens,
+						requester,
+						job.id
+					]
+				);
+			let ins;
+			await client.query('SAVEPOINT draft_insert');
+			try {
+				ins = await insertDraft(spec.requestedBy);
+			} catch (err) {
+				const fkUser =
+					spec.requestedBy !== null &&
+					(err as { code?: string; constraint?: string }).code === '23503' &&
+					(err as { constraint?: string }).constraint === 'narrative_drafts_requested_by_fkey';
+				if (!fkUser) throw err;
+				await client.query('ROLLBACK TO SAVEPOINT draft_insert');
+				log(`  ${label}: requester ${spec.requestedBy} no longer exists; saving the draft unattributed`);
+				ins = await insertDraft(null);
+			}
+			const id =
+				ins.rows[0]?.id ??
+				(await client.query<{ id: string }>(`SELECT id::text AS id FROM narrative_drafts WHERE job_run_id = $1`, [job.id]))
+					.rows[0].id;
+			const note = `draft #${id} from ${days.length} accepted day(s) via ${model.id}`;
+			await client.query(`UPDATE job_runs SET status = 'done', last_error = $2, completed_at = NOW() WHERE id = $1`, [
+				job.id,
+				note
+			]);
+			return id;
+		});
+		if (draftId === null) {
+			log(`  ${label}: superseded by a newer attempt; result discarded`);
 			return;
 		}
-
-		await query(
-			`UPDATE job_runs SET status='done', last_error=$2, completed_at=NOW() WHERE id=$1`,
-			[job.id, `generated from ${days.length} accepted day(s)`]
-		);
-		log(`  scope=year scope_key=${scopeKey}: generated from ${days.length} accepted day(s)`);
+		log(`  ${label}: draft #${draftId} from ${days.length} accepted day(s)`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		log(`  scope=year scope_key=${scopeKey} FAILED: ${msg}`);
-		await query(`UPDATE job_runs SET status='failed', last_error=$2, completed_at=NOW() WHERE id=$1`, [job.id, msg.slice(0, 500)]);
+		log(`  ${label} FAILED: ${msg}`);
+		await finishNarrativeJob(job, 'failed', msg.slice(0, 500));
 	}
 }
 

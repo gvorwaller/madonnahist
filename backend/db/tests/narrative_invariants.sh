@@ -16,7 +16,10 @@
 #   backend/db/tests/narrative_invariants.sh
 #   backend/db/tests/narrative_invariants.sh --env .env.test
 #
-# Prereq: scripts/test-db-migrate.sh has applied 0021 on the isolated local
+# Since 0033 (td-f1f49b) the worker may not write narrative_summaries at all;
+# it appends candidates to narrative_drafts and the admin promotes one.
+#
+# Prereq: scripts/test-db-migrate.sh has applied 0021 and 0033 on the isolated local
 # test DB.
 
 set -uo pipefail
@@ -60,7 +63,7 @@ red()   { printf '\033[31m✖\033[0m %s\n' "$1"; FAIL=$((FAIL+1)); }
 # CASCADE is a no-op beyond the table itself.
 # ─────────────────────────────────────────────────────────────────
 psql_owner -v ON_ERROR_STOP=1 -q <<'SQL'
-TRUNCATE narrative_summaries RESTART IDENTITY CASCADE;
+TRUNCATE narrative_summaries, narrative_drafts, narrative_guidance RESTART IDENTITY CASCADE;
 
 INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, is_published)
   VALUES ('year', '1970', 'Initial draft text.', 'test-model-v1', false);
@@ -86,37 +89,36 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────
-# Test 2: worker UPDATE summary_text/generated_by/generated_at → succeeds
-# (the columns migration 0021 actually grants — the upsert path the
-# narrative_summary job type relies on).
+# Test 2 (flipped by 0033): worker UPDATE summary_text → now DENIED. Since
+# td-f1f49b the worker only writes candidates to narrative_drafts; the
+# admin's "Use this" is the only path into narrative_summaries.
 # ─────────────────────────────────────────────────────────────────
 out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
   "UPDATE narrative_summaries SET summary_text = 'Worker-updated text.', generated_by = 'test-model-v2', generated_at = NOW()
      WHERE scope='year' AND scope_key='1970';" 2>&1)
-if [[ "$out" == "UPDATE 1" ]]; then
-  green "worker UPDATE summary_text/generated_by/generated_at → succeeds"
+if echo "$out" | grep -qE "permission denied"; then
+  green "worker UPDATE summary_text → rejected (0033 revoked 0021's column grant)"
 else
-  red "worker UPDATE summary_text/generated_by/generated_at should succeed but got: $out"
+  red "worker UPDATE summary_text should be rejected but got: $out"
 fi
 
-updated_text=$(psql_owner -tAc "SELECT summary_text FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
-if [[ "$updated_text" == "Worker-updated text." ]]; then
-  green "summary_text reflects the worker's UPDATE"
+unchanged_text=$(psql_owner -tAc "SELECT summary_text FROM narrative_summaries WHERE scope='year' AND scope_key='1970';")
+if [[ "$unchanged_text" == "Initial draft text." ]]; then
+  green "summary_text unchanged after the rejected worker UPDATE"
 else
-  red "expected summary_text='Worker-updated text.' but got '$updated_text'"
+  red "expected summary_text='Initial draft text.' but got '$unchanged_text'"
 fi
 
 # ─────────────────────────────────────────────────────────────────
-# Test 3: worker INSERT a fresh (scope, scope_key) row → allowed (table-level
-# INSERT grant from 0004_grants_rls.sql, unaffected by this migration).
+# Test 3 (flipped by 0033): worker INSERT into narrative_summaries → DENIED.
 # ─────────────────────────────────────────────────────────────────
 out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
   "INSERT INTO narrative_summaries (scope, scope_key, summary_text, generated_by, is_published)
      VALUES ('year', '1971', 'Fresh draft.', 'test-model-v1', false);" 2>&1)
-if [[ "$out" == "INSERT 0 1" ]]; then
-  green "worker INSERT narrative_summaries (fresh scope_key) → allowed"
+if echo "$out" | grep -qE "permission denied"; then
+  green "worker INSERT narrative_summaries → rejected"
 else
-  red "worker INSERT should succeed but got: $out"
+  red "worker INSERT narrative_summaries should be rejected but got: $out"
 fi
 
 # ─────────────────────────────────────────────────────────────────
@@ -159,6 +161,93 @@ if [[ "$still_published" == "t" ]]; then
 else
   red "is_published should remain true but got '$still_published'"
 fi
+
+# ─────────────────────────────────────────────────────────────────
+# narrative_drafts / narrative_guidance (0033, td-f1f49b)
+# ─────────────────────────────────────────────────────────────────
+expect_ok() { # label, expected-prefix, output
+  if [[ "$3" == "$2"* ]]; then green "$1"; else red "$1 — got: $3"; fi
+}
+expect_denied() { # label, output
+  if echo "$2" | grep -qE "permission denied"; then green "$1"; else red "$1 — got: $2"; fi
+}
+
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text, day_count, job_run_id)
+     VALUES ('year', '1970', 'test-model', 'anthropic', 'fresh', 'Candidate text.', 3, 990001) RETURNING id;" 2>&1)
+draft_id=$(echo "$out" | head -1)
+if [[ "$draft_id" =~ ^[0-9]+$ ]]; then
+  green "worker INSERT narrative_drafts → allowed"
+else
+  red "worker INSERT narrative_drafts should succeed but got: $out"
+fi
+
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc "UPDATE narrative_drafts SET draft_text = 'x' WHERE id = ${draft_id:-0};" 2>&1)
+expect_denied "worker UPDATE narrative_drafts → rejected (append-only)" "$out"
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc "DELETE FROM narrative_drafts WHERE id = ${draft_id:-0};" 2>&1)
+expect_denied "worker DELETE narrative_drafts → rejected (append-only)" "$out"
+
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc "SELECT count(*) FROM narrative_drafts;" 2>&1)
+if [[ "$out" =~ ^[0-9]+$ ]]; then green "app SELECT narrative_drafts → allowed"; else red "app SELECT narrative_drafts should succeed but got: $out"; fi
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text, job_run_id)
+     VALUES ('year', '1970', 'test-model', 'anthropic', 'fresh', 'Second try.', 990001);" 2>&1)
+if echo "$out" | grep -qE "duplicate key"; then
+  green "a second draft for the same job_run_id → rejected (UNIQUE)"
+else
+  red "a second draft for the same job should violate UNIQUE but got: $out"
+fi
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text)
+     VALUES ('year', '1970', 'test-model', 'anthropic', 'fresh', 'No job.');" 2>&1)
+if echo "$out" | grep -qE "violates check constraint"; then
+  green "generated draft without job_run_id → rejected by CHECK"
+else
+  red "generated draft without job_run_id should violate the CHECK but got: $out"
+fi
+
+# The app adds a draft for each hand edit, so replacing an edit never loses it.
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text)
+     VALUES ('year', '1970', 'hand-edit', 'human', 'edit', 'Edited.');" 2>&1)
+expect_ok "app INSERT narrative_drafts (hand edit) → allowed" "INSERT 0 1" "$out"
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text)
+     VALUES ('year', '1970', 'hand-edit', 'human', 'fresh', 'x');" 2>&1)
+if echo "$out" | grep -qE "violates check constraint"; then
+  green "human provider with a non-edit mode → rejected by CHECK"
+else
+  red "provider 'human' with mode 'fresh' should violate the CHECK but got: $out"
+fi
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc "UPDATE narrative_drafts SET draft_text = 'x' WHERE id = ${draft_id:-0};" 2>&1)
+expect_denied "app UPDATE narrative_drafts → rejected" "$out"
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc "DELETE FROM narrative_drafts WHERE id = ${draft_id:-0};" 2>&1)
+expect_denied "app DELETE narrative_drafts → rejected" "$out"
+
+out=$(psql_owner -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_drafts (scope, scope_key, model_name, provider, mode, draft_text, job_run_id)
+     VALUES ('year', '1970', 'm', 'anthropic', 'revise', 'x', 990002);" 2>&1)
+if echo "$out" | grep -qE "violates check constraint"; then
+  green "revise draft without base_text → rejected by CHECK"
+else
+  red "revise draft without base_text should violate the CHECK but got: $out"
+fi
+
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
+  "INSERT INTO narrative_guidance (scope, scope_key, guidance_text) VALUES ('year', '1970', 'Notes.');" 2>&1)
+expect_ok "app INSERT narrative_guidance → allowed" "INSERT 0 1" "$out"
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
+  "UPDATE narrative_guidance SET guidance_text = 'More notes.' WHERE scope='year' AND scope_key='1970';" 2>&1)
+expect_ok "app UPDATE narrative_guidance → allowed" "UPDATE 1" "$out"
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc "SELECT guidance_text FROM narrative_guidance WHERE scope_key='1970';" 2>&1)
+expect_ok "worker SELECT narrative_guidance → allowed" "More notes." "$out"
+out=$(psql_worker -v ON_ERROR_STOP=1 -tAc \
+  "UPDATE narrative_guidance SET guidance_text = 'w' WHERE scope_key='1970';" 2>&1)
+expect_denied "worker UPDATE narrative_guidance → rejected" "$out"
+
+out=$(psql_app -v ON_ERROR_STOP=1 -tAc \
+  "UPDATE narrative_summaries SET source_draft_id = ${draft_id:-0} WHERE scope='year' AND scope_key='1970';" 2>&1)
+expect_ok "app UPDATE narrative_summaries.source_draft_id → allowed" "UPDATE 1" "$out"
 
 # ─────────────────────────────────────────────────────────────────
 echo "----"

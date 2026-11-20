@@ -78,7 +78,9 @@ const CONTENT_WORDS: Record<string, string> = {
 	pdf_exports: 'PDFs',
 	place_locations: 'place map decisions',
 	memories: 'memories',
-	memory_revisions: 'memories'
+	memory_revisions: 'memories',
+	narrative_drafts: 'year story drafts',
+	narrative_guidance: 'year story notes'
 };
 
 function isFkViolation(err: unknown): err is { code: string; table?: string } {
