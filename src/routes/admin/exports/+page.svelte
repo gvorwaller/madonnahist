@@ -34,6 +34,34 @@
 	// while one of its PDFs is generating. Existing exports: the decade of
 	// the newest PDF starts open. Both remembered per tab (DecadeFolds).
 	const yearsWithPdf = $derived(new Set(data.exports.map((e) => Number(e.year))));
+
+	// What each year already has, per kind of PDF: the newest export of each
+	// (data.exports is newest first), so the Generate table shows what exists
+	// without cross-referencing the Existing exports list.
+	const MODES: ContentMode[] = ['full', 'narrative', 'days'];
+	const SHORT_MODE_LABELS: Record<ContentMode, string> = {
+		full: 'Full history',
+		narrative: 'Narrative only',
+		days: 'Days only'
+	};
+	const latestPdf = $derived.by(() => {
+		const m = new Map<string, ExportListRow>();
+		for (const e of data.exports as ExportListRow[]) {
+			const key = `${e.year}:${e.contentMode}`;
+			if (!m.has(key)) m.set(key, e);
+		}
+		return m;
+	});
+	/** For PDFs that contain the days: how far the accepted-day count has moved since. */
+	function staleNote(row: ExportYearRow, e: ExportListRow): string | null {
+		if (e.contentMode === 'narrative') return null;
+		const diff = row.accepted - e.dayCount;
+		if (diff > 0) return `${plural(diff, 'more day', 'more days')} accepted since`;
+		if (diff < 0) return `${plural(-diff, 'fewer accepted day', 'fewer accepted days')} now`;
+		return null;
+	}
+	const shortDate = (ts: string) =>
+		new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 	const newestExportId = $derived(data.exports[0]?.id ?? null);
 	const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -101,19 +129,41 @@
 					{/if}
 				{/snippet}
 				{#snippet children(list)}
-					<table class="data-table">
+					<table class="data-table gen-table">
 						<thead>
 							<tr>
 								<th>Year</th>
 								<th class="col-num">Accepted</th>
+								<th>PDFs</th>
 								<th class="col-actions">Content &amp; actions</th>
 							</tr>
 						</thead>
 						<tbody>
 							{#each list as row (row.year)}
 								<tr>
-									<td>{row.year}</td>
+									<td class="col-year">{row.year}</td>
 									<td class="col-num">{row.accepted} / {row.total} ({row.percent}%)</td>
+									<td class="col-pdfs">
+										<ul class="pdf-list" aria-label="PDFs for {row.year}">
+											{#each MODES as mode (mode)}
+												{@const e = latestPdf.get(`${row.year}:${mode}`)}
+												<li class:none={!e}>
+													<span class="pdf-kind">{SHORT_MODE_LABELS[mode]}{#if !e}: none yet{/if}</span>
+													{#if e}
+														&middot; {shortDate(e.createdAt)} &middot; {formatBytes(e.byteSize)}
+														<a
+															class="pdf-dl"
+															href="/admin/exports/download/{e.id}"
+															aria-label="Download the {row.year} {SHORT_MODE_LABELS[mode]} PDF from {shortDate(e.createdAt)}"
+															>Download</a
+														>
+														{@const note = staleNote(row, e)}
+														{#if note}<span class="stale">⚠ {note}</span>{/if}
+													{/if}
+												</li>
+											{/each}
+										</ul>
+									</td>
 									<td class="col-actions">
 										<form
 											method="POST"
@@ -299,6 +349,59 @@
 	.generating {
 		font-style: italic;
 		color: #4a4a4a;
+	}
+	.pdf-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		font-size: 0.8rem;
+		color: #333;
+		line-height: 1.6;
+	}
+	.pdf-list li.none {
+		color: #4a4a4a;
+	}
+	.pdf-kind {
+		font-weight: 600;
+	}
+	.pdf-list li.none .pdf-kind {
+		font-weight: 400;
+	}
+	.pdf-dl {
+		margin-left: 0.3rem;
+		color: #1f4d3d;
+	}
+	.stale {
+		display: block;
+		color: #7a4a00;
+		font-size: 0.75rem;
+	}
+	/* Narrow screens: each year becomes a card instead of a wide row. */
+	@media (max-width: 760px) {
+		.gen-table thead {
+			display: none;
+		}
+		.gen-table tr {
+			display: block;
+			padding: 0.6rem 0;
+			border-bottom: 1px solid #e5e5e5;
+		}
+		.gen-table td {
+			display: block;
+			border: none;
+			padding: 0.2rem 0.6rem;
+			text-align: left;
+		}
+		.gen-table .col-year {
+			font-weight: 700;
+			font-size: 0.95rem;
+		}
+		.gen-table .col-actions {
+			white-space: normal;
+		}
+		.gen-table .col-actions form {
+			flex-wrap: wrap;
+		}
 	}
 	.mode-select {
 		font-size: 0.8rem;
