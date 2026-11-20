@@ -2,6 +2,8 @@
 	import { page } from '$app/state';
 	import MemoryList from '$lib/components/viewer/MemoryList.svelte';
 	import { MONTHS, backLabel, backTarget, withFrom } from '$lib/viewer/nav';
+	import { PdfShare } from '$lib/viewer/pdf-share.svelte';
+	import { untrack } from 'svelte';
 
 	const { data } = $props();
 
@@ -57,6 +59,17 @@
 		narrative: 'PDF, story only',
 		days: 'PDF, days only'
 	};
+	const PDF_FILE_SUFFIX: Record<string, string> = { full: '', narrative: ' (story)', days: ' (days)' };
+	// In the installed app a PDF goes to the share sheet instead of
+	// replacing the app window (see pdf-share.svelte.ts).
+	const pdf = new PdfShare();
+	// The year arrows reuse this page: drop a PDF that belongs to the year
+	// (or the edition) that was showing before.
+	$effect(() => {
+		void data.year;
+		void data.pdfExports;
+		untrack(() => pdf.reset());
+	});
 	// A PDF is an edition as of the day it was made (CODEX1 finding 10).
 	const pdfMadeOn = $derived.by(() => {
 		if (data.pdfExports.length === 0) return null;
@@ -152,11 +165,31 @@
 						href="/app/year/{data.year}/pdf?mode={ex.mode}"
 						target="_blank"
 						rel="noopener"
+						onclick={(e) =>
+							pdf.open(
+								e,
+								`/app/year/${data.year}/pdf?mode=${ex.mode}`,
+								`Family History ${data.year}${PDF_FILE_SUFFIX[ex.mode] ?? ''}.pdf`,
+								`${data.year} ${PDF_LABEL[ex.mode] ?? 'PDF'}`
+							)}
 						>⬇ {PDF_LABEL[ex.mode] ?? 'PDF'}
 						<span class="size">({formatBytes(ex.byteSize)})</span></a
 					>
 				{/each}
 			</div>
+			{#if pdf.state === 'loading'}
+				<p class="pdf-note" role="status">Getting the PDF ready…</p>
+			{:else if pdf.state === 'ready'}
+				<div class="v-actions">
+					<button type="button" class="v-btn primary" onclick={() => pdf.share()}>Share or print the PDF</button>
+				</div>
+				<p class="pdf-note" role="status">{pdf.label} is ready. Tap the button, then choose Print or Save to Files.</p>
+			{:else if pdf.state === 'error'}
+				<p class="pdf-note" role="alert">
+					{pdf.message}
+					{#if pdf.signInHref}<a href={pdf.signInHref}>Sign in</a>{/if}
+				</p>
+			{/if}
 			{#if pdfMadeOn}
 				<p class="pdf-note">PDFs show the archive as of {pdfMadeOn}.</p>
 			{/if}

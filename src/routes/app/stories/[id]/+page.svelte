@@ -1,5 +1,17 @@
 <script lang="ts">
+	import { PdfShare } from '$lib/viewer/pdf-share.svelte';
+	import { untrack } from 'svelte';
+
 	const { data } = $props();
+	// In the installed app a PDF goes to the share sheet instead of
+	// replacing the app window (see pdf-share.svelte.ts).
+	const pdf = new PdfShare();
+	// Drop a PDF that belongs to the story that was showing before.
+	$effect(() => {
+		void data.id;
+		void data.pdfSizeKb;
+		untrack(() => pdf.reset());
+	});
 
 	function formatDate(iso: string): string {
 		return new Date(iso).toLocaleDateString('en-US', {
@@ -63,9 +75,26 @@
 				</button>
 			{/if}
 			{#if !data.renderMode && data.pdfSizeKb !== null}
-				<a class="btn-secondary" href="/app/stories/{data.id}/pdf" target="_blank" rel="noopener">
+				<a
+					class="btn-secondary"
+					href="/app/stories/{data.id}/pdf"
+					target="_blank"
+					rel="noopener"
+					onclick={(e) => pdf.open(e, `/app/stories/${data.id}/pdf`, 'Family History story.pdf', 'Story PDF')}
+				>
 					Download PDF ({data.pdfSizeKb} KB)
 				</a>
+				{#if pdf.state === 'loading'}
+					<p class="pdf-status" role="status">Getting the PDF ready…</p>
+				{:else if pdf.state === 'ready'}
+					<button type="button" class="btn-secondary" onclick={() => pdf.share()}>Share or print the PDF</button>
+					<p class="pdf-status" role="status">Tap it, then choose Print or Save to Files.</p>
+				{:else if pdf.state === 'error'}
+					<p class="pdf-status" role="alert">
+						{pdf.message}
+						{#if pdf.signInHref}<a href={pdf.signInHref}>Sign in</a>{/if}
+					</p>
+				{/if}
 			{/if}
 		</article>
 	</div>
@@ -192,6 +221,11 @@
 		outline: 2px solid var(--color-evergreen-dark);
 		outline-offset: 2px;
 	}
+	.pdf-status {
+		margin: 0.5rem 0 0;
+		font-size: 15px;
+		color: var(--color-ink-muted);
+	}
 
 	/* ── Print: same conventions as the book page's PDF export
 	     (src/routes/app/book/[scope]/[key]/+page.svelte) — the worker's
@@ -201,7 +235,8 @@
 	     a normal browser visit without ?render=pdf. ── */
 	@media print {
 		.back-link,
-		.btn-secondary {
+		.btn-secondary,
+		.pdf-status {
 			display: none !important;
 		}
 		.story-page {
