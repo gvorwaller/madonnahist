@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '$lib/viewer/viewer.css';
 	import { page } from '$app/state';
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import { afterNavigate } from '$app/navigation';
 	import NavProgress from '$lib/components/viewer/NavProgress.svelte';
 

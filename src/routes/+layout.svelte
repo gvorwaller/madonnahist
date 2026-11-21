@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
+	import SignedOutBar from '$lib/components/SignedOutBar.svelte';
 
 	let { children, data } = $props();
 
@@ -46,6 +47,8 @@
 <main>
 	{@render children()}
 </main>
+
+<SignedOutBar />
 
 <style>
 	:global(body) {

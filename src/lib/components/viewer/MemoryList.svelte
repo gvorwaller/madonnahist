@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { navigating, page } from '$app/state';
 	import { isSignedOutResult, signInHref } from '$lib/viewer/session';
@@ -120,6 +120,7 @@
 		{:else if m.canHide}
 			<form
 				class="hide"
+				data-signed-out-inline
 				method="POST"
 				action="/app/account?/hideWriter"
 				use:enhance={toggle(() => `hidden-w-${m.writerId}`)}
@@ -139,6 +140,7 @@
 		<p><span aria-hidden="true">🙈</span> {hiddenText(h)}</p>
 		<div class="row">
 			<form
+				data-signed-out-inline
 				method="POST"
 				action="/app/account?/showWriter"
 				use:enhance={toggle(() => {

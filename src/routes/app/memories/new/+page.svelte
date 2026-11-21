@@ -26,5 +26,6 @@
 		{from}
 		maxYear={data.maxYear}
 		error={form?.error ?? null}
+		canonical={data.initial}
 	/>
 </div>

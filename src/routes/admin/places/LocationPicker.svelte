@@ -6,7 +6,9 @@
 	 * (/admin/places/locate); "Save this location" posts ?/pin.
 	 */
 	import { onMount, untrack } from 'svelte';
-	import { enhance } from '$app/forms';
+	import { page } from '$app/state';
+	import { enhance } from '$lib/forms';
+	import { isSignedOutResult, signInHref } from '$lib/viewer/session';
 	import { loadGoogleMaps, onMapsAuthFailure } from '$lib/google-maps';
 	import type { SubmitFunction } from '@sveltejs/kit';
 
@@ -56,6 +58,8 @@
 	let saving = $state(false);
 	let note = $state('');
 	let error = $state('');
+	/** Signed out before Save (td-46337c): the modal makes the app-wide bar unreachable, so say it here. */
+	let signInTo = $state<string | null>(null);
 	let mapError = $state('');
 
 	/* eslint-disable @typescript-eslint/no-explicit-any */
@@ -250,9 +254,13 @@
 	const save: SubmitFunction = () => {
 		saving = true;
 		error = '';
+		signInTo = null;
+		const back = signInHref(page.url);
 		return async ({ result, update }) => {
 			saving = false;
-			if (result.type === 'success') {
+			if (isSignedOutResult(result)) {
+				signInTo = back;
+			} else if (result.type === 'success') {
 				await update({ reset: false });
 				onsaved(String(result.data?.message ?? 'Location saved'));
 				dialog.close();
@@ -312,7 +320,13 @@
 			{/if}
 		</p>
 		{#if error}<p class="err" role="alert">{error}</p>{/if}
-		<form method="POST" action="/admin/places?/pin" use:enhance={save}>
+		{#if signInTo}
+			<p class="err" role="alert">
+				You've been signed out, so the location wasn't saved.
+				<a class="signin" href={signInTo}>Sign in again</a>, then pick it once more.
+			</p>
+		{/if}
+		<form method="POST" action="/admin/places?/pin" data-signed-out-inline use:enhance={save}>
 			<input type="hidden" name="entity_id" value={place.entityId} />
 			<input type="hidden" name="lat" value={selected?.lat ?? ''} />
 			<input type="hidden" name="lon" value={selected?.lon ?? ''} />
@@ -465,6 +479,12 @@
 		margin: 0 0 0.4rem;
 		font-size: 0.92rem;
 		line-height: 1.45;
+	}
+	.signin {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: inherit;
 	}
 	.err {
 		margin: 0 0 0.4rem;

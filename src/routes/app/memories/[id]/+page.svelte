@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import { page } from '$app/state';
 	import MemoryForm from '$lib/components/viewer/MemoryForm.svelte';
 	import { backLabel, backTarget, withFrom } from '$lib/viewer/nav';
@@ -27,6 +27,10 @@
 	// After a refused save the page shows the text that was submitted, so it
 	// keeps the version that text was based on (needed without JS, where
 	// the page re-renders with a fresh load) (CODEX code review #2).
+	// A memory kept from before a sign-out (td-46337c) brings back the
+	// version its text was based on, and Save, Unshare and Delete all use it:
+	// none of them may act on a revision the writer hasn't seen. Discard
+	// returns to the loaded text and its version together.
 	// svelte-ignore state_referenced_locally
 	let loadedVersion = $state(
 		form && 'version' in form && typeof form.version === 'string' && 'values' in form
@@ -68,6 +72,9 @@
 		{from}
 		maxYear={data.maxYear}
 		error={formError}
+		canonical={data.initial}
+		onrestore={(v) => (loadedVersion = v)}
+		ondiscard={() => (loadedVersion = data.memory.version)}
 	/>
 
 	<section class="more" aria-labelledby="more-h">

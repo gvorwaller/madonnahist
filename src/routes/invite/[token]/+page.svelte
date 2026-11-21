@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import { page } from '$app/state';
 	import AuthShell from '$lib/components/viewer/AuthShell.svelte';
 	import HomeScreenSteps from '$lib/components/viewer/HomeScreenSteps.svelte';

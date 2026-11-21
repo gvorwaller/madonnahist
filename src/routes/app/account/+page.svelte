@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import HomeScreenSteps from '$lib/components/viewer/HomeScreenSteps.svelte';
 	import { navigating, page } from '$app/state';
 	import { possessive } from '$lib/viewer/memories';
@@ -135,6 +135,7 @@
 				shown. This only changes what you see.
 			</p>
 			<form
+				data-signed-out-inline
 				method="POST"
 				action="/app/account?/memoryWriters"
 				use:enhance={() => {

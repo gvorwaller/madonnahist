@@ -34,6 +34,7 @@
 		"test:places": "node scripts/test-places.mjs",
 		"test:place-rules": "tsx scripts/test-place-rules.ts",
 		"test:refresh": "tsx scripts/test-refresh.ts",
+		"test:signed-out": "tsx scripts/test-signed-out.ts",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

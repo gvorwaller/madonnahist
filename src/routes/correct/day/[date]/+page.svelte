@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { enhance, deserialize } from '$app/forms';
+	import { deserialize } from '$app/forms';
+	import { enhance } from '$lib/forms';
 	import { page } from '$app/stores';
 
 	const { data } = $props();
