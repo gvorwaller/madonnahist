@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
+	import { modalOpen } from '$lib/dialog-opener';
 	import { enhance } from '$lib/forms';
 	import EntityPicker from '$lib/components/EntityPicker.svelte';
 
@@ -86,9 +88,7 @@
 
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key === 'Escape') {
-			if (deleteTarget) deleteTarget = null;
-			if (mergeTarget) mergeTarget = null;
+		if (e.key === 'Escape' && !modalOpen()) {
 			if (editingId !== null) cancelEdit();
 			if (aliasEditingId !== null) cancelAlias();
 		}
@@ -282,75 +282,81 @@
 </div>
 
 {#if deleteTarget}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm delete">
-		<div class="modal-content">
-			<h3>Delete entity</h3>
-			<p>
-				Delete "{deleteTarget.label}"? This cannot be undone. Only entities with zero mentions can
-				be deleted.
-			</p>
-			<div class="modal-actions">
-				<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="?/delete"
-					use:enhance={() => {
-						return ({ result, update }) => {
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
-							}
-							deleteTarget = null;
-							update();
-						};
-					}}
-				>
-					<input type="hidden" name="id" value={deleteTarget.id} />
-					<button type="submit" class="btn-danger">Delete</button>
-				</form>
+	<Modal label="Confirm delete" onclose={() => (deleteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Delete entity</h3>
+				<p>
+					Delete "{deleteTarget.label}"? This cannot be undone. Only entities with zero mentions can
+					be deleted.
+				</p>
+				<div class="modal-actions">
+					<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="?/delete"
+						use:enhance={() => {
+							const t = deleteTarget;
+							return ({ result, update }) => {
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
+								}
+								if (deleteTarget === t) deleteTarget = null;
+								update();
+							};
+						}}
+					>
+						<input type="hidden" name="id" value={deleteTarget.id} />
+						<button type="submit" class="btn-danger">Delete</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if mergeTarget}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm merge">
-		<div class="modal-content">
-			<h3>Merge entity</h3>
-			<p>
-				Merge "{mergeTarget.label}" into another entity? All of its day mentions move to the
-				target, and it becomes an alias of the target (kept, not deleted). This cannot be undone.
-			</p>
-			<div class="merge-select-label">
-				Merge into:
-				<EntityPicker
-					options={canonicalOptionsFor(mergeTarget.entityType, mergeTarget.id)}
-					bind:selectedId={mergeDestination}
-					placeholder="Type a name to search…"
-					inputLabel="Merge target"
-				/>
-			</div>
-			<div class="modal-actions">
-				<button class="btn-cancel" onclick={() => (mergeTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="?/mergeInto"
-					use:enhance={() => {
-						return ({ result, update }) => {
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Merge failed';
-							}
-							mergeTarget = null;
-							update();
-						};
-					}}
-				>
-					<input type="hidden" name="sourceId" value={mergeTarget.id} />
-					<input type="hidden" name="targetId" value={mergeDestination ?? ''} />
-					<button type="submit" class="btn-danger" disabled={!mergeDestination}>Merge</button>
-				</form>
+	<Modal label="Confirm merge" onclose={() => (mergeTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Merge entity</h3>
+				<p>
+					Merge "{mergeTarget.label}" into another entity? All of its day mentions move to the
+					target, and it becomes an alias of the target (kept, not deleted). This cannot be undone.
+				</p>
+				<div class="merge-select-label">
+					Merge into:
+					<EntityPicker
+						options={canonicalOptionsFor(mergeTarget.entityType, mergeTarget.id)}
+						bind:selectedId={mergeDestination}
+						placeholder="Type a name to search…"
+						inputLabel="Merge target"
+					/>
+				</div>
+				<div class="modal-actions">
+					<button class="btn-cancel" onclick={() => (mergeTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="?/mergeInto"
+						use:enhance={() => {
+							const t = mergeTarget;
+							return ({ result, update }) => {
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Merge failed';
+								}
+								if (mergeTarget === t) mergeTarget = null;
+								update();
+							};
+						}}
+					>
+						<input type="hidden" name="sourceId" value={mergeTarget.id} />
+						<input type="hidden" name="targetId" value={mergeDestination ?? ''} />
+						<button type="submit" class="btn-danger" disabled={!mergeDestination}>Merge</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

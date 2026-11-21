@@ -23,6 +23,8 @@
 	let queryText = $state(options.find((o) => o.id === selectedId)?.display_name ?? '');
 	let open = $state(false);
 	let wrapper: HTMLElement | undefined = $state(undefined);
+	let input: HTMLInputElement | undefined = $state(undefined);
+	let refocusing = false;
 	const uid = $props.id();
 	const listId = `${uid}-list`;
 
@@ -36,6 +38,15 @@
 		selectedId = o.id;
 		queryText = o.display_name;
 		open = false;
+		// Chosen from the keyboard (Tab to an option, Enter): that option is
+		// about to be removed with the list, which would drop focus to <body>,
+		// out of a surrounding dialog (CODEX td-eb28c8 round 2). Keep it on the
+		// input, list closed. A tap keeps focus on the input already.
+		if (wrapper?.contains(document.activeElement) && document.activeElement !== input) {
+			refocusing = true;
+			input?.focus();
+			refocusing = false;
+		}
 	}
 
 	function handleInput() {
@@ -50,7 +61,9 @@
 			e.preventDefault();
 			if (open && filtered.length > 0) choose(filtered[0]);
 		} else if (e.key === 'Escape' && open) {
-			// Close the list without also closing a surrounding modal.
+			// Close the list without also closing a surrounding modal: a
+			// native <dialog> closes on Escape unless the key is cancelled.
+			e.preventDefault();
 			e.stopPropagation();
 			open = false;
 		}
@@ -68,9 +81,12 @@
 	<input
 		type="text"
 		class="picker-input"
+		bind:this={input}
 		bind:value={queryText}
 		oninput={handleInput}
-		onfocus={() => (open = true)}
+		onfocus={() => {
+			if (!refocusing) open = true;
+		}}
 		onkeydown={handleKeydown}
 		{placeholder}
 		aria-label={inputLabel}

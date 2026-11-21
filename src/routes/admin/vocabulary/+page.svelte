@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
+	import { modalOpen } from '$lib/dialog-opener';
 	import { enhance } from '$lib/forms';
 
 	const { data } = $props();
@@ -91,9 +93,7 @@
 </script>
 
 <svelte:window onkeydown={(e) => {
-	if (e.key === 'Escape') {
-		if (deleteTarget) deleteTarget = null;
-		if (promoteTarget) promoteTarget = null;
+	if (e.key === 'Escape' && !modalOpen()) {
 		if (editingVocab !== null) cancelEdit();
 		if (addCategory !== null) cancelAdd();
 		if (editingNotation !== null) cancelEditNotation();
@@ -373,102 +373,108 @@
 
 <!-- Delete/Suppress confirmation modal -->
 {#if deleteTarget}
-	<div class="modal-overlay" role="dialog" aria-label="Confirm deletion">
-		<div class="modal">
-			<h2>{deleteTarget.type === 'vocab' ? 'Delete Vocabulary Entry' : deleteTarget.type === 'notation' ? 'Delete Notation Entry' : 'Suppress Lexicon Pair'}</h2>
-			<p>
-				{#if deleteTarget.type === 'vocab'}
-					Permanently delete <strong>{deleteTarget.label}</strong> from the vocabulary?
-				{:else if deleteTarget.type === 'notation'}
-					Permanently delete notation <strong>{deleteTarget.label}</strong>?
-				{:else}
-					Suppress <strong>{deleteTarget.label}</strong>? It will be excluded from the OCR prompt but kept in history.
-				{/if}
-			</p>
-			<div class="modal-actions">
-				<button class="btn btn-secondary" onclick={() => deleteTarget = null}>Cancel</button>
-				{#if deleteTarget.type === 'vocab'}
-					<form method="POST" action="?/deleteVocab" use:enhance={() => {
-						const t = deleteTarget;
-						return ({ result, update }) => {
-							deleteTarget = null;
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
-							} else {
-								update();
-							}
-						};
-					}}>
-						<input type="hidden" name="id" value={deleteTarget.id} />
-						<button type="submit" class="btn btn-danger">Delete</button>
-					</form>
-				{:else if deleteTarget.type === 'notation'}
-					<form method="POST" action="?/deleteNotation" use:enhance={() => {
-						return ({ result, update }) => {
-							deleteTarget = null;
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
-							} else {
-								update();
-							}
-						};
-					}}>
-						<input type="hidden" name="id" value={deleteTarget.id} />
-						<button type="submit" class="btn btn-danger">Delete</button>
-					</form>
-				{:else}
-					<form method="POST" action="?/suppressLexicon" use:enhance={() => {
-						const t = deleteTarget;
-						return ({ result, update }) => {
-							deleteTarget = null;
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Suppress failed';
-							} else {
-								update();
-							}
-						};
-					}}>
-						<input type="hidden" name="id" value={deleteTarget.id} />
-						<button type="submit" class="btn btn-danger">Suppress</button>
-					</form>
-				{/if}
+	<Modal label="Confirm deletion" onclose={() => (deleteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2>{deleteTarget.type === 'vocab' ? 'Delete Vocabulary Entry' : deleteTarget.type === 'notation' ? 'Delete Notation Entry' : 'Suppress Lexicon Pair'}</h2>
+				<p>
+					{#if deleteTarget.type === 'vocab'}
+						Permanently delete <strong>{deleteTarget.label}</strong> from the vocabulary?
+					{:else if deleteTarget.type === 'notation'}
+						Permanently delete notation <strong>{deleteTarget.label}</strong>?
+					{:else}
+						Suppress <strong>{deleteTarget.label}</strong>? It will be excluded from the OCR prompt but kept in history.
+					{/if}
+				</p>
+				<div class="modal-actions">
+					<button class="btn btn-secondary" onclick={() => deleteTarget = null}>Cancel</button>
+					{#if deleteTarget.type === 'vocab'}
+						<form method="POST" action="?/deleteVocab" use:enhance={() => {
+							const t = deleteTarget;
+							return ({ result, update }) => {
+								if (deleteTarget === t) deleteTarget = null;
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
+								} else {
+									update();
+								}
+							};
+						}}>
+							<input type="hidden" name="id" value={deleteTarget.id} />
+							<button type="submit" class="btn btn-danger">Delete</button>
+						</form>
+					{:else if deleteTarget.type === 'notation'}
+						<form method="POST" action="?/deleteNotation" use:enhance={() => {
+							const t = deleteTarget;
+							return ({ result, update }) => {
+								if (deleteTarget === t) deleteTarget = null;
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
+								} else {
+									update();
+								}
+							};
+						}}>
+							<input type="hidden" name="id" value={deleteTarget.id} />
+							<button type="submit" class="btn btn-danger">Delete</button>
+						</form>
+					{:else}
+						<form method="POST" action="?/suppressLexicon" use:enhance={() => {
+							const t = deleteTarget;
+							return ({ result, update }) => {
+								if (deleteTarget === t) deleteTarget = null;
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Suppress failed';
+								} else {
+									update();
+								}
+							};
+						}}>
+							<input type="hidden" name="id" value={deleteTarget.id} />
+							<button type="submit" class="btn btn-danger">Suppress</button>
+						</form>
+					{/if}
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <!-- Promote to vocabulary modal -->
 {#if promoteTarget}
-	<div class="modal-overlay" role="dialog" aria-label="Promote to vocabulary">
-		<div class="modal">
-			<h2>Promote to Vocabulary</h2>
-			<p>Add <strong>{promoteTarget.token}</strong> to the OCR vocabulary.</p>
-			<form method="POST" action="?/promoteToVocab" use:enhance={() => {
-				return ({ result, update }) => {
-					promoteTarget = null;
-					if (result.type === 'failure') {
-						actionError = (result.data as { error?: string })?.error ?? 'Promote failed';
-					} else {
-						update();
-					}
-				};
-			}}>
-				<input type="hidden" name="lexiconId" value={promoteTarget.id} />
-				<div class="form-group">
-					<label for="promote-category">Category</label>
-					<select id="promote-category" name="category" bind:value={promoteCategory} class="input">
-						{#each categories as cat}
-							<option value={cat}>{categoryLabels[cat]}</option>
-						{/each}
-					</select>
-				</div>
-				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" onclick={() => promoteTarget = null}>Cancel</button>
-					<button type="submit" class="btn btn-primary">Promote</button>
-				</div>
-			</form>
+	<Modal label="Promote to vocabulary" onclose={() => (promoteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2>Promote to Vocabulary</h2>
+				<p>Add <strong>{promoteTarget.token}</strong> to the OCR vocabulary.</p>
+				<form method="POST" action="?/promoteToVocab" use:enhance={() => {
+					const t = promoteTarget;
+					return ({ result, update }) => {
+						if (promoteTarget === t) promoteTarget = null;
+						if (result.type === 'failure') {
+							actionError = (result.data as { error?: string })?.error ?? 'Promote failed';
+						} else {
+							update();
+						}
+					};
+				}}>
+					<input type="hidden" name="lexiconId" value={promoteTarget.id} />
+					<div class="form-group">
+						<label for="promote-category">Category</label>
+						<select id="promote-category" name="category" bind:value={promoteCategory} class="input">
+							{#each categories as cat}
+								<option value={cat}>{categoryLabels[cat]}</option>
+							{/each}
+						</select>
+					</div>
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" onclick={() => promoteTarget = null}>Cancel</button>
+						<button type="submit" class="btn btn-primary">Promote</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

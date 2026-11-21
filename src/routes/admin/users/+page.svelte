@@ -1,4 +1,6 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
+	import { modalOpen } from '$lib/dialog-opener';
 	import { enhance } from '$lib/forms';
 
 	const { data } = $props();
@@ -25,19 +27,27 @@
 	let notice = $state('');
 
 	// Shared enhance handler for remove / restore / delete.
-	function accountResult(done: (data: Record<string, unknown> | undefined) => string) {
-		return () =>
-			async ({
+	// Each confirmation closes only itself when its answer comes: Escape
+	// during a slow save, then another confirmation, must not lose the
+	// second one (CODEX td-eb28c8 round 2).
+	function accountResult(
+		done: (data: Record<string, unknown> | undefined, sent: { username: string } | null) => string
+	) {
+		return () => {
+			const sentRemove = removeTarget;
+			const sentDelete = deleteTarget;
+			return async ({
 				result,
 				update
 			}: {
 				result: import('@sveltejs/kit').ActionResult;
 				update: (opts?: { reset?: boolean }) => Promise<void>;
 			}) => {
-				// Build the message while the confirmed target is still set.
-				const message = result.type === 'success' ? done(result.data) : '';
-				removeTarget = null;
-				deleteTarget = null;
+				// Named from what was sent, not from whatever confirmation is open
+				// when the answer arrives (CODEX td-eb28c8 round 3).
+				const message = result.type === 'success' ? done(result.data, sentRemove ?? sentDelete) : '';
+				if (removeTarget === sentRemove) removeTarget = null;
+				if (deleteTarget === sentDelete) deleteTarget = null;
 				if (result.type === 'failure') {
 					notice = '';
 					actionError = (result.data as { error?: string })?.error ?? 'That did not work';
@@ -49,6 +59,7 @@
 				}
 				await update();
 			};
+		};
 	}
 	let resetPassword = $state('');
 
@@ -111,8 +122,18 @@
 		}
 	}
 
+	// Where focus goes when the invite-link dialog is dismissed. That dialog
+	// opens on the save's answer, not on a click, so "what was just clicked"
+	// may be something else by then (CODEX td-eb28c8 #3). The button that
+	// sent it, if it's still there; else that row's "New link"; else
+	// "Invite a family member" (a new account's form is gone by then).
+	let linkReturn: (() => HTMLElement | null) | null = null;
+
 	// Shared enhance handler: the action returns { inviteLink } on success.
-	function inviteResult() {
+	function inviteResult({ formData, submitter }: { formData: FormData; submitter: HTMLElement | null }) {
+		const userId = formData.get('userId');
+		const row = typeof userId === 'string' ? userId : null;
+		const sent = confirmInvite;
 		return async ({
 			result,
 			update
@@ -120,7 +141,7 @@
 			result: import('@sveltejs/kit').ActionResult;
 			update: (opts?: { reset?: boolean }) => Promise<void>;
 		}) => {
-			confirmInvite = null;
+			if (confirmInvite === sent) confirmInvite = null;
 			if (result.type === 'failure') {
 				actionError = (result.data as { error?: string })?.error ?? 'That did not work';
 				return;
@@ -128,6 +149,10 @@
 			if (result.type === 'success') {
 				const l = (result.data as { inviteLink?: InviteLink } | undefined)?.inviteLink;
 				if (l) {
+					linkReturn = () =>
+						(submitter?.isConnected ? submitter : null) ??
+						(row ? document.querySelector<HTMLElement>(`[data-invite-for="${row}"]`) : null) ??
+						document.querySelector<HTMLElement>('[data-invite-start]');
 					link = l;
 					copied = false;
 					inviting = false;
@@ -139,12 +164,8 @@
 </script>
 
 <svelte:window onkeydown={(e) => {
-	if (e.key === 'Escape') {
-		if (resetTarget) cancelReset();
-		if (removeTarget) removeTarget = null;
-		if (deleteTarget) deleteTarget = null;
+	if (e.key === 'Escape' && !modalOpen()) {
 		if (addingUser) cancelAddUser();
-		if (confirmInvite) confirmInvite = null;
 		if (inviting) inviting = false;
 	}
 }} />
@@ -201,6 +222,7 @@
 								{#if u.invite}
 									<button
 										class="btn btn-sm btn-secondary"
+										data-invite-for={u.id}
 										onclick={() => (confirmInvite = { kind: 'reissue', id: u.id, username: u.username })}
 										>New link</button
 									>
@@ -212,7 +234,7 @@
 								{:else}
 									<form method="POST" action="/admin/users?/reissueInvite" use:enhance={inviteResult} class="inline">
 										<input type="hidden" name="userId" value={u.id} />
-										<button type="submit" class="btn btn-sm btn-secondary">Invite link</button>
+										<button type="submit" class="btn btn-sm btn-secondary" data-invite-for={u.id}>Invite link</button>
 									</form>
 								{/if}
 							{/if}
@@ -282,7 +304,7 @@
 				{:else}
 					<tr>
 						<td colspan="6">
-							<button class="btn btn-sm btn-primary add-btn" onclick={startInvite}>✉ Invite a family member</button>
+							<button class="btn btn-sm btn-primary add-btn" data-invite-start onclick={startInvite}>✉ Invite a family member</button>
 							<button class="btn btn-sm btn-secondary add-btn" onclick={startAddUser}>+ Add user</button>
 						</td>
 					</tr>
@@ -345,141 +367,152 @@
 
 <!-- Remove access confirmation -->
 {#if removeTarget}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rm-h">
-		<div class="modal">
-			<h2 id="rm-h">Remove access for {removeTarget.username}?</h2>
-			<p>
-				<strong>{removeTarget.display_name}</strong> will be signed out everywhere and won't be able
-				to sign in again. Everything they've added stays in the history. You can restore access later.
-			</p>
-			<form
-				method="POST"
-				action="/admin/users?/removeAccess"
-				use:enhance={accountResult(() => `Removed access for ${removeTarget?.username ?? 'the account'}.`)}
-			>
-				<input type="hidden" name="userId" value={removeTarget.id} />
-				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" onclick={() => (removeTarget = null)}>Cancel</button>
-					<button type="submit" class="btn btn-danger">Remove access</button>
-				</div>
-			</form>
+	<Modal labelledby="rm-h" onclose={() => (removeTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2 id="rm-h">Remove access for {removeTarget.username}?</h2>
+				<p>
+					<strong>{removeTarget.display_name}</strong> will be signed out everywhere and won't be able
+					to sign in again. Everything they've added stays in the history. You can restore access later.
+				</p>
+				<form
+					method="POST"
+					action="/admin/users?/removeAccess"
+					use:enhance={accountResult((_d, sent) => `Removed access for ${sent?.username ?? 'the account'}.`)}
+				>
+					<input type="hidden" name="userId" value={removeTarget.id} />
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" onclick={() => (removeTarget = null)}>Cancel</button>
+						<button type="submit" class="btn btn-danger">Remove access</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <!-- Delete permanently confirmation -->
 {#if deleteTarget}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="del-h">
-		<div class="modal">
-			<h2 id="del-h">Permanently delete {deleteTarget.username}?</h2>
-			<p>
-				The account <strong>{deleteTarget.username}</strong> ({deleteTarget.display_name}) will be
-				deleted. This can't be undone, and the username becomes free to reuse. If it ever added to
-				the history, the delete is refused and nothing changes.
-			</p>
-			<form
-				method="POST"
-				action="/admin/users?/deleteAccount"
-				use:enhance={accountResult((d) => `Deleted ${(d?.deleted as string) ?? 'the account'} permanently.`)}
-			>
-				<input type="hidden" name="userId" value={deleteTarget.id} />
-				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" onclick={() => (deleteTarget = null)}>Cancel</button>
-					<button type="submit" class="btn btn-danger">Delete permanently</button>
-				</div>
-			</form>
+	<Modal labelledby="del-h" onclose={() => (deleteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2 id="del-h">Permanently delete {deleteTarget.username}?</h2>
+				<p>
+					The account <strong>{deleteTarget.username}</strong> ({deleteTarget.display_name}) will be
+					deleted. This can't be undone, and the username becomes free to reuse. If it ever added to
+					the history, the delete is refused and nothing changes.
+				</p>
+				<form
+					method="POST"
+					action="/admin/users?/deleteAccount"
+					use:enhance={accountResult((d) => `Deleted ${(d?.deleted as string) ?? 'the account'} permanently.`)}
+				>
+					<input type="hidden" name="userId" value={deleteTarget.id} />
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" onclick={() => (deleteTarget = null)}>Cancel</button>
+						<button type="submit" class="btn btn-danger">Delete permanently</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <!-- New invite link: shown once, kept until dismissed -->
 {#if link}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="link-h">
-		<div class="modal wide">
-			<h2 id="link-h">Invite link for {link.displayName}</h2>
-			<p>
-				Send this in Messages. It works once and expires <strong>{longDate(link.expiresAt)}</strong>.
-				Their username is <strong class="token">{link.username}</strong>.
-			</p>
-			<input
-				bind:this={linkInput}
-				class="input link-input"
-				type="text"
-				readonly
-				value={link.url}
-				aria-label="Invite link"
-				onfocus={(e) => (e.currentTarget as HTMLInputElement).select()}
-			/>
-			<p class="hint">This link is shown only now. If it's lost, use "New link" on their row.</p>
-			<div class="modal-actions">
-				<button type="button" class="btn btn-primary" onclick={copyLink}>{copied ? 'Copied ✓' : 'Copy link'}</button>
-				<button type="button" class="btn btn-secondary" onclick={() => (link = null)}>Done</button>
+	<Modal labelledby="link-h" onclose={() => (link = null)} opener={() => linkReturn?.() ?? null}>
+		<div class="modal-overlay">
+			<div class="modal wide">
+				<h2 id="link-h">Invite link for {link.displayName}</h2>
+				<p>
+					Send this in Messages. It works once and expires <strong>{longDate(link.expiresAt)}</strong>.
+					Their username is <strong class="token">{link.username}</strong>.
+				</p>
+				<input
+					bind:this={linkInput}
+					class="input link-input"
+					type="text"
+					readonly
+					value={link.url}
+					aria-label="Invite link"
+					onfocus={(e) => (e.currentTarget as HTMLInputElement).select()}
+				/>
+				<p class="hint">This link is shown only now. If it's lost, use "New link" on their row.</p>
+				<div class="modal-actions">
+					<button type="button" class="btn btn-primary" onclick={copyLink}>{copied ? 'Copied ✓' : 'Copy link'}</button>
+					<button type="button" class="btn btn-secondary" onclick={() => (link = null)}>Done</button>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <!-- New link / cancel link confirmation -->
 {#if confirmInvite}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="ci-h">
-		<div class="modal">
-			<h2 id="ci-h">{confirmInvite.kind === 'reissue' ? 'Make a new invite link?' : 'Cancel the invite link?'}</h2>
-			<p>
-				{#if confirmInvite.kind === 'reissue'}
-					The link already sent to <strong>{confirmInvite.username}</strong> will stop working, and you'll get a new one to send.
-				{:else}
-					The link sent to <strong>{confirmInvite.username}</strong> will stop working. You can make a new one later.
-				{/if}
-			</p>
-			<form
-				method="POST"
-				action={confirmInvite.kind === 'reissue' ? '/admin/users?/reissueInvite' : '/admin/users?/revokeInvite'}
-				use:enhance={inviteResult}
-			>
-				<input type="hidden" name="userId" value={confirmInvite.id} />
-				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" onclick={() => (confirmInvite = null)}>Keep it</button>
-					<button type="submit" class="btn btn-danger">
-						{confirmInvite.kind === 'reissue' ? 'Make new link' : 'Cancel link'}
-					</button>
-				</div>
-			</form>
+	<Modal labelledby="ci-h" onclose={() => (confirmInvite = null)}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2 id="ci-h">{confirmInvite.kind === 'reissue' ? 'Make a new invite link?' : 'Cancel the invite link?'}</h2>
+				<p>
+					{#if confirmInvite.kind === 'reissue'}
+						The link already sent to <strong>{confirmInvite.username}</strong> will stop working, and you'll get a new one to send.
+					{:else}
+						The link sent to <strong>{confirmInvite.username}</strong> will stop working. You can make a new one later.
+					{/if}
+				</p>
+				<form
+					method="POST"
+					action={confirmInvite.kind === 'reissue' ? '/admin/users?/reissueInvite' : '/admin/users?/revokeInvite'}
+					use:enhance={inviteResult}
+				>
+					<input type="hidden" name="userId" value={confirmInvite.id} />
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" onclick={() => (confirmInvite = null)}>Keep it</button>
+						<button type="submit" class="btn btn-danger">
+							{confirmInvite.kind === 'reissue' ? 'Make new link' : 'Cancel link'}
+						</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <!-- Reset password confirmation modal -->
 {#if resetTarget}
-	<div class="modal-overlay" role="dialog" aria-label="Reset password">
-		<div class="modal">
-			<h2>Reset Password</h2>
-			<p>
-				Set a new password for <strong>{resetTarget.username}</strong>.
-				This immediately signs them out of every device — they must log in again with the new password.
-			</p>
-			<form method="POST" action="/admin/users?/resetPassword" use:enhance={() => {
-				return ({ result, update }) => {
-					if (result.type === 'failure') {
-						actionError = (result.data as { error?: string })?.error ?? 'Reset failed';
-						resetTarget = null;
-					} else {
-						resetTarget = null;
-						update();
-					}
-				};
-			}}>
-				<input type="hidden" name="userId" value={resetTarget.id} />
-				<div class="form-group">
-					<label for="reset-password">New password</label>
-					<input id="reset-password" type="password" name="newPassword" bind:value={resetPassword} class="input" autocomplete="new-password" />
-				</div>
-				<div class="modal-actions">
-					<button type="button" class="btn btn-secondary" onclick={cancelReset}>Cancel</button>
-					<button type="submit" class="btn btn-danger" disabled={resetPassword.length < 8}>Reset password</button>
-				</div>
-			</form>
+	<Modal label="Reset password" onclose={cancelReset}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2>Reset Password</h2>
+				<p>
+					Set a new password for <strong>{resetTarget.username}</strong>.
+					This immediately signs them out of every device — they must log in again with the new password.
+				</p>
+				<form method="POST" action="/admin/users?/resetPassword" use:enhance={() => {
+					// Closes only this editor, not one opened while this was saving.
+					const sent = resetTarget;
+					return ({ result, update }) => {
+						if (resetTarget === sent) resetTarget = null;
+						if (result.type === 'failure') {
+							actionError = (result.data as { error?: string })?.error ?? 'Reset failed';
+						} else {
+							update();
+						}
+					};
+				}}>
+					<input type="hidden" name="userId" value={resetTarget.id} />
+					<div class="form-group">
+						<label for="reset-password">New password</label>
+						<input id="reset-password" type="password" name="newPassword" bind:value={resetPassword} class="input" autocomplete="new-password" />
+					</div>
+					<div class="modal-actions">
+						<button type="button" class="btn btn-secondary" onclick={cancelReset}>Cancel</button>
+						<button type="submit" class="btn btn-danger" disabled={resetPassword.length < 8}>Reset password</button>
+					</div>
+				</form>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

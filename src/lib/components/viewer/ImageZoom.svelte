@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import { navigating } from '$app/state';
+	import { currentOpener, restoreFocus, trapTab } from '$lib/dialog-opener';
 	/**
 	 * Full-screen view of one day's handwriting (V3 Slice 1). Shared by Today
 	 * (tap a thumbnail) and Day (tap the image). A native modal <dialog> gives
@@ -30,8 +32,12 @@
 
 	let dlg: HTMLDialogElement | undefined = $state();
 	let shown = $state(false);
+	// Focus goes back here on close (td-eb28c8): Safari doesn't focus a
+	// tapped button, so the browser has nothing to return to.
+	let opener: HTMLElement | null = null;
 
 	export function open() {
+		opener = currentOpener();
 		shown = true;
 		dlg?.showModal();
 	}
@@ -49,7 +55,12 @@
 	aria-label={alt}
 	bind:this={dlg}
 	onclick={onClick}
-	onclose={() => (shown = false)}
+	onkeydown={trapTab}
+	onclose={() => {
+		shown = false;
+		if (!navigating.to) restoreFocus(opener);
+		opener = null;
+	}}
 >
 	<div class="bar">
 		{#if dayHref}

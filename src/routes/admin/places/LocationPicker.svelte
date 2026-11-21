@@ -10,6 +10,7 @@
 	import { enhance } from '$lib/forms';
 	import { isSignedOutResult, signInHref } from '$lib/viewer/session';
 	import { loadGoogleMaps, onMapsAuthFailure } from '$lib/google-maps';
+	import { currentOpener, restoreFocus } from '$lib/dialog-opener';
 	import type { SubmitFunction } from '@sveltejs/kit';
 
 	interface Spot {
@@ -210,6 +211,9 @@
 	}
 
 	onMount(() => {
+		// Back to the button that opened it on close (td-eb28c8); Safari
+		// doesn't focus a clicked button, so the browser can't do this itself.
+		const opener = currentOpener();
 		dialog.showModal();
 		const offAuth = onMapsAuthFailure(() => {
 			mapError =
@@ -248,7 +252,11 @@
 				mapError = err instanceof Error ? err.message : 'Could not load the map.';
 			}
 		})();
-		return offAuth;
+		return () => {
+			offAuth();
+			if (dialog.open) dialog.close();
+			restoreFocus(opener);
+		};
 	});
 
 	const save: SubmitFunction = () => {

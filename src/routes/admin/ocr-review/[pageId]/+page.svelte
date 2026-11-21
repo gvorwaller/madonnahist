@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { invalidateAll } from '$app/navigation';
 
 	const { data } = $props();
@@ -76,10 +77,6 @@
 
 	function closeLightbox() {
 		lightboxSrc = null;
-	}
-
-	function onLightboxKey(e: KeyboardEvent) {
-		if (e.key === 'Escape') closeLightbox();
 	}
 
 	function dayOfMonth(d: { entry_date: string }): number {
@@ -250,18 +247,18 @@
 	</div>
 </div>
 
-<svelte:window onkeydown={onLightboxKey} />
-
 {#if lightboxSrc}
-	<div class="lightbox-overlay" role="dialog" aria-label="Day cell detail">
-		<button class="lightbox-close" onclick={closeLightbox} aria-label="Close">&times;</button>
-		<button class="lightbox-bg" onclick={closeLightbox} aria-label="Close overlay"></button>
-		<div class="lightbox-content">
-			<div class="lightbox-header">{lightboxAlt}</div>
-			<img src={lightboxSrc} alt={lightboxAlt} class="lightbox-img" />
-			<div class="lightbox-text">{lightboxText || '(blank)'}</div>
+	<Modal label="Day cell detail" onclose={closeLightbox}>
+		<div class="lightbox-overlay">
+			<button class="lightbox-close" onclick={closeLightbox} aria-label="Close">&times;</button>
+			<button class="lightbox-bg" onclick={closeLightbox} aria-label="Close overlay"></button>
+			<div class="lightbox-content">
+				<div class="lightbox-header">{lightboxAlt}</div>
+				<img src={lightboxSrc} alt={lightboxAlt} class="lightbox-img" />
+				<div class="lightbox-text">{lightboxText || '(blank)'}</div>
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

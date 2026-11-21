@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { deserialize } from '$app/forms';
 	import { enhance } from '$lib/forms';
 	import { page } from '$app/stores';
@@ -242,15 +243,6 @@
 		return `left:${(cb.x / pw) * 100}%;top:${(cb.y / ph) * 100}%;width:${(cb.width / pw) * 100}%;height:${(cb.height / ph) * 100}%`;
 	});
 </script>
-
-<svelte:window onkeydown={(e) => {
-	if (e.key === 'Escape') {
-		if (lightboxOpen) lightboxOpen = false;
-		if (pageImageOpen) pageImageOpen = false;
-		if (showFlagModal) { showFlagModal = false; flagNote = ''; }
-		if (historyOpen) historyOpen = false;
-	}
-}} />
 
 <div class="page">
 	<header>
@@ -556,125 +548,136 @@
 </div>
 
 {#if showFlagModal}
-	<div class="modal-overlay" role="dialog" aria-label="Flag as illegible">
-		<div class="modal">
-			<h2>Flag as Illegible</h2>
-			<p>This day will be marked as illegible and skipped. You can add an optional note.</p>
-			<textarea
-				class="flag-note"
-				bind:value={flagNote}
-				placeholder="Optional note (e.g., 'water damage', 'pencil too faint')"
-			></textarea>
-			<div class="modal-actions">
-				<button class="action-btn btn-secondary" onclick={() => { showFlagModal = false; flagNote = ''; }}>
-					Cancel
-				</button>
-				<form method="POST" action="?/flag" use:enhance={() => {
-					saving = true;
-					if (autosaveTimer) clearTimeout(autosaveTimer);
-					return ({ update }) => { saving = false; showFlagModal = false; update(); };
-				}}>
-					<input type="hidden" name="reviewNote" value={flagNote} />
-					<button type="submit" class="action-btn btn-danger" disabled={saving}>
-						Confirm
+	<Modal label="Flag as illegible" onclose={() => {
+		showFlagModal = false;
+		flagNote = '';
+	}}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2>Flag as Illegible</h2>
+				<p>This day will be marked as illegible and skipped. You can add an optional note.</p>
+				<textarea
+					class="flag-note"
+					bind:value={flagNote}
+					placeholder="Optional note (e.g., 'water damage', 'pencil too faint')"
+				></textarea>
+				<div class="modal-actions">
+					<button class="action-btn btn-secondary" onclick={() => { showFlagModal = false; flagNote = ''; }}>
+						Cancel
 					</button>
-				</form>
+					<form method="POST" action="?/flag" use:enhance={() => {
+						saving = true;
+						if (autosaveTimer) clearTimeout(autosaveTimer);
+						return ({ update }) => { saving = false; showFlagModal = false; update(); };
+					}}>
+						<input type="hidden" name="reviewNote" value={flagNote} />
+						<button type="submit" class="action-btn btn-danger" disabled={saving}>
+							Confirm
+						</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if lightboxOpen}
-	<div class="lightbox-overlay" role="dialog" aria-label="Day cell zoom">
-		<button class="lightbox-close" onclick={() => lightboxOpen = false} aria-label="Close">&times;</button>
-		<button class="lightbox-bg" onclick={() => lightboxOpen = false} aria-label="Close overlay"></button>
-		<div class="lightbox-content">
-			<img src={imageSrc} alt="Day cell {dayNum}" class="lightbox-img" />
+	<Modal label="Day cell zoom" onclose={() => (lightboxOpen = false)}>
+		<div class="lightbox-overlay">
+			<button class="lightbox-close" onclick={() => lightboxOpen = false} aria-label="Close">&times;</button>
+			<button class="lightbox-bg" onclick={() => lightboxOpen = false} aria-label="Close overlay"></button>
+			<div class="lightbox-content">
+				<img src={imageSrc} alt="Day cell {dayNum}" class="lightbox-img" />
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if pageImageOpen}
-	<div class="lightbox-overlay" role="dialog" aria-label="Full calendar page">
-		<button class="lightbox-close" onclick={() => pageImageOpen = false} aria-label="Close">&times;</button>
-		<button class="lightbox-bg" onclick={() => pageImageOpen = false} aria-label="Close overlay"></button>
-		<div class="lightbox-content">
-			<div class="lightbox-header">{monthNames[data.day.month]} {data.day.year} — Full Page</div>
-			<img src={pageImageSrc} alt="Full calendar page" class="lightbox-img" />
+	<Modal label="Full calendar page" onclose={() => (pageImageOpen = false)}>
+		<div class="lightbox-overlay">
+			<button class="lightbox-close" onclick={() => pageImageOpen = false} aria-label="Close">&times;</button>
+			<button class="lightbox-bg" onclick={() => pageImageOpen = false} aria-label="Close overlay"></button>
+			<div class="lightbox-content">
+				<div class="lightbox-header">{monthNames[data.day.month]} {data.day.year} — Full Page</div>
+				<img src={pageImageSrc} alt="Full calendar page" class="lightbox-img" />
+			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if historyOpen}
-	<div class="modal-overlay" role="dialog" aria-label="History for {dateLabel}">
-		<div class="modal history-modal">
-			<div class="history-header">
-				<h2>History — {dateLabel}</h2>
-				<button class="history-close" onclick={() => historyOpen = false} aria-label="Close history">&times;</button>
-			</div>
-			<div class="history-body">
-				{#if historyLoading}
-					<p class="history-loading">Loading…</p>
-				{:else if historyError}
-					<p class="history-error" role="alert">{historyError}</p>
-				{:else if historyData}
-					<section class="history-section">
-						<h3>Corrections</h3>
-						{#each historyData.corrections as c, i (i)}
-							<div class="history-entry">
-								<div class="history-entry-meta">
-									<span class="history-entry-who">{c.display_name}</span>
-									<span class="history-entry-when">{formatHistoryTime(c.created_at)}</span>
-									<span class="history-entry-status">{c.status_after}</span>
-								</div>
-								{#if c.corrected_text}
-									<div class="history-entry-text">{c.corrected_text}</div>
-								{/if}
-								{#if c.review_note}
-									<div class="history-entry-note">Note: {c.review_note}</div>
-								{/if}
-							</div>
-						{:else}
-							<p class="history-empty">No correction history yet.</p>
-						{/each}
-					</section>
-
-					<section class="history-section">
-						<h3>LLM drafts</h3>
-						{#each historyData.llmDraftRuns as d, i (i)}
-							<div class="history-entry">
-								<div class="history-entry-meta">
-									<span class="history-entry-who">{d.model_name}</span>
-									<span class="history-entry-when">{formatHistoryTime(d.created_at)}</span>
-								</div>
-								<div class="history-entry-text">{d.draft_text}</div>
-							</div>
-						{:else}
-							<p class="history-empty">No LLM drafts yet.</p>
-						{/each}
-					</section>
-
-					<section class="history-section">
-						<h3>OCR runs</h3>
-						{#each historyData.ocrRuns as o, i (i)}
-							<div class="history-entry">
-								<div class="history-entry-meta">
-									<span class="history-entry-who">{o.vendor}</span>
-									<span class="history-entry-when">{formatHistoryTime(o.created_at)}</span>
-									{#if o.confidence_score !== null}
-										<span class="history-entry-status">confidence {o.confidence_score.toFixed(2)}</span>
+	<Modal label="History for {dateLabel}" onclose={() => (historyOpen = false)}>
+		<div class="modal-overlay">
+			<div class="modal history-modal">
+				<div class="history-header">
+					<h2>History — {dateLabel}</h2>
+					<button class="history-close" onclick={() => historyOpen = false} aria-label="Close history">&times;</button>
+				</div>
+				<div class="history-body">
+					{#if historyLoading}
+						<p class="history-loading">Loading…</p>
+					{:else if historyError}
+						<p class="history-error" role="alert">{historyError}</p>
+					{:else if historyData}
+						<section class="history-section">
+							<h3>Corrections</h3>
+							{#each historyData.corrections as c, i (i)}
+								<div class="history-entry">
+									<div class="history-entry-meta">
+										<span class="history-entry-who">{c.display_name}</span>
+										<span class="history-entry-when">{formatHistoryTime(c.created_at)}</span>
+										<span class="history-entry-status">{c.status_after}</span>
+									</div>
+									{#if c.corrected_text}
+										<div class="history-entry-text">{c.corrected_text}</div>
+									{/if}
+									{#if c.review_note}
+										<div class="history-entry-note">Note: {c.review_note}</div>
 									{/if}
 								</div>
-								<div class="history-entry-text">{o.raw_text}</div>
-							</div>
-						{:else}
-							<p class="history-empty">No OCR runs yet.</p>
-						{/each}
-					</section>
-				{/if}
+							{:else}
+								<p class="history-empty">No correction history yet.</p>
+							{/each}
+						</section>
+
+						<section class="history-section">
+							<h3>LLM drafts</h3>
+							{#each historyData.llmDraftRuns as d, i (i)}
+								<div class="history-entry">
+									<div class="history-entry-meta">
+										<span class="history-entry-who">{d.model_name}</span>
+										<span class="history-entry-when">{formatHistoryTime(d.created_at)}</span>
+									</div>
+									<div class="history-entry-text">{d.draft_text}</div>
+								</div>
+							{:else}
+								<p class="history-empty">No LLM drafts yet.</p>
+							{/each}
+						</section>
+
+						<section class="history-section">
+							<h3>OCR runs</h3>
+							{#each historyData.ocrRuns as o, i (i)}
+								<div class="history-entry">
+									<div class="history-entry-meta">
+										<span class="history-entry-who">{o.vendor}</span>
+										<span class="history-entry-when">{formatHistoryTime(o.created_at)}</span>
+										{#if o.confidence_score !== null}
+											<span class="history-entry-status">confidence {o.confidence_score.toFixed(2)}</span>
+										{/if}
+									</div>
+									<div class="history-entry-text">{o.raw_text}</div>
+								</div>
+							{:else}
+								<p class="history-empty">No OCR runs yet.</p>
+							{/each}
+						</section>
+					{/if}
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

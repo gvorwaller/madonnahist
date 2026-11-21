@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { enhance } from '$lib/forms';
 	import { afterNavigate } from '$app/navigation';
+	import { currentOpener, restoreFocus, trapTab } from '$lib/dialog-opener';
 	import NavProgress from '$lib/components/viewer/NavProgress.svelte';
 
 	let { children, data } = $props();
@@ -42,8 +43,18 @@
 	// background and Escape-to-close in Safari and Chrome without custom code.
 	let drawer: HTMLDialogElement | undefined = $state();
 
+	// Back to the Menu button on close (td-eb28c8), but not after following
+	// a link in it: then the new page decides where focus goes.
+	let menuOpener: HTMLElement | null = null;
+	let closedByNav = false;
 	function openMenu() {
+		menuOpener = currentOpener();
 		drawer?.showModal();
+	}
+	function onDrawerClose() {
+		if (!closedByNav) restoreFocus(menuOpener);
+		closedByNav = false;
+		menuOpener = null;
 	}
 	function closeMenu() {
 		if (drawer?.open) drawer.close();
@@ -52,7 +63,10 @@
 		// A click on the backdrop lands on the <dialog> element itself.
 		if (e.target === drawer) closeMenu();
 	}
-	afterNavigate(() => closeMenu());
+	afterNavigate(() => {
+		closedByNav = !!drawer?.open;
+		closeMenu();
+	});
 </script>
 
 <div class="app-shell" class:immersive>
@@ -152,7 +166,7 @@
 		</nav>
 
 		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-		<dialog class="drawer" aria-label="Menu" bind:this={drawer} onclick={onDrawerClick}>
+		<dialog class="drawer" aria-label="Menu" bind:this={drawer} onclick={onDrawerClick} onkeydown={trapTab} onclose={onDrawerClose}>
 			<div class="drawer-inner">
 				<div class="drawer-head">
 					<div class="who">

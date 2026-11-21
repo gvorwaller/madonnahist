@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { enhance } from '$lib/forms';
 	import { GRID_TEMPLATES, buildDayGrid } from '$lib/ingest/day-grid';
 	import type { PageData, ActionData } from './$types';
@@ -143,8 +144,6 @@
 		lightboxSrc = null;
 	}
 </script>
-
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && lightboxSrc) closeLightbox(); }} />
 
 <div class="capture-page">
 	<header>
@@ -374,31 +373,36 @@
 </div>
 
 {#if confirmUningest}
-	<div class="modal-overlay" role="dialog" aria-label="Confirm un-ingest">
-		<div class="modal-box">
-			<h3>Un-ingest page</h3>
-			<p>Revert <strong>{confirmUningest.label}</strong> back to intake?</p>
-			<p class="modal-detail">This will delete the page, all days, OCR results, and drafts. The image will reappear in the active intake section for re-classification.</p>
-			<div class="modal-actions">
-				<form method="POST" action="?/uningest" use:enhance={() => {
-					return ({ update }) => { confirmUningest = null; update(); };
-				}}>
-					<input type="hidden" name="intakeId" value={confirmUningest.intakeId} />
-					<input type="hidden" name="pageId" value={confirmUningest.pageId} />
-					<button type="submit" class="btn-confirm-danger">Un-ingest</button>
-				</form>
-				<button class="btn-cancel" onclick={() => confirmUningest = null}>Cancel</button>
+	<Modal label="Confirm un-ingest" onclose={() => (confirmUningest = null)}>
+		<div class="modal-overlay">
+			<div class="modal-box">
+				<h3>Un-ingest page</h3>
+				<p>Revert <strong>{confirmUningest.label}</strong> back to intake?</p>
+				<p class="modal-detail">This will delete the page, all days, OCR results, and drafts. The image will reappear in the active intake section for re-classification.</p>
+				<div class="modal-actions">
+					<form method="POST" action="?/uningest" use:enhance={() => {
+						const t = confirmUningest;
+						return ({ update }) => { if (confirmUningest === t) confirmUningest = null; update(); };
+					}}>
+						<input type="hidden" name="intakeId" value={confirmUningest.intakeId} />
+						<input type="hidden" name="pageId" value={confirmUningest.pageId} />
+						<button type="submit" class="btn-confirm-danger">Un-ingest</button>
+					</form>
+					<button class="btn-cancel" onclick={() => confirmUningest = null}>Cancel</button>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if lightboxSrc}
-	<button type="button" class="lightbox" onclick={closeLightbox} aria-label="Close lightbox">
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
-		<img src={lightboxSrc} alt="Full-size preview" onclick={(e) => e.stopPropagation()} />
-		<span class="lightbox-close" aria-hidden="true">X</span>
-	</button>
+	<Modal label="Full-size preview" onclose={closeLightbox}>
+		<button type="button" class="lightbox" onclick={closeLightbox} aria-label="Close lightbox">
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_click_events_have_key_events -->
+			<img src={lightboxSrc} alt="Full-size preview" onclick={(e) => e.stopPropagation()} />
+			<span class="lightbox-close" aria-hidden="true">X</span>
+		</button>
+	</Modal>
 {/if}
 
 <style>

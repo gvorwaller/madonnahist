@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { enhance } from '$lib/forms';
 	import EntityPicker from '$lib/components/EntityPicker.svelte';
 
@@ -44,12 +45,6 @@
 		return sd?.subsetSummary ?? 'the entire accepted archive';
 	}
 </script>
-
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape' && deleteTarget !== null) deleteTarget = null;
-	}}
-/>
 
 <div class="page">
 	<header>
@@ -227,31 +222,34 @@
 </div>
 
 {#if deleteTarget}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm delete">
-		<div class="modal-content">
-			<h3>Delete saved answer</h3>
-			<p>Delete the saved answer to "{deleteTarget.question}"? This cannot be undone.</p>
-			<div class="modal-actions">
-				<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="?/delete"
-					use:enhance={() => {
-						return async ({ result, update }) => {
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string } | undefined)?.error ?? 'Delete failed';
-							}
-							deleteTarget = null;
-							await update();
-						};
-					}}
-				>
-					<input type="hidden" name="id" value={deleteTarget.id} />
-					<button type="submit" class="btn-danger">Delete</button>
-				</form>
+	<Modal label="Confirm delete" onclose={() => (deleteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Delete saved answer</h3>
+				<p>Delete the saved answer to "{deleteTarget.question}"? This cannot be undone.</p>
+				<div class="modal-actions">
+					<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="?/delete"
+						use:enhance={() => {
+							const t = deleteTarget;
+							return async ({ result, update }) => {
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string } | undefined)?.error ?? 'Delete failed';
+								}
+								if (deleteTarget === t) deleteTarget = null;
+								await update();
+							};
+						}}
+					>
+						<input type="hidden" name="id" value={deleteTarget.id} />
+						<button type="submit" class="btn-danger">Delete</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

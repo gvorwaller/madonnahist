@@ -35,6 +35,7 @@
 		"test:place-rules": "tsx scripts/test-place-rules.ts",
 		"test:refresh": "tsx scripts/test-refresh.ts",
 		"test:signed-out": "tsx scripts/test-signed-out.ts",
+		"test:dialogs": "tsx scripts/test-dialogs.ts",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

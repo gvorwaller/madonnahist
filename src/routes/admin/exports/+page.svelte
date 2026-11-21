@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { enhance } from '$lib/forms';
 	import { invalidateAll } from '$app/navigation';
 	import DecadeFolds from '$lib/components/admin/DecadeFolds.svelte';
@@ -99,12 +100,6 @@
 		return `${value.toFixed(1)} ${units[unitIndex]}`;
 	}
 </script>
-
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape' && deleteTarget !== null) deleteTarget = null;
-	}}
-/>
 
 <div class="page">
 	<header>
@@ -267,35 +262,38 @@
 </div>
 
 {#if deleteTarget !== null}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm delete">
-		<div class="modal-content">
-			<h3>Delete PDF export</h3>
-			<p>
-				Delete the {deleteTarget.year} {CONTENT_MODE_LABELS[deleteTarget.contentMode]} PDF
-				({formatBytes(deleteTarget.byteSize)})? This removes the file from storage and cannot be
-				undone. You can generate a new one later.
-			</p>
-			<div class="modal-actions">
-				<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="?/delete"
-					use:enhance={() => {
-						return ({ result, update }) => {
-							if (result.type === 'failure') {
-								actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
-							}
-							deleteTarget = null;
-							update();
-						};
-					}}
-				>
-					<input type="hidden" name="id" value={deleteTarget.id} />
-					<button type="submit" class="btn-danger">Delete</button>
-				</form>
+	<Modal label="Confirm delete" onclose={() => (deleteTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Delete PDF export</h3>
+				<p>
+					Delete the {deleteTarget.year} {CONTENT_MODE_LABELS[deleteTarget.contentMode]} PDF
+					({formatBytes(deleteTarget.byteSize)})? This removes the file from storage and cannot be
+					undone. You can generate a new one later.
+				</p>
+				<div class="modal-actions">
+					<button class="btn-cancel" onclick={() => (deleteTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="?/delete"
+						use:enhance={() => {
+							const t = deleteTarget;
+							return ({ result, update }) => {
+								if (result.type === 'failure') {
+									actionError = (result.data as { error?: string })?.error ?? 'Delete failed';
+								}
+								if (deleteTarget === t) deleteTarget = null;
+								update();
+							};
+						}}
+					>
+						<input type="hidden" name="id" value={deleteTarget.id} />
+						<button type="submit" class="btn-danger">Delete</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

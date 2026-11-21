@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Modal from '$lib/components/Modal.svelte';
 	import { enhance } from '$lib/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { untrack } from 'svelte';
@@ -88,7 +89,10 @@
 	// refuse if another tab changed the text meanwhile.
 	let publishTarget = $state<{ year: number; draftId: string | null } | null>(null);
 	let editDraftId = $state<string | null>(null);
-	let unpublishTarget = $state<number | null>(null);
+	// An object, not just the year: a late answer closes only the
+	// confirmation it was sent from, even if the same year was reopened
+	// (CODEX td-eb28c8 #4).
+	let unpublishTarget = $state<{ year: number } | null>(null);
 	let useTarget = $state<{ year: number; draft: Draft } | null>(null);
 
 	const statusLabels: Record<string, string> = { none: 'None', draft: 'Draft', published: 'Published' };
@@ -169,16 +173,6 @@
 
 	const isSaveNotes = (input: SubmitInput) => input.action.search.includes('saveNotes');
 </script>
-
-<svelte:window
-	onkeydown={(e) => {
-		if (e.key === 'Escape') {
-			publishTarget = null;
-			unpublishTarget = null;
-			useTarget = null;
-		}
-	}}
-/>
 
 {#snippet draftText(text: string)}
 	<div class="preview">
@@ -476,7 +470,7 @@
 											>Publish</button
 										>
 									{:else if row.status === 'published'}
-										<button class="btn btn-secondary" onclick={() => (unpublishTarget = row.year)}>Unpublish</button>
+										<button class="btn btn-secondary" onclick={() => (unpublishTarget = { year: row.year })}>Unpublish</button>
 									{/if}
 								</td>
 							</tr>
@@ -494,76 +488,104 @@
 </div>
 
 {#if publishTarget !== null}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm publish">
-		<div class="modal-content">
-			<h3>Publish narrative</h3>
-			<p>
-				Publish the {publishTarget.year} narrative{publishTarget.draftId ? ` (draft #${publishTarget.draftId})` : ''}? It
-				will immediately become visible to every family viewer on the {publishTarget.year} year page, labeled as
-				AI-written.
-			</p>
-			<div class="modal-actions">
-				<button class="btn btn-secondary" onclick={() => (publishTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="{ACTION}?/publish"
-					use:enhance={handled('Publish failed', undefined, () => (publishTarget = null))}
-				>
-					<input type="hidden" name="year" value={publishTarget.year} />
-					<input type="hidden" name="expectedDraftId" value={publishTarget.draftId ?? ''} />
-					<button type="submit" class="btn btn-danger">Publish</button>
-				</form>
+	<Modal label="Confirm publish" onclose={() => (publishTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Publish narrative</h3>
+				<p>
+					Publish the {publishTarget.year} narrative{publishTarget.draftId ? ` (draft #${publishTarget.draftId})` : ''}? It
+					will immediately become visible to every family viewer on the {publishTarget.year} year page, labeled as
+					AI-written.
+				</p>
+				<div class="modal-actions">
+					<button class="btn btn-secondary" onclick={() => (publishTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="{ACTION}?/publish"
+						use:enhance={(input) => {
+							const t = publishTarget;
+							return handled('Publish failed', undefined, () => {
+								if (publishTarget === t) publishTarget = null;
+							})(input);
+						}}
+					>
+						<input type="hidden" name="year" value={publishTarget.year} />
+						<input type="hidden" name="expectedDraftId" value={publishTarget.draftId ?? ''} />
+						<button type="submit" class="btn btn-danger">Publish</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if unpublishTarget !== null}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm unpublish">
-		<div class="modal-content">
-			<h3>Unpublish narrative</h3>
-			<p>
-				Unpublish the {unpublishTarget} narrative? It will immediately disappear from the family viewer. The text and
-				all drafts are kept, and you can publish it again later.
-			</p>
-			<div class="modal-actions">
-				<button class="btn btn-secondary" onclick={() => (unpublishTarget = null)}>Cancel</button>
-				<form method="POST" action="{ACTION}?/unpublish" use:enhance={handled('Unpublish failed', () => (unpublishTarget = null))}>
-					<input type="hidden" name="year" value={unpublishTarget} />
-					<button type="submit" class="btn btn-danger">Unpublish</button>
-				</form>
+	<Modal label="Confirm unpublish" onclose={() => (unpublishTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Unpublish narrative</h3>
+				<p>
+					Unpublish the {unpublishTarget.year} narrative? It will immediately disappear from the family viewer. The text and
+					all drafts are kept, and you can publish it again later.
+				</p>
+				<div class="modal-actions">
+					<button class="btn btn-secondary" onclick={() => (unpublishTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="{ACTION}?/unpublish"
+						use:enhance={(input) => {
+							const t = unpublishTarget;
+							return handled('Unpublish failed', undefined, () => {
+								if (unpublishTarget === t) unpublishTarget = null;
+							})(input);
+						}}
+					>
+						<input type="hidden" name="year" value={unpublishTarget.year} />
+						<button type="submit" class="btn btn-danger">Unpublish</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 {#if useTarget !== null}
-	<div class="modal-overlay" role="dialog" aria-modal="true" aria-label="Confirm replacing published text">
-		<div class="modal-content">
-			<h3>Replace the published text?</h3>
-			<p>
-				The {useTarget.year} narrative is published. Using draft #{useTarget.draft.id}
-				({narrativeModelLabel(useTarget.draft.model_name)}) changes what the family sees right away. The current text stays in
-				the drafts list, so you can switch back.
-			</p>
-			<div class="modal-actions">
-				<button class="btn btn-secondary" onclick={() => (useTarget = null)}>Cancel</button>
-				<form
-					method="POST"
-					action="{ACTION}?/useDraft"
-					use:enhance={handled('Could not use that draft', () => {
-						notice = `Draft #${useTarget?.draft.id} is now the published ${useTarget?.year} text.`;
-						useTarget = null;
-					})}
-				>
-					<input type="hidden" name="year" value={useTarget.year} />
-					<input type="hidden" name="draftId" value={useTarget.draft.id} />
-					<input type="hidden" name="confirmPublished" value="1" />
-					<button type="submit" class="btn btn-danger">Replace published text</button>
-				</form>
+	<Modal label="Confirm replacing published text" onclose={() => (useTarget = null)}>
+		<div class="modal-overlay">
+			<div class="modal-content">
+				<h3>Replace the published text?</h3>
+				<p>
+					The {useTarget.year} narrative is published. Using draft #{useTarget.draft.id}
+					({narrativeModelLabel(useTarget.draft.model_name)}) changes what the family sees right away. The current text stays in
+					the drafts list, so you can switch back.
+				</p>
+				<div class="modal-actions">
+					<button class="btn btn-secondary" onclick={() => (useTarget = null)}>Cancel</button>
+					<form
+						method="POST"
+						action="{ACTION}?/useDraft"
+						use:enhance={(input) => {
+							// Closed on any answer, so a refusal shows on the page, not behind
+							// the dialog; only this confirmation, not one opened since.
+							const t = useTarget;
+							return handled(
+								'Could not use that draft',
+								() => (notice = `Draft #${t?.draft.id} is now the published ${t?.year} text.`),
+								() => {
+									if (useTarget === t) useTarget = null;
+								}
+							)(input);
+						}}
+					>
+						<input type="hidden" name="year" value={useTarget.year} />
+						<input type="hidden" name="draftId" value={useTarget.draft.id} />
+						<input type="hidden" name="confirmPublished" value="1" />
+						<button type="submit" class="btn btn-danger">Replace published text</button>
+					</form>
+				</div>
 			</div>
 		</div>
-	</div>
+	</Modal>
 {/if}
 
 <style>

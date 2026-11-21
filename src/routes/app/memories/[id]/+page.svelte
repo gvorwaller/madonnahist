@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$lib/forms';
+	import { currentOpener, restoreFocus, trapTab } from '$lib/dialog-opener';
 	import { page } from '$app/state';
 	import MemoryForm from '$lib/components/viewer/MemoryForm.svelte';
 	import { backLabel, backTarget, withFrom } from '$lib/viewer/nav';
@@ -39,6 +40,8 @@
 	);
 
 	let confirmDialog: HTMLDialogElement | undefined = $state();
+	// "Keep it" or Escape puts focus back on the Delete button (td-eb28c8).
+	let confirmOpener: HTMLElement | null = null;
 	let busy = $state(false);
 </script>
 
@@ -103,13 +106,26 @@
 			<p class="v-alert" role="alert">{otherError}</p>
 		{/if}
 		<p>Deleting removes this memory from the family history.</p>
-		<button type="button" class="v-btn danger" onclick={() => confirmDialog?.showModal()}>
+		<button
+			type="button"
+			class="v-btn danger"
+			onclick={() => {
+				confirmOpener = currentOpener();
+				confirmDialog?.showModal();
+			}}
+		>
 			Delete this memory…
 		</button>
 	</section>
 </div>
 
-<dialog bind:this={confirmDialog} class="confirm" aria-labelledby="del-h">
+<dialog
+	bind:this={confirmDialog}
+	class="confirm"
+	aria-labelledby="del-h"
+	onkeydown={trapTab}
+	onclose={() => restoreFocus(confirmOpener)}
+>
 	<h2 id="del-h">Delete your memory of {when}?</h2>
 	<p>It will no longer show anywhere in the family history.</p>
 	<form

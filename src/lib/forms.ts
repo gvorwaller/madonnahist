@@ -2,6 +2,7 @@ import { applyAction, enhance as kitEnhance } from '$app/forms';
 import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 import { isSignedOutResult, signInHref } from '$lib/viewer/session';
 import { showSignedOut } from '$lib/signed-out.svelte';
+import { settleFocus } from '$lib/dialog-opener';
 
 /** What a page's own failure path shows inline, beside the bar. */
 export const SIGNED_OUT_MESSAGE = "You've been signed out, so that wasn't saved.";
@@ -27,6 +28,9 @@ export const SIGNED_OUT_MESSAGE = "You've been signed out, so that wasn't saved.
  * A late answer for a page the person has already left (form removed or
  * URL changed) still reaches the form's callback, so busy flags reset, but
  * raises no bar: it would point the sign-in back at the wrong page.
+ *
+ * When the page's update() is done, focus that a closing dialog put back on
+ * its opener is put back again if Kit's update reset it (td-eb28c8).
  */
 export function enhance<
 	Success extends Record<string, unknown> | undefined,
@@ -37,7 +41,17 @@ export function enhance<
 		// correction editor flushes its autosave) while the URL changes.
 		const from = location.href;
 		const after = submit ? await submit(input) : undefined;
-		return async (opts) => {
+		return async (raw) => {
+			const opts = {
+				...raw,
+				update: async (u?: { reset?: boolean; invalidateAll?: boolean }) => {
+					try {
+						await raw.update(u);
+					} finally {
+						settleFocus();
+					}
+				}
+			};
 			let o = opts;
 			if (!form.hasAttribute('data-signed-out-inline') && isSignedOutResult(opts.result)) {
 				if (form.isConnected && location.href === from) showSignedOut(signInHref(new URL(from)));
@@ -57,6 +71,7 @@ export function enhance<
 						const here = location.origin + location.pathname;
 						const samePage = here === opts.action.origin + opts.action.pathname;
 						if (samePage && form.isConnected && location.href === from) await applyAction(result);
+						settleFocus();
 					}
 				};
 			}
