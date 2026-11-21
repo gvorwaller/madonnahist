@@ -134,10 +134,10 @@
 			</details>
 		{/if}
 
-		{#if data.memories.length > 0}
+		{#if data.memories.length + data.hiddenMemories.length > 0}
 			<section class="mems" aria-labelledby="mem-h">
 				<div class="v-section-h"><h2 id="mem-h">Memories from {data.year}</h2></div>
-				<MemoryList memories={data.memories} of="this year" {here} />
+				<MemoryList memories={data.memories} hidden={data.hiddenMemories} of="this year" {here} />
 				{#if data.canWrite}
 					<a
 						class="v-btn secondary v-add-memory"
@@ -244,13 +244,13 @@
 				<h2>No days from {data.year} yet</h2>
 				<p>Check back as Madonna works through the calendars.</p>
 				<div class="v-actions center">
-					{#if data.canWrite && data.memories.length === 0}
+					{#if data.canWrite && data.memories.length + data.hiddenMemories.length === 0}
 						<a class="v-btn primary" href={withFrom(`/app/memories/new?year=${data.year}`, here)}
 							>+ Add a memory of this year</a
 						>
 					{/if}
 					<a
-						class="v-btn {data.canWrite && data.memories.length === 0 ? 'secondary' : 'primary'}"
+						class="v-btn {data.canWrite && data.memories.length + data.hiddenMemories.length === 0 ? 'secondary' : 'primary'}"
 						href="/app/timeline">Go to the Timeline</a
 					>
 				</div>

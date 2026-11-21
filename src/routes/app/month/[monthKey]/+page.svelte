@@ -124,7 +124,7 @@
 <div class="v-page wide">
 	<a class="v-back" href={backHref}>◂ {backText}</a>
 
-	{#if !data.found && (data.reason === 'invalid' || data.memories.length === 0)}
+	{#if !data.found && (data.reason === 'invalid' || data.memories.length + data.hiddenMemories.length === 0)}
 		<div class="v-empty">
 			<div class="icon" aria-hidden="true">🗓️</div>
 			<h1 class="v-title">{data.reason === 'invalid' ? 'Not a valid month' : 'Not captured yet'}</h1>
@@ -179,10 +179,10 @@
 			{/if}
 		</p>
 
-		{#if data.memories.length > 0}
+		{#if data.memories.length + data.hiddenMemories.length > 0}
 			<section class="mems" aria-labelledby="mem-h">
 				<div class="v-section-h"><h2 id="mem-h">Memories from {monthTitle}</h2></div>
-				<MemoryList memories={data.memories} of="this month" {here} />
+				<MemoryList memories={data.memories} hidden={data.hiddenMemories} of="this month" {here} />
 				{#if data.canWrite}
 					<a class="v-btn secondary v-add-memory" href={addHref}>+ Add a memory of this month</a>
 				{/if}

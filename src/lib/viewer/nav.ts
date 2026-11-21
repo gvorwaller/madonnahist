@@ -35,7 +35,18 @@ export function backTarget(from: string | null | undefined, fallback = '/app'): 
 	// eslint-disable-next-line no-control-regex
 	if (/[\u0000-\u001f\u007f]/.test(from)) return fallback;
 	if (!/^\/app(\/|\?|$)/.test(from)) return fallback;
-	return from;
+	// Dot segments ("/app/../admin", also percent-encoded) pass the prefix
+	// test but resolve elsewhere: check and return the path as a browser
+	// would resolve it (CODEX review of td-76a40f, #4).
+	const base = 'http://same-origin.invalid';
+	let url: URL;
+	try {
+		url = new URL(from, base);
+	} catch {
+		return fallback;
+	}
+	if (url.origin !== base || !/^\/app(\/|$)/.test(url.pathname)) return fallback;
+	return url.pathname + url.search + url.hash;
 }
 
 /** `href` plus `?from=<from>` (or `&from=` when href already has a query). */

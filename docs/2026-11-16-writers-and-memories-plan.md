@@ -280,7 +280,7 @@ memories, plus "+ Add a memory of this month/year" for writers.
 - Search includes memories.
 - `has_memory` flags count shared memories (`viewer.ts` ×3, `app/+page.server.ts`, search).
 - Share and Book view include memories.
-- The include/exclude-by-writer toggle (td-76a40f), worth building once there's a second
+- ~~The include/exclude-by-writer toggle (td-76a40f)~~ built 2026-11-21 (migration 0035, see V5). Originally: worth building once there's a second
   non-Madonna writer.
 - The enrichment worker reads memories, so people and places get chips.
 - Madonna's pre-1976 memories, typed by Gaylon for her.

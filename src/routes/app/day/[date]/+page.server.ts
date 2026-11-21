@@ -8,7 +8,7 @@ import {
 } from '$lib/server/viewer';
 import { getDayEntityChips } from '$lib/server/entities';
 import { getDayMemories, getWriterForUser, viewerIdOf } from '$server/memories';
-import type { MemoryView } from '$lib/viewer/memories';
+import type { HiddenMemories, MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -22,6 +22,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			entryDate: params.date,
 			dateLabel: null,
 			memories: [] as MemoryView[],
+			hiddenMemories: [] as HiddenMemories[],
 			canWrite: false,
 			prevDate: null,
 			nextDate: null
@@ -35,11 +36,14 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// draft) still shows on a day Madonna hasn't reached. They never widen
 	// what calendar text, tags, chips or images this page returns.
 	const viewerId = viewerIdOf(locals);
-	const [memories, writer] = await Promise.all([
+	const [{ memories, hidden: hiddenMemories }, writer] = await Promise.all([
 		getDayMemories(entryDate, viewerId),
 		getWriterForUser(viewerId)
 	]);
 	const canWrite = !!writer;
+	// A day whose only memories are hidden still counts as a memory day, so
+	// the page can say what's hidden and offer to show it (td-76a40f).
+	const anyMemories = memories.length + hiddenMemories.length > 0;
 
 	// Publishable-day predicate applied directly in this query — a day that
 	// exists but isn't accepted yet is treated identically to one that
@@ -59,12 +63,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!row) {
 		// Prev/Next still work on a memory-only day (AGY2 #1).
 		const adjacent =
-			memories.length > 0 ? await getAdjacentAcceptedDates(entryDate) : { prev: null, next: null };
+			anyMemories ? await getAdjacentAcceptedDates(entryDate) : { prev: null, next: null };
 		return {
 			found: false as const,
 			entryDate,
 			dateLabel,
 			memories,
+			hiddenMemories,
 			canWrite,
 			prevDate: adjacent.prev,
 			nextDate: adjacent.next
@@ -100,6 +105,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		nextDate: next,
 		otherYears,
 		memories,
+		hiddenMemories,
 		canWrite
 	};
 };

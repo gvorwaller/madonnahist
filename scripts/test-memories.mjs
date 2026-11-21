@@ -31,6 +31,12 @@
 //   - text never reaches audit_log; memory_revisions keeps it; workers can't
 //     read memories, revisions or writers; the app can't change revisions
 //   - delete: gone, recoverable from memory_revisions, audited
+//   - whose memories you see (td-76a40f, migration 0035): Hide under someone
+//     else's memory (never Madonna's or your own), hidden on Day/Month/Year
+//     for that reader only with a "hidden" note and Show, a memory-only day
+//     keeps its page, refusals (Madonna, self, junk, unknown, signed out),
+//     returnTo stays inside /app, Your account's list and save, DB CHECK and
+//     grants
 //   - an account that wrote a memory ("(memories)"), or is only linked to a
 //     writer ("set up to write memories"), can't be deleted permanently
 //
@@ -717,6 +723,239 @@ async function main() {
 			);
 			const again = await getPage(`/app/memories/${draftId}`, cW);
 			record('deleted memory: edit page is 404', again.status === 404);
+		}
+
+		// ── Whose memories you see (td-76a40f, migration 0035) ──
+		{
+			const HIDE_ONLY = '1901-02-20';
+			const hiddenRows = async (uid) =>
+				(
+					await owner.query(
+						`SELECT writer_id FROM hidden_memory_writers WHERE user_id = $1 ORDER BY writer_id`,
+						[uid]
+					)
+				).rows.map((r) => r.writer_id);
+			const viewerId = (await owner.query(`SELECT id FROM users WHERE username = $1`, [VIEWER])).rows[0].id;
+			await action('/app/memories/new?/save', dayFields(ACCEPTED, 'MEMTEST-W2-ACCEPTED', 'share'), cW2);
+			await action('/app/memories/new?/save', dayFields(HIDE_ONLY, 'MEMTEST-HIDE-ONLY', 'share'), cW);
+
+			const before = await getPage(`/app/day/${ACCEPTED}`, cV);
+			record(
+				'viewer sees both writers with a Hide button for each, none for Madonna',
+				before.html.includes('MEMTEST-ACCEPTED-MEMORY') &&
+					before.html.includes('MEMTEST-W2-ACCEPTED') &&
+					before.html.includes(`Hide ${WRITER_NAME}'s memories`) &&
+					before.html.includes("Hide Memtester Two's memories") &&
+					!before.html.includes("Hide Madonna's memories")
+			);
+			const own = await getPage(`/app/day/${ACCEPTED}`, cW);
+			record(
+				'a writer gets no Hide button on their own memory',
+				own.html.includes('MEMTEST-ACCEPTED-MEMORY') && !own.html.includes(`Hide ${WRITER_NAME}'s memories`)
+			);
+
+			const back = `/app/day/${ACCEPTED}?from=%2Fapp%2Ftimeline`;
+			const h = await action('/app/account?/hideWriter', { writer: String(w1), returnTo: back }, cV);
+			record(
+				'hide: redirects back to the same page, at the hidden note',
+				h.json?.type === 'redirect' && h.json.location === `${back}#hidden-w-${w1}`,
+				h.text.slice(0, 160)
+			);
+			record('hide: one row saved', JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w1]));
+			const again = await action('/app/account?/hideWriter', { writer: String(w1), returnTo: back }, cV);
+			record('hide twice: still one row', again.json?.type === 'redirect' && (await hiddenRows(viewerId)).length === 1);
+
+			const day = await getPage(`/app/day/${ACCEPTED}`, cV);
+			record(
+				'hidden: day keeps calendar, Madonna and the other writer; says what is hidden',
+				!day.html.includes('MEMTEST-ACCEPTED-MEMORY') &&
+					day.html.includes('MEMTEST-ACCEPTED-TEXT') &&
+					day.html.includes('MEMTEST-MADONNA-MEMORY') &&
+					day.html.includes('MEMTEST-W2-ACCEPTED') &&
+					day.html.includes(`${WRITER_NAME}'s memory of this day is hidden.`) &&
+					day.html.includes(`Show ${WRITER_NAME}'s memories`) &&
+					day.html.includes(`id="hidden-w-${w1}"`)
+			);
+			const only = await getPage(`/app/day/${HIDE_ONLY}`, cV);
+			record(
+				'memory-only day with its memory hidden: the note, not "Not transcribed yet"',
+				!only.html.includes('MEMTEST-HIDE-ONLY') &&
+					only.html.includes(`${WRITER_NAME}'s memory of this day is hidden.`) &&
+					!only.html.includes('<h1 class="v-title">Not transcribed yet')
+			);
+			const mo = await getPage('/app/month/1901-03', cV);
+			const yr = await getPage(`/app/year/${FIX_YEAR}`, cV);
+			record(
+				'hidden on Month and Year pages too',
+				!mo.html.includes('MEMTEST-MONTH') &&
+					mo.html.includes(`${WRITER_NAME}'s memory of this month is hidden.`) &&
+					!yr.html.includes('MEMTEST-YEAR') &&
+					yr.html.includes(`${WRITER_NAME}'s memory of this year is hidden.`)
+			);
+			const other = await getPage(`/app/day/${ACCEPTED}`, cW2);
+			const self = await getPage(`/app/day/${ACCEPTED}`, cW);
+			record(
+				'only the viewer is affected: others and the writer still see it',
+				other.html.includes('MEMTEST-ACCEPTED-MEMORY') && self.html.includes('MEMTEST-ACCEPTED-MEMORY')
+			);
+
+			// Refusals: Madonna, yourself, junk, a writer that doesn't exist, and
+			// a writer who has shared nothing (CODEX #2: else their name would
+			// appear on the reader's account page).
+			const silent = (await owner.query(`SELECT id FROM writers WHERE slug = 'mem-test-off'`)).rows[0].id;
+			for (const [label, cookie, writer] of [
+				['Madonna (writer 1)', cV, '1'],
+				['your own writer', cW, String(w1)],
+				['a non-number', cV, '2abc'],
+				['no such writer', cV, '987654321'],
+				['a writer with nothing shared', cV, String(silent)]
+			]) {
+				const r = await action('/app/account?/hideWriter', { writer, returnTo: back }, cookie);
+				record(`hide refused: ${label}`, r.status === 400, `${r.status} ${r.text.slice(0, 120)}`);
+			}
+			record(
+				'refusals saved nothing',
+				JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w1]) &&
+					(await hiddenRows(writerId)).length === 0
+			);
+			const evil = await action('/app/account?/hideWriter', { writer: String(w2), returnTo: 'https://evil.example/x' }, cV);
+			record(
+				'outside returnTo falls back to Your account',
+				evil.json?.location === `/app/account#hidden-w-${w2}`,
+				evil.json?.location
+			);
+			await action('/app/account?/showWriter', { writer: String(w2), returnTo: back }, cV);
+			// CODEX #4: dot segments resolve outside /app; fall back instead.
+			for (const sneaky of ['/app/../admin/users', '/app/%2e%2e/admin/users', '/app/./../login']) {
+				const r = await action('/app/account?/hideWriter', { writer: String(w2), returnTo: sneaky }, cV);
+				record(
+					`returnTo ${sneaky} falls back to Your account`,
+					r.json?.location === `/app/account#hidden-w-${w2}`,
+					r.json?.location
+				);
+			}
+			await action('/app/account?/showWriter', { writer: String(w2), returnTo: back }, cV);
+
+			// Signed out: the hook's plain 401, which is not an ActionResult (no
+			// known `type`). MemoryList and Your account detect exactly that
+			// (src/lib/viewer/session.ts) and offer sign-in.
+			const out = await req('/app/account?/hideWriter', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded', Origin: BASE_URL },
+				body: new URLSearchParams({ writer: String(w2), returnTo: back }).toString()
+			});
+			const outEnh = await action('/app/account?/hideWriter', { writer: String(w2), returnTo: back }, null);
+			record('signed out (plain form): 401', out.status === 401, String(out.status));
+			record(
+				'signed out (enhanced): 401 with no ActionResult type',
+				outEnh.httpStatus === 401 && outEnh.json && !('type' in outEnh.json),
+				outEnh.text.slice(0, 160)
+			);
+			record(
+				'signed out: nothing saved',
+				JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w1])
+			);
+
+			// Your account: the list, then a save that flips both.
+			const acc = await getPage('/app/account', cV);
+			const box = (id) => new RegExp(`name="show" value="${id}"[^>]*>`).exec(acc.html)?.[0] ?? '';
+			record(
+				'Your account lists both writers; the hidden one unticked; not Madonna',
+				acc.html.includes('Memories you see') &&
+					acc.html.includes(`${WRITER_NAME}'s memories`) &&
+					acc.html.includes("Memtester Two's memories") &&
+					!box(w1).includes('checked') &&
+					box(w2).includes('checked') &&
+					!/value="1"[^>]*name="show"|name="show" value="1"/.test(acc.html),
+				`${box(w1)} | ${box(w2)}`
+			);
+			const accW2 = await getPage('/app/account', cW2);
+			record(
+				"a writer's own name isn't on their list",
+				accW2.html.includes(`${WRITER_NAME}'s memories`) && !accW2.html.includes("Memtester Two's memories")
+			);
+			const body = new URLSearchParams();
+			body.append('writer', String(w1));
+			body.append('writer', String(w2));
+			body.append('show', String(w1));
+			body.append('wasShown', String(w2)); // drawn: w1 hidden, w2 shown
+			const postForm = async (b) => {
+				const res = await req('/app/account?/memoryWriters', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/x-www-form-urlencoded',
+						Origin: BASE_URL,
+						'x-sveltekit-action': 'true',
+						Accept: 'application/json',
+						Cookie: cV
+					},
+					body: b.toString()
+				});
+				return res.json();
+			};
+			const saveJson = await postForm(body);
+			record(
+				'save: ticked shows, unticked hides',
+				saveJson.type === 'success' && JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w2]),
+				JSON.stringify(saveJson).slice(0, 160)
+			);
+			const bad = await action('/app/account?/memoryWriters', { writer: '1' }, cV);
+			record(
+				'save listing Madonna is refused and changes nothing',
+				bad.status === 400 && JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w2])
+			);
+
+			// CODEX #1: the account page is open on a laptop (drawn: w1 shown,
+			// w2 hidden). On the phone they hide w1. Back on the laptop they
+			// tick w2 and Save: w2 shows, and w1 stays hidden.
+			await action('/app/account?/hideWriter', { writer: String(w1), returnTo: back }, cV);
+			const stale = new URLSearchParams();
+			stale.append('writer', String(w1));
+			stale.append('writer', String(w2));
+			stale.append('show', String(w1));
+			stale.append('show', String(w2));
+			stale.append('wasShown', String(w1));
+			const staleJson = await postForm(stale);
+			record(
+				'stale account page: only the changed box is saved',
+				staleJson.type === 'success' && JSON.stringify(await hiddenRows(viewerId)) === JSON.stringify([w1]),
+				JSON.stringify(await hiddenRows(viewerId))
+			);
+			const s = await action('/app/account?/showWriter', { writer: String(w1), returnTo: back }, cV);
+			const restored = await getPage(`/app/day/${ACCEPTED}`, cV);
+			record(
+				'show: back to the page, everything visible again',
+				s.json?.location === back &&
+					(await hiddenRows(viewerId)).length === 0 &&
+					restored.html.includes('MEMTEST-ACCEPTED-MEMORY') &&
+					restored.html.includes('MEMTEST-W2-ACCEPTED') &&
+					!restored.html.includes('is hidden.')
+			);
+
+			// Database rules.
+			let madonna = false;
+			try {
+				await app.query(`INSERT INTO hidden_memory_writers (user_id, writer_id) VALUES ($1, 1)`, [viewerId]);
+			} catch (e) {
+				madonna = /check constraint/.test(String(e));
+			}
+			record('DB refuses hiding Madonna (CHECK)', madonna);
+			for (const [label, pool, sql] of [
+				['worker cannot read hidden_memory_writers', worker, `SELECT 1 FROM hidden_memory_writers LIMIT 1`],
+				['app cannot UPDATE hidden_memory_writers', app, `UPDATE hidden_memory_writers SET hidden_at = NOW()`]
+			]) {
+				let denied = false;
+				try {
+					await pool.query(sql);
+				} catch (e) {
+					denied = /permission denied/.test(String(e));
+				}
+				record(label, denied);
+			}
+
+			// Writer two goes back to "set up, wrote nothing" for the next section.
+			await owner.query(`DELETE FROM memories WHERE created_by = $1`, [writer2Id]);
+			await owner.query(`DELETE FROM memory_revisions WHERE revised_by = $1`, [writer2Id]);
 		}
 
 		// ── Accounts that wrote, or are writers, can't be deleted ──

@@ -14,6 +14,7 @@ export const MEMORY_MAX = 10_000;
 /** A memory as a page shows it. */
 export interface MemoryView {
 	id: number;
+	writerId: number;
 	writerName: string;
 	/** YYYY-MM-DD, the first day of the period for month and year memories. */
 	date: string;
@@ -24,6 +25,32 @@ export interface MemoryView {
 	mine: boolean;
 	/** Exact updated_at text, sent back with an edit to catch stale tabs. */
 	version: string;
+	/**
+	 * The viewer may hide this writer's memories (td-76a40f): someone else's,
+	 * never Madonna's, never their own.
+	 */
+	canHide: boolean;
+}
+
+/** Madonna's writer id. Her memories can never be hidden (migration 0035). */
+export const MADONNA_WRITER_ID = 1;
+
+/** Memories on a page that the viewer chose not to see, per writer (td-76a40f). */
+export interface HiddenMemories {
+	writerId: number;
+	writerName: string;
+	count: number;
+}
+
+/** What a Day, Month or Year page gets: the memories shown, plus what's hidden. */
+export interface PageMemories {
+	memories: MemoryView[];
+	hidden: HiddenMemories[];
+}
+
+/** "Gaylon's", or "James'" for a name ending in s. */
+export function possessive(name: string): string {
+	return /s$/i.test(name) ? `${name}'` : `${name}'s`;
 }
 
 /** What the add/edit form holds (selects carry strings; month/day unpadded). */

@@ -7,7 +7,7 @@ import {
 	type DayHighlight
 } from '$lib/server/viewer';
 import { getPeriodMemories, getWriterForUser, viewerIdOf } from '$server/memories';
-import type { MemoryView } from '$lib/viewer/memories';
+import type { HiddenMemories, MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
 const MIN_YEAR = 1900;
@@ -32,6 +32,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			narrative: null as string | null,
 			pdfExports: [] as Array<{ mode: string; byteSize: number; createdAt: string }>,
 			memories: [] as MemoryView[],
+			hiddenMemories: [] as HiddenMemories[],
 			canWrite: false
 		};
 	}
@@ -39,7 +40,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const year = Number(params.year);
 	// Year memories (plan §4): shared ones plus your own drafts.
 	const viewerId = viewerIdOf(locals);
-	const [memories, writer] = await Promise.all([
+	const [{ memories, hidden: hiddenMemories }, writer] = await Promise.all([
 		getPeriodMemories('year', params.year, viewerId),
 		getWriterForUser(viewerId)
 	]);
@@ -89,6 +90,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		narrative,
 		pdfExports,
 		memories,
+		hiddenMemories,
 		canWrite: !!writer
 	};
 };

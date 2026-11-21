@@ -118,7 +118,7 @@
 
 <svelte:head>
 	<title
-		>{data.found || data.memories.length > 0
+		>{data.found || data.memories.length + data.hiddenMemories.length > 0
 			? fmt(data.entryDate, { month: 'long', day: 'numeric', year: 'numeric' })
 			: 'Not transcribed yet'}
 		— Vorwaller Family History</title
@@ -128,7 +128,7 @@
 <div class="v-page wide">
 	<a class="v-back" href={backHref}>◂ {backText}</a>
 
-	{#if !data.found && data.memories.length === 0}
+	{#if !data.found && data.memories.length + data.hiddenMemories.length === 0}
 		<div class="v-empty">
 			<div class="icon" aria-hidden="true">✍️</div>
 			<h1 class="v-title">Not transcribed yet</h1>
@@ -171,7 +171,7 @@
 					<p class="not-yet">Madonna's calendar for this day isn't transcribed yet.</p>
 				{/if}
 
-				<MemoryList memories={data.memories} of="this day" {here} />
+				<MemoryList memories={data.memories} hidden={data.hiddenMemories} of="this day" {here} />
 				{#if data.canWrite}
 					<a
 						class="v-btn secondary v-add-memory"

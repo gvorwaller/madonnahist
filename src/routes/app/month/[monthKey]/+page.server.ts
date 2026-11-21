@@ -1,7 +1,7 @@
 import { query } from '$lib/db';
 import { getAdjacentCapturedMonths, getMonthPhoto, getMonthReading } from '$lib/server/viewer';
 import { getPeriodMemories, getWriterForUser, viewerIdOf } from '$server/memories';
-import type { MemoryView } from '$lib/viewer/memories';
+import type { HiddenMemories, MemoryView } from '$lib/viewer/memories';
 import type { PageServerLoad } from './$types';
 
 /**
@@ -42,6 +42,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			reason: 'invalid' as const,
 			monthKey: params.monthKey,
 			memories: [] as MemoryView[],
+			hiddenMemories: [] as HiddenMemories[],
 			canWrite: false
 		};
 	}
@@ -53,7 +54,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Month memories are independent of the captured page (plan §4): an
 	// uncaptured month still shows them. They never widen the calendar data.
 	const viewerId = viewerIdOf(locals);
-	const [memories, writer] = await Promise.all([
+	const [{ memories, hidden: hiddenMemories }, writer] = await Promise.all([
 		getPeriodMemories('month', params.monthKey, viewerId),
 		getWriterForUser(viewerId)
 	]);
@@ -69,7 +70,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// With memories, keep the header chevrons; the photo column is
 		// omitted by the page (AGY2 #4).
 		const adjacent =
-			memories.length > 0 ? await getAdjacentCapturedMonths(year, month) : { prev: null, next: null };
+			memories.length + hiddenMemories.length > 0
+				? await getAdjacentCapturedMonths(year, month)
+				: { prev: null, next: null };
 		return {
 			found: false as const,
 			reason: 'missing' as const,
@@ -77,6 +80,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			year,
 			month,
 			memories,
+			hiddenMemories,
 			canWrite,
 			prevMonth: key(adjacent.prev),
 			nextMonth: key(adjacent.next)
@@ -101,6 +105,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		prevMonth: key(adjacent.prev),
 		nextMonth: key(adjacent.next),
 		memories,
+		hiddenMemories,
 		canWrite
 	};
 };

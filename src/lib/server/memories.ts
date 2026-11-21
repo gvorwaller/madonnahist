@@ -27,8 +27,11 @@ import {
 	PRECISIONS,
 	memoryDateLabel,
 	memoryPageHref,
+	MADONNA_WRITER_ID,
+	type HiddenMemories,
 	type MemoryFields,
 	type MemoryView,
+	type PageMemories,
 	type Precision
 } from '$lib/viewer/memories';
 
@@ -72,6 +75,7 @@ export function viewerIdOf(locals: App.Locals): number {
 
 interface Row {
 	id: number;
+	writer_id: number;
 	writer_name: string;
 	memory_date: string;
 	date_precision: Precision;
@@ -79,49 +83,78 @@ interface Row {
 	shared: boolean;
 	created_by: number;
 	version: string;
+	/** Only pageMemories() selects these two. */
+	can_hide?: boolean;
+	is_hidden?: boolean;
 }
 
-const SELECT_VIEW = `
-	SELECT m.id, w.display_name AS writer_name, m.memory_date::text AS memory_date,
-	       m.date_precision, m.body, (m.shared_at IS NOT NULL) AS shared,
-	       m.created_by, m.updated_at::text AS version
-	  FROM memories m
-	  JOIN writers w ON w.id = m.writer_id`;
+const VIEW_COLUMNS = `m.id, m.writer_id, w.display_name AS writer_name,
+	       m.memory_date::text AS memory_date, m.date_precision, m.body,
+	       (m.shared_at IS NOT NULL) AS shared, m.created_by, m.updated_at::text AS version`;
+const VIEW_FROM = `FROM memories m JOIN writers w ON w.id = m.writer_id`;
+const SELECT_VIEW = `SELECT ${VIEW_COLUMNS} ${VIEW_FROM}`;
 
 function toView(r: Row, viewerId: number): MemoryView {
 	return {
 		id: r.id,
+		writerId: r.writer_id,
 		writerName: r.writer_name,
 		date: r.memory_date,
 		precision: r.date_precision,
 		body: r.body,
 		shared: r.shared,
 		mine: viewerId > 0 && r.created_by === viewerId,
-		version: r.version
+		version: r.version,
+		canHide: r.can_hide === true
 	};
 }
 
 /**
- * Memories a page may show: shared ones, plus the viewer's own drafts.
- * Shared first (oldest first), then drafts.
+ * SQL: the viewer ($3) may hide this memory's writer. They must be a real
+ * person, the writer can't be Madonna or the viewer's own writer, and the
+ * viewer didn't type it (what you typed always shows to you).
  */
-async function visible(
+const CAN_HIDE = `($3 > 0 AND m.writer_id <> ${MADONNA_WRITER_ID}
+	  AND w.user_id IS DISTINCT FROM $3 AND m.created_by <> $3)`;
+
+/**
+ * Memories a page may show: shared ones, plus the viewer's own drafts.
+ * Shared first (oldest first), then drafts. Writers the viewer hid
+ * (td-76a40f, migration 0035) are left out and only counted, so the page can
+ * say what's hidden and offer to show it again.
+ */
+async function pageMemories(
 	precision: Precision,
 	date: string,
 	viewerId: number
-): Promise<MemoryView[]> {
+): Promise<PageMemories> {
 	const res = await query<Row>(
-		`${SELECT_VIEW}
+		`SELECT ${VIEW_COLUMNS},
+		        ${CAN_HIDE} AS can_hide,
+		        (${CAN_HIDE} AND EXISTS (SELECT 1 FROM hidden_memory_writers h
+		                                  WHERE h.user_id = $3 AND h.writer_id = m.writer_id)) AS is_hidden
+		   ${VIEW_FROM}
 		  WHERE m.date_precision = $1 AND m.memory_date = $2::date
 		    AND (m.shared_at IS NOT NULL OR m.created_by = $3)
 		  ORDER BY (m.shared_at IS NULL), m.shared_at, m.created_at, m.id`,
 		[precision, date, viewerId]
 	);
-	return res.rows.map((r) => toView(r, viewerId));
+	const memories: MemoryView[] = [];
+	const hidden = new Map<number, HiddenMemories>();
+	for (const r of res.rows) {
+		if (!r.is_hidden) {
+			memories.push(toView(r, viewerId));
+			continue;
+		}
+		const h = hidden.get(r.writer_id);
+		if (h) h.count++;
+		else hidden.set(r.writer_id, { writerId: r.writer_id, writerName: r.writer_name, count: 1 });
+	}
+	return { memories, hidden: [...hidden.values()] };
 }
 
-export function getDayMemories(date: string, viewerId: number): Promise<MemoryView[]> {
-	return visible('day', date, viewerId);
+export function getDayMemories(date: string, viewerId: number): Promise<PageMemories> {
+	return pageMemories('day', date, viewerId);
 }
 
 /** key: "YYYY-MM" for a month, "YYYY" for a year. */
@@ -129,9 +162,151 @@ export function getPeriodMemories(
 	precision: 'month' | 'year',
 	key: string,
 	viewerId: number
-): Promise<MemoryView[]> {
+): Promise<PageMemories> {
 	const date = precision === 'month' ? `${key}-01` : `${key}-01-01`;
-	return visible(precision, date, viewerId);
+	return pageMemories(precision, date, viewerId);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Hiding a writer's memories (td-76a40f, migration 0035)
+// ─────────────────────────────────────────────────────────────────
+
+/** A writer this person could hide, as Your account lists them. */
+export interface HideableWriter {
+	writerId: number;
+	writerName: string;
+	/** Shared memories by this writer that the person didn't type. */
+	count: number;
+	hidden: boolean;
+}
+
+/**
+ * Writers whose memories this person can turn off: everyone with at least
+ * one shared memory, plus anyone they've already hidden. Never Madonna or
+ * their own writer. Alphabetical.
+ */
+export async function listHideableWriters(userId: number): Promise<HideableWriter[]> {
+	if (!Number.isInteger(userId) || userId <= 0) return [];
+	const res = await query<{ id: number; display_name: string; count: number; hidden: boolean }>(
+		`SELECT w.id, w.display_name, c.count,
+		        EXISTS (SELECT 1 FROM hidden_memory_writers h
+		                 WHERE h.user_id = $1 AND h.writer_id = w.id) AS hidden
+		   FROM writers w
+		   CROSS JOIN LATERAL (
+		     SELECT COUNT(*)::int AS count FROM memories m
+		      WHERE m.writer_id = w.id AND m.shared_at IS NOT NULL AND m.created_by <> $1) c
+		  WHERE w.id <> ${MADONNA_WRITER_ID}
+		    AND w.user_id IS DISTINCT FROM $1
+		    AND (c.count > 0 OR EXISTS (SELECT 1 FROM hidden_memory_writers h
+		                                 WHERE h.user_id = $1 AND h.writer_id = w.id))
+		  ORDER BY lower(w.display_name), w.id`,
+		[userId]
+	);
+	return res.rows.map((r) => ({
+		writerId: r.id,
+		writerName: r.display_name,
+		count: r.count,
+		hidden: r.hidden
+	}));
+}
+
+/** A writer id from a form ("12"), or null. Never Madonna. */
+function formWriterId(raw: unknown): number | null {
+	const text = typeof raw === 'string' ? raw : '';
+	if (!/^\d{1,9}$/.test(text)) return null;
+	const id = Number(text);
+	return id > 0 && id !== MADONNA_WRITER_ID ? id : null;
+}
+
+/**
+ * Hide one writer for this person. Allowed only for a writer the account
+ * list would show (CODEX #2): not their own writer, and with a shared
+ * memory they didn't type, or already hidden by them (so hiding is
+ * idempotent). Otherwise a writer who has shared nothing could be added to
+ * the list and have their name shown. Returns false when not allowed.
+ */
+async function hide(client: pg.PoolClient, userId: number, writerId: number): Promise<boolean> {
+	const res = await client.query(
+		`INSERT INTO hidden_memory_writers (user_id, writer_id)
+		 SELECT $1, w.id FROM writers w
+		  WHERE w.id = $2 AND w.id <> ${MADONNA_WRITER_ID} AND w.user_id IS DISTINCT FROM $1
+		    AND EXISTS (SELECT 1 FROM memories m
+		                 WHERE m.writer_id = w.id AND m.shared_at IS NOT NULL AND m.created_by <> $1)
+		 ON CONFLICT (user_id, writer_id) DO NOTHING
+		 RETURNING 1`,
+		[userId, writerId]
+	);
+	if (res.rowCount === 1) return true;
+	// Nothing inserted: fine if it was already hidden (the app role has no
+	// UPDATE here, so no DO UPDATE upsert).
+	const already = await client.query(
+		`SELECT 1 FROM hidden_memory_writers WHERE user_id = $1 AND writer_id = $2`,
+		[userId, writerId]
+	);
+	return already.rowCount === 1;
+}
+
+/** Show one writer again: only ever removes this person's own row. */
+async function show(client: pg.PoolClient, userId: number, writerId: number): Promise<void> {
+	await client.query(`DELETE FROM hidden_memory_writers WHERE user_id = $1 AND writer_id = $2`, [
+		userId,
+		writerId
+	]);
+}
+
+/**
+ * Hide or show one writer's memories for this person (the button under a
+ * memory, and "Show" on a page's hidden note). Idempotent. Returns false
+ * when the id isn't a writer they may hide (Madonna, their own writer, a
+ * writer with nothing shared, no such writer, junk).
+ */
+export function setWriterHidden(userId: number, writerRaw: unknown, hidden: boolean): Promise<boolean> {
+	const id = formWriterId(writerRaw);
+	if (id === null || !Number.isInteger(userId) || userId <= 0) return Promise.resolve(false);
+	return withTransaction(async (client) => {
+		if (hidden) return hide(client, userId, id);
+		await show(client, userId, id);
+		return true;
+	});
+}
+
+/** Thrown inside saveHiddenWriters' transaction to roll it back. */
+class NotHideable extends Error {}
+
+/**
+ * Your account's "Memories you see" form. Each listed writer comes back as
+ * a `writer` field; each ticked box as `show`; and each box that was ticked
+ * when the page was drawn as `wasShown`. Only boxes the person changed are
+ * written (CODEX #1): an account page left open on a laptop must not undo
+ * what they hid since on their phone. If any change isn't allowed, nothing
+ * is saved and it returns false.
+ */
+export async function saveHiddenWriters(
+	userId: number,
+	listed: unknown[],
+	shown: unknown[],
+	wasShown: unknown[]
+): Promise<boolean> {
+	if (!Number.isInteger(userId) || userId <= 0) return false;
+	const ids = (list: unknown[]) => new Set(list.map(formWriterId));
+	const nowShown = ids(shown);
+	const before = ids(wasShown);
+	const writers = [...ids(listed)];
+	if (writers.includes(null)) return false;
+	try {
+		await withTransaction(async (client) => {
+			for (const id of writers as number[]) {
+				const want = nowShown.has(id);
+				if (want === before.has(id)) continue; // untouched box
+				if (want) await show(client, userId, id);
+				else if (!(await hide(client, userId, id))) throw new NotHideable();
+			}
+		});
+		return true;
+	} catch (e) {
+		if (e instanceof NotHideable) return false;
+		throw e;
+	}
 }
 
 /** Everything this person typed: drafts first, then by memory date. */

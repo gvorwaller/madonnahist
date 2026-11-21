@@ -1,5 +1,7 @@
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { query, withTransaction } from '$lib/db';
+import { backTarget } from '$lib/viewer/nav';
+import { listHideableWriters, saveHiddenWriters, setWriterHidden } from '$server/memories';
 import { hashPassword, verifyPassword } from '$server/auth';
 import { cleanDisplayName, passwordProblem, revokeInvite } from '$server/invites';
 import { allow } from '$server/rate-limit';
@@ -26,13 +28,16 @@ function realUserId(locals: App.Locals): number {
 }
 
 export const load: PageServerLoad = async ({ locals, request }) => {
-	realUserId(locals);
+	const userId = realUserId(locals);
 	const ua = request.headers.get('user-agent') ?? '';
 	const platform = /iPhone|iPad|iPod/i.test(ua) ? 'ios' : /Android/i.test(ua) ? 'android' : 'other';
 	return {
 		username: locals.user!.username,
 		displayName: locals.user!.display_name,
-		platform: platform as 'ios' | 'android' | 'other'
+		platform: platform as 'ios' | 'android' | 'other',
+		// "Memories you see" (td-76a40f): empty until someone besides
+		// Madonna and you has shared a memory.
+		memoryWriters: await listHideableWriters(userId)
 	};
 };
 
@@ -134,5 +139,39 @@ export const actions: Actions = {
 
 		cookies.set(SESSION_COOKIE_NAME, sessionId, SESSION_COOKIE_OPTS);
 		return { pwSaved: true };
+	},
+
+	// ── Whose memories you see (td-76a40f) ──────────────────────────
+	// hideWriter / showWriter come from the button under a memory and the
+	// "hidden" note on Day, Month and Year pages. They always redirect back
+	// to that page (validated to /app), so they work without JavaScript; the
+	// page's enhance handler reloads its data in place instead.
+
+	hideWriter: async ({ request, locals }) => {
+		const userId = realUserId(locals);
+		const form = await request.formData();
+		const writer = form.get('writer');
+		if (!(await setWriterHidden(userId, writer, true))) {
+			return fail(400, { memoryError: "Those memories can't be hidden." });
+		}
+		const back = backTarget(form.get('returnTo')?.toString(), '/app/account');
+		redirect(303, `${back}#hidden-w-${Number(writer)}`);
+	},
+
+	showWriter: async ({ request, locals }) => {
+		const userId = realUserId(locals);
+		const form = await request.formData();
+		if (!(await setWriterHidden(userId, form.get('writer'), false))) {
+			return fail(400, { memoryError: "Those memories can't be changed." });
+		}
+		redirect(303, backTarget(form.get('returnTo')?.toString(), '/app/account'));
+	},
+
+	memoryWriters: async ({ request, locals }) => {
+		const userId = realUserId(locals);
+		const form = await request.formData();
+		const ok = await saveHiddenWriters(userId, form.getAll('writer'), form.getAll('show'), form.getAll('wasShown'));
+		if (!ok) return fail(400, { memoryError: "Couldn't save that. Reload the page and try again." });
+		return { memoriesSaved: true };
 	}
 };

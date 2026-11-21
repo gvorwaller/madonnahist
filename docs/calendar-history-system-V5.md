@@ -174,14 +174,34 @@ and Year pages.
 - They never widen what calendar text, tags or images are returned.
 - Madonna's own memories stay in `calendar_days.day_narrative` ("Madonna remembers").
 
+**Whose memories you see** (td-76a40f, migration 0035, built 2026-11-21):
+- `hidden_memory_writers (user_id, writer_id)`: one row means this reader has hidden that writer's
+  memories. It is saved per account, so the choice follows the reader to other devices.
+  - A CHECK forbids writer 1, because Madonna's memories always show.
+  - The app never lists or accepts the reader's own writer, and memories you typed always show to
+    you.
+  - Grants: the app has `SELECT, INSERT, DELETE`; workers have nothing. No `audit_log` rows: it's a
+    reading preference, not archive content.
+- Under someone else's memory there is a "Hide <name>'s memories" button.
+- Where a hidden writer has memories on a Day, Month or Year page, a dashed note says how many are
+  hidden, with "Show <name>'s memories" and a link to Your account.
+  - A memory-only day whose memories are all hidden keeps its page and shows the note, so the
+    reader isn't told "Not transcribed yet".
+- Your account → "Memories you see" lists every writer with a shared memory (or already hidden),
+  except Madonna and the reader, with a checkbox for each.
+- The buttons post to `/app/account?/hideWriter` and `?/showWriter`, then redirect back to the page
+  (`returnTo`, validated to `/app`), so they work without JavaScript. With JavaScript the page
+  reloads its data in place and focus moves to the note or the memory.
+- Slice B must apply the same filter wherever memories are added: search, the `has_memory`
+  highlights and Share. Shared PDFs and the Book view are the same for every reader, so they ignore
+  it.
+
 **Deliberately deferred until a second handwritten source actually arrives** (they cost no more
 then, and there is nothing to test them against now):
 - the uniqueness change to `calendar_pages (writer_id, year, month)` and to
   `calendar_days (writer_id, entry_date)`;
 - writer-aware OCR and cleanup prompts;
-- a many-entries-per-date model for journals;
-- the reader's include/exclude-by-writer toggle (td-76a40f), useful once there is a second writer
-  besides Madonna.
+- a many-entries-per-date model for journals.
 
 **Next slice (B):**
 - memories in search and in the `has_memory` highlights;
