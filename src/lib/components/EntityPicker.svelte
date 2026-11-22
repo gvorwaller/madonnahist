@@ -8,12 +8,20 @@
 		options,
 		selectedId = $bindable(null),
 		placeholder = 'Type a name…',
-		inputLabel = 'Search entities'
+		inputLabel = 'Search entities',
+		inline = false
 	}: {
 		options: Option[];
 		selectedId?: number | null;
 		placeholder?: string;
 		inputLabel?: string;
+		/**
+		 * Show the list in the page's flow, pushing what's below down, instead
+		 * of floating over it. For a picker inside something that scrolls or
+		 * clips (e.g. a table that scrolls sideways), where a floating list
+		 * would be cut off and its last choices couldn't be tapped.
+		 */
+		inline?: boolean;
 	} = $props();
 
 	// Initialize the text from an existing selection (e.g. editing an alias
@@ -97,7 +105,7 @@
 		autocomplete="off"
 	/>
 	{#if open}
-		<ul class="picker-list" id={listId} role="listbox">
+		<ul class="picker-list" class:inline id={listId} role="listbox">
 			{#each filtered as o (o.id)}
 				<li>
 					<!-- pointerdown preventDefault: Safari doesn't focus buttons on
@@ -158,6 +166,11 @@
 		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
 		max-height: 16rem;
 		overflow-y: auto;
+	}
+	.picker-list.inline {
+		position: static;
+		margin-top: 2px;
+		box-shadow: none;
 	}
 	.picker-option {
 		display: block;

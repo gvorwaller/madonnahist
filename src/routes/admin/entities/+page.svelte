@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { modalOpen } from '$lib/dialog-opener';
 	import { enhance } from '$lib/forms';
@@ -58,8 +59,123 @@
 		}
 	}
 
-	function entitiesByType(type: string) {
-		return data.entities.filter((e: { entity_type: string }) => e.entity_type === type);
+	// ── Finding your way in a long list: fold sections, search, jump by letter ──
+	type Entity = (typeof data.entities)[number];
+	const TYPES = ['person', 'place', 'event'] as const;
+	type EntityType = (typeof TYPES)[number];
+	const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
+
+	/** Lower case, accents and ligatures off: "Zoë" is found by "zoe", "ﬂ" by "fl". */
+	function fold(s: string) {
+		return s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+	}
+	/** Letters and digits only (any script): "kmart" finds "K-Mart", "pamenoch" finds "Pam Enoch". */
+	function squash(s: string) {
+		return s.replace(/[^\p{L}\p{N}]/gu, '');
+	}
+	/** A–Z, or "#" for anything else (digits, symbols, letters like Ł or 東). Always one character. */
+	function letterOf(name: string) {
+		const c = fold(name.trim()).toUpperCase().charAt(0);
+		return c >= 'A' && c <= 'Z' ? c : '#';
+	}
+	const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+
+	interface Row {
+		e: Entity;
+		letter: string;
+		/** Name, slug and alias target, each folded, and each squashed: matched one at a time. */
+		fields: string[];
+		squashed: string[];
+	}
+	// A–Z then "#" (names starting with a digit or symbol), by name within a letter.
+	const sorted = $derived.by(() => {
+		const byType: Record<EntityType, Row[]> = { person: [], place: [], event: [] };
+		for (const e of data.entities as Entity[]) {
+			const fields = [e.display_name, e.slug, e.alias_of_display_name ?? ''].filter(Boolean).map(fold);
+			byType[e.entity_type as EntityType]?.push({
+				e,
+				letter: letterOf(e.display_name),
+				fields,
+				squashed: fields.map(squash)
+			});
+		}
+		for (const t of TYPES) {
+			byType[t].sort(
+				(a, b) =>
+					LETTERS.indexOf(a.letter) - LETTERS.indexOf(b.letter) ||
+					collator.compare(a.e.display_name, b.e.display_name)
+			);
+		}
+		return byType;
+	});
+
+	let search = $state('');
+	const needle = $derived(fold(search.trim()));
+	const sections = $derived(
+		TYPES.map((type) => {
+			const all = sorted[type];
+			const sq = squash(needle);
+			const rows = needle
+				? all.filter(
+						(r) => r.fields.some((f) => f.includes(needle)) || (sq !== '' && r.squashed.some((f) => f.includes(sq)))
+					)
+				: all;
+			const groups: { letter: string; rows: Entity[] }[] = [];
+			for (const r of rows) {
+				const last = groups[groups.length - 1];
+				if (last?.letter === r.letter) last.rows.push(r.e);
+				else groups.push({ letter: r.letter, rows: [r.e] });
+			}
+			return { type, total: all.length, count: rows.length, groups };
+		})
+	);
+	const matchCount = $derived(sections.reduce((n, s) => n + s.count, 0));
+
+	// Which sections are open. Remembered in this browser. While searching,
+	// sections with a match open and the rest fold; either can be flipped for
+	// that search (inSearch, forgotten when the search changes).
+	const OPEN_KEY = 'admin-entities-open';
+	let open = $state<Record<EntityType, boolean>>({ person: true, place: true, event: true });
+	let inSearch = $state<Partial<Record<EntityType, boolean>>>({});
+	onMount(() => {
+		try {
+			const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? 'null');
+			if (saved && typeof saved === 'object') {
+				for (const t of TYPES) if (typeof saved[t] === 'boolean') open[t] = saved[t];
+			}
+		} catch {
+			/* no storage: everything starts open */
+		}
+	});
+	$effect(() => {
+		void needle;
+		inSearch = {};
+	});
+	function expanded(type: EntityType, count: number) {
+		return needle ? (inSearch[type] ?? count > 0) : open[type];
+	}
+	function toggleSection(type: EntityType, count: number) {
+		if (needle) {
+			inSearch = { ...inSearch, [type]: !expanded(type, count) };
+			return;
+		}
+		open[type] = !open[type];
+		try {
+			localStorage.setItem(OPEN_KEY, JSON.stringify(open));
+		} catch {
+			/* not remembered; still works */
+		}
+	}
+
+	let barHeight = $state(0);
+	let searchInput: HTMLInputElement | undefined = $state();
+	/** Scroll a letter's heading to just under the search bar, and move focus there. */
+	function jump(type: EntityType, letter: string) {
+		const el = document.getElementById(`letter-${type}-${letter}`);
+		if (!el) return;
+		const top = el.getBoundingClientRect().top + window.scrollY - barHeight;
+		window.scrollTo({ top });
+		el.focus({ preventScroll: true });
 	}
 
 	function startEdit(e: { id: number; display_name: string }) {
@@ -95,7 +211,7 @@
 	}}
 />
 
-<div class="page">
+<div class="page" style="--bar: {barHeight}px">
 	<header>
 		<a href="/admin" class="back">Admin</a>
 		<h1>Entities &amp; Aliases</h1>
@@ -112,12 +228,69 @@
 		</div>
 	{/if}
 
-	{#each ['person', 'place', 'event'] as type (type)}
-		<section class="section">
-			<h2>{typeLabels[type]}</h2>
-			{#if entitiesByType(type).length === 0}
-				<p class="empty">None yet.</p>
+	<div class="toolbar" bind:offsetHeight={barHeight}>
+		<label class="search-label" for="entity-search">Find a name</label>
+		<div class="search-row">
+			<input
+				id="entity-search"
+				class="search-input"
+				type="search"
+				autocomplete="off"
+				spellcheck="false"
+				placeholder="e.g. Rebekah, kmart"
+				bind:value={search}
+				bind:this={searchInput}
+			/>
+			{#if search}
+				<button type="button" class="btn btn-secondary search-clear" onclick={() => {
+						search = '';
+						searchInput?.focus();
+					}}>Clear</button
+				>
+			{/if}
+		</div>
+		<p class="search-status" role="status">
+			{#if needle}{matchCount === 0 ? 'No names match.' : `${matchCount} ${matchCount === 1 ? 'match' : 'matches'}`}{/if}
+		</p>
+	</div>
+
+	{#each sections as s (s.type)}
+		{@const type = s.type}
+		{@const isOpen = expanded(type, s.count)}
+		<section class="section" aria-labelledby="heading-{type}">
+			<h2 id="heading-{type}">
+				<button
+					type="button"
+					class="section-toggle"
+					aria-expanded={isOpen}
+					aria-controls="body-{type}"
+					onclick={() => toggleSection(type, s.count)}
+				>
+					<span class="chevron" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
+					{typeLabels[type]}
+					<span class="section-count">{needle ? `${s.count} of ${s.total}` : s.total}</span>
+				</button>
+			</h2>
+			<!-- Kept in the page while folded, so the toggle's aria-controls points at something. -->
+			<div class="section-body" id="body-{type}" hidden={!isOpen}>
+			{#if !isOpen}
+				<!-- folded: rows not rendered -->
+			{:else if s.count === 0}
+				<p class="empty">{needle ? 'No matches here.' : 'None yet.'}</p>
 			{:else}
+				{#if s.groups.length > 1}
+					<nav class="locator" aria-label="Jump to {typeLabels[type]} by first letter">
+						{#each s.groups as g (g.letter)}
+							<button
+								type="button"
+								class="locator-letter"
+								aria-label="{typeLabels[type]} starting with {g.letter === '#' ? 'other initials (numbers, symbols, other letters)' : g.letter}"
+								onclick={() => jump(type, g.letter)}>{g.letter}</button
+							>
+						{/each}
+					</nav>
+				{/if}
+				<div class="table-wrap">
 				<table class="data-table">
 					<thead>
 						<tr>
@@ -128,8 +301,12 @@
 							<th class="col-actions">Actions</th>
 						</tr>
 					</thead>
+					{#each s.groups as g (g.letter)}
 					<tbody>
-						{#each entitiesByType(type) as e (e.id)}
+						<tr class="letter-row">
+							<th colspan="5" scope="rowgroup" id="letter-{type}-{g.letter}" tabindex="-1">{g.letter}</th>
+						</tr>
+						{#each g.rows as e (e.id)}
 							<tr>
 								<td>
 									{#if editingId === e.id}
@@ -197,6 +374,7 @@
 													bind:selectedId={aliasTargetId}
 													placeholder="Type a name to search…"
 													inputLabel="Alias target for {e.display_name}"
+													inline
 												/>
 												<button type="submit" class="btn btn-sm btn-primary" disabled={!aliasTargetId}>Save</button>
 												<button type="button" class="btn btn-sm btn-secondary" onclick={cancelAlias}>Cancel</button>
@@ -275,8 +453,11 @@
 							{/if}
 						{/each}
 					</tbody>
+					{/each}
 				</table>
+				</div>
 			{/if}
+			</div>
 		</section>
 	{/each}
 </div>
@@ -361,9 +542,162 @@
 
 <style>
 	.page {
-		max-width: 900px;
+		max-width: 1020px;
 		margin: 0 auto;
 		padding: 1.5rem 1rem;
+	}
+	/* Search stays at the top while the long lists scroll under it. */
+	.toolbar {
+		position: sticky;
+		top: 0;
+		z-index: 5;
+		background: #fafaf8; /* the page's own background (root layout) */
+		padding: 0.6rem 0 0.4rem;
+		margin-bottom: 0.75rem;
+		border-bottom: 1px solid #e5e5e5;
+	}
+	.search-label {
+		display: block;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #333;
+		margin-bottom: 0.3rem;
+	}
+	.search-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+	.search-input {
+		flex: 1;
+		max-width: 420px;
+		min-height: 44px;
+		box-sizing: border-box;
+		font-size: 1rem;
+		padding: 0.4rem 0.7rem;
+		border: 1px solid #767676;
+		border-radius: 6px;
+	}
+	.search-input::placeholder {
+		color: #595959;
+	}
+	.search-clear {
+		min-height: 44px;
+		min-width: 44px;
+	}
+	.search-status {
+		margin: 0.3rem 0 0;
+		min-height: 1.2em;
+		font-size: 0.85rem;
+		color: #555;
+	}
+	.section-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		min-height: 44px;
+		padding: 0.3rem 0.4rem;
+		background: #f4f4f4;
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		font: inherit;
+		font-weight: 700;
+		color: #222;
+		text-align: left;
+		cursor: pointer;
+	}
+	.section-toggle:focus-visible,
+	.locator-letter:focus-visible {
+		outline: 2px solid #1a4731;
+		outline-offset: 2px;
+	}
+	.chevron {
+		width: 1.1em;
+		color: #444;
+	}
+	.section-count {
+		margin-left: auto;
+		font-weight: 400;
+		font-size: 0.85rem;
+		color: #3d3d3d; /* AAA on the #f4f4f4 header */
+		font-variant-numeric: tabular-nums;
+	}
+	/* The table, with the letter locator beside it on the right. */
+	.section-body {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 0 0.75rem;
+		margin-top: 0.6rem;
+	}
+	.section-body[hidden] {
+		display: none;
+	}
+	/* First in the markup, so Tab reaches the letters before hundreds of rows;
+	   shown to the right of the table. */
+	.section-body > .locator {
+		grid-column: 2;
+		grid-row: 1;
+	}
+	.section-body > .table-wrap {
+		grid-column: 1;
+		grid-row: 1;
+	}
+	.table-wrap {
+		min-width: 0;
+		overflow-x: auto;
+	}
+	.letter-row th {
+		background: #efece4;
+		color: #222;
+		font-size: 0.9rem;
+		padding: 0.3rem 0.6rem;
+	}
+	.letter-row th:focus {
+		outline: 2px solid #1a4731;
+		outline-offset: -2px;
+	}
+	.locator {
+		position: sticky;
+		top: calc(var(--bar) + 4px);
+		align-self: start;
+		display: grid;
+		grid-template-columns: repeat(2, 44px);
+		gap: 2px;
+		max-height: calc(100vh - var(--bar) - 12px);
+		overflow-y: auto;
+	}
+	.locator-letter {
+		width: 44px;
+		height: 44px;
+		border: 1px solid #ccc;
+		border-radius: 6px;
+		background: #fff;
+		color: #1a4731;
+		font: inherit;
+		font-weight: 700;
+		cursor: pointer;
+	}
+	.locator-letter:hover {
+		background: #efece4;
+	}
+	/* Narrow screens: letters in a row above the table instead. */
+	@media (max-width: 700px) {
+		.section-body {
+			grid-template-columns: minmax(0, 1fr);
+		}
+		.section-body > .locator,
+		.section-body > .table-wrap {
+			grid-column: 1;
+			grid-row: auto;
+		}
+		.locator {
+			position: static;
+			display: flex;
+			flex-wrap: wrap;
+			max-height: none;
+			margin-bottom: 0.5rem;
+		}
 	}
 	header {
 		margin-bottom: 1.25rem;
@@ -390,10 +724,10 @@
 	}
 	.section h2 {
 		font-size: 1.05rem;
-		margin: 0 0 0.6rem;
+		margin: 0;
 	}
 	.empty {
-		color: #777;
+		color: #555;
 		font-size: 0.85rem;
 		font-style: italic;
 	}
