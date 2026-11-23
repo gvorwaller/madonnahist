@@ -98,6 +98,7 @@ const P = {
 	trip: ['zqxmap-twin-city', 'Zqxmap Twin City', 'fl'],
 	stale: ['zqxmap-stale-chain', 'Zqxmap Stale Chain', 'fl'],
 	staleKept: ['zqxmap-stale-kept', 'Zqxmap Stale Kept', 'fl'],
+	staleOrphan: ['zqxmap-stale-orphan', 'Zqxmap Stale Orphan', 'fl'],
 	pending: ['zqxmap-pending-place', 'Zqxmap Riverside Park Pending', 'pending']
 };
 const DAYS = { fl: '1907-04-10', ut: '1985-03-10', pending: '1907-04-11' };
@@ -232,19 +233,21 @@ async function main() {
 		const viewer = await login(VIEWER_USERNAME);
 
 		// Rows decided by rule v1 (before 2026-11-14): a chain shown by mistake,
-		// and the same mistake that an admin has since confirmed.
+		// the same mistake that an admin has since confirmed, and one confirmed
+		// by an admin whose account was later removed (decided_by nulled,
+		// decided_at kept: still a human decision, CODEX9 td-c6e871 #6).
 		const JAX = { lat: 30.3322, lon: -81.6557 };
 		const chain = (name) => [
 			{ name, address: '1 A St, Jacksonville, FL', lat: JAX.lat + 0.02, lon: JAX.lon, placeId: 'stub-stale-1', types: ['restaurant'], score: 1 },
 			{ name, address: '2 B St, Jacksonville, FL', lat: JAX.lat + 0.021, lon: JAX.lon + 0.001, placeId: 'stub-stale-2', types: ['restaurant'], score: 1 }
 		];
-		for (const [key, decidedBy] of [['stale', null], ['staleKept', adminId]]) {
+		for (const [key, decidedBy, decided] of [['stale', null, false], ['staleKept', adminId, true], ['staleOrphan', null, true]]) {
 			const c = chain(P[key][1]);
 			await pool.query(
 				`INSERT INTO place_locations (entity_id, status, lat, lon, google_place_id, matched_name, address, region,
 				   query, looked_up_name, score, candidates, decided_by, decided_at, rule_version)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, 'florida', $6, $6, 1, $8::jsonb, $9, CASE WHEN $9::int IS NULL THEN NULL ELSE NOW() END, 1)`,
-				[ids[key], decidedBy ? 'confirmed' : 'auto', c[0].lat, c[0].lon, c[0].placeId, P[key][1], c[0].address, JSON.stringify(c), decidedBy]
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, 'florida', $6, $6, 1, $8::jsonb, $9, CASE WHEN $10 THEN NOW() ELSE NULL END, 1)`,
+				[ids[key], decided ? 'confirmed' : 'auto', c[0].lat, c[0].lon, c[0].placeId, P[key][1], c[0].address, JSON.stringify(c), decidedBy, decided]
 			);
 		}
 
@@ -322,6 +325,12 @@ async function main() {
 		);
 		const kept = await pool.query(`SELECT status, rule_version FROM place_locations WHERE entity_id = $1`, [ids.staleKept]);
 		record('old-rule row an admin decided is never re-decided', kept.rows[0]?.status === 'confirmed' && kept.rows[0]?.rule_version === 1, JSON.stringify(kept.rows[0]));
+		const orphan = await pool.query(`SELECT status, rule_version FROM place_locations WHERE entity_id = $1`, [ids.staleOrphan]);
+		record(
+			"…nor is one whose deciding account was removed (decided_at, not decided_by, is the provenance)",
+			orphan.rows[0]?.status === 'confirmed' && orphan.rows[0]?.rule_version === 1,
+			JSON.stringify(orphan.rows[0])
+		);
 		record('nothing found → no map (not_found)', r.nowhere?.status === 'no_location' && r.nowhere?.reason === 'not_found');
 		record('possessive name never searched → no map (general)', r.possessive?.status === 'no_location' && r.possessive?.reason === 'general' && r.possessive?.query === null);
 		record('generic word never searched → no map (general)', r.generic?.status === 'no_location' && r.generic?.reason === 'general' && r.generic?.query === null);

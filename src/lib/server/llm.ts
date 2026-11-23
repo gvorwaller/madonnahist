@@ -107,3 +107,57 @@ export async function completeText(system: string, user: string, maxTokens = 204
 		.join('\n')
 		.trim();
 }
+
+export interface BoundedCompletion {
+	text: string;
+	model: string;
+	inputTokens: number;
+	outputTokens: number;
+}
+
+/**
+ * A short, bounded call made inside a request (td-c6e871, entity cleanup
+ * pre-check): one model, a hard deadline below nginx's 60 s proxy timeout
+ * (the SDK's own retry included), and anything but a normal finish is an
+ * error, never partial text. Stub mode returns `stub()` after
+ * MADONNAHIST_LLM_STUB_DELAY_MS (default 0), so tests can overlap calls.
+ */
+export async function completeBounded(opts: {
+	model: string;
+	system: string;
+	user: string;
+	maxTokens: number;
+	effort?: 'low' | 'medium' | 'high';
+	deadlineMs: number;
+	stub: () => string;
+}): Promise<BoundedCompletion> {
+	if (isStubMode()) {
+		const delay = Number(env.MADONNAHIST_LLM_STUB_DELAY_MS ?? 0);
+		if (delay > 0) await new Promise((r) => setTimeout(r, Math.min(delay, 10_000)));
+		const text = opts.stub();
+		log(`STUB mode — bounded completion (${text.length} chars)`);
+		return { text, model: opts.model, inputTokens: 0, outputTokens: 0 };
+	}
+
+	const client = await getClient();
+	const message = await client.messages.create(
+		{
+			model: opts.model,
+			max_tokens: opts.maxTokens,
+			...(opts.effort ? { output_config: { effort: opts.effort } } : {}),
+			system: opts.system,
+			messages: [{ role: 'user', content: opts.user }]
+		},
+		{ signal: AbortSignal.timeout(opts.deadlineMs), maxRetries: 1 }
+	);
+	if (message.stop_reason !== 'end_turn') {
+		throw new Error(`${opts.model} stopped with stop_reason=${message.stop_reason}`);
+	}
+	const text = message.content
+		.filter((b): b is Anthropic.TextBlock => b.type === 'text')
+		.map((b) => b.text)
+		.join('\n')
+		.trim();
+	if (!text) throw new Error(`${opts.model} returned no text`);
+	return { text, model: message.model, inputTokens: message.usage.input_tokens, outputTokens: message.usage.output_tokens };
+}

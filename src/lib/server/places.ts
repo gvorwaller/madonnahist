@@ -11,9 +11,13 @@
  * Accepted-only: a place is looked up only when it has an accepted mention,
  * so a name known only from untranscribed days is never sent to Google.
  * Generic words and possessive names ("Grandma's", "Wendy's") are never
- * sent either. Admin decisions (decided_by set) are never overwritten.
+ * sent either. Admin decisions (decided_at set) are never overwritten. decided_at,
+ * not decided_by, is the provenance: removing the deciding account nulls
+ * decided_by but keeps decided_at (0029_place_locations.sql).
  */
-import { query } from '$lib/db';
+import type pg from 'pg';
+import { query, withTransaction } from '$lib/db';
+import { ENTITY_GRAPH_LOCK } from '$lib/entity-locks';
 import { env } from '$env/dynamic/private';
 import { isGeocodeConfigured, isGeocodeStub, searchPlaces } from '$lib/server/geocode';
 import {
@@ -88,7 +92,7 @@ async function pendingPlaces(limit: number | null): Promise<PendingPlace[]> {
 		    AND canon.alias_of_entity_id IS NULL
 		    AND cd.correction_status = 'accepted'
 		    AND (pl.entity_id IS NULL
-		         OR (pl.decided_by IS NULL AND pl.looked_up_name <> canon.display_name))
+		         OR (pl.decided_at IS NULL AND pl.looked_up_name <> canon.display_name))
 		  GROUP BY canon.id, canon.display_name
 		  ORDER BY COUNT(DISTINCT cd.id) DESC, canon.display_name
 		  LIMIT $1`,
@@ -105,8 +109,33 @@ export async function countPending(): Promise<number> {
 	return (await pendingPlaces(null)).length;
 }
 
+/**
+ * Every map write for a place goes through this (td-c6e871, CODEX code
+ * review #2): under the entity-graph lock that merges and aliases take, and
+ * only while the place is still a main (canonical) name. A merge that lands
+ * while a lookup or an admin action is in flight either finishes first (this
+ * then sees an alias and writes nothing) or waits for this write, and then
+ * carries it to the survivor. Google calls stay outside: only the write
+ * holds the lock. Returns null when the place is no longer canonical.
+ */
+async function writeIfCanonical<T>(entityId: number, fn: (client: pg.PoolClient) => Promise<T>): Promise<T | null> {
+	return withTransaction(async (client) => {
+		await client.query('SELECT pg_advisory_xact_lock($1, $2)', [...ENTITY_GRAPH_LOCK]);
+		const ok = await client.query(
+			`SELECT 1 FROM entities WHERE id = $1 AND entity_type = 'place' AND alias_of_entity_id IS NULL`,
+			[entityId]
+		);
+		if (!ok.rowCount) return null;
+		return fn(client);
+	});
+}
+
+/**
+ * An automatic lookup's result. It never replaces a decision an admin made
+ * while the lookup ran (decided_at set): only an undecided row is refreshed.
+ */
 async function save(place: PendingPlace, d: Decision, queryText: string | null) {
-	await query(
+	await writeIfCanonical(place.id, (client) => client.query(
 		`INSERT INTO place_locations
 		   (entity_id, status, reason, lat, lon, google_place_id, matched_name, address, region,
 		    query, looked_up_name, score, candidates, looked_up_at, decided_by, decided_at, rule_version)
@@ -117,7 +146,8 @@ async function save(place: PendingPlace, d: Decision, queryText: string | null) 
 		   address = EXCLUDED.address, region = EXCLUDED.region, query = EXCLUDED.query,
 		   looked_up_name = EXCLUDED.looked_up_name, score = EXCLUDED.score,
 		   candidates = EXCLUDED.candidates, looked_up_at = NOW(), decided_by = NULL, decided_at = NULL,
-		   rule_version = EXCLUDED.rule_version`,
+		   rule_version = EXCLUDED.rule_version
+		 WHERE place_locations.decided_at IS NULL`,
 		[
 			place.id,
 			d.status,
@@ -134,12 +164,12 @@ async function save(place: PendingPlace, d: Decision, queryText: string | null) 
 			JSON.stringify(d.candidates),
 			RULE_VERSION
 		]
-	);
+	));
 }
 
 /**
  * Re-decide rows that an older version of the automatic rule decided, from
- * their stored candidates: no Google calls. Admin decisions (decided_by
+ * their stored candidates: no Google calls. Admin decisions (decided_at
  * set) are never touched. Returns how many rows changed status or match.
  */
 export async function recheckOutdated(): Promise<number> {
@@ -154,19 +184,21 @@ export async function recheckOutdated(): Promise<number> {
 	}>(
 		`SELECT entity_id, looked_up_name, region, status, reason, google_place_id, candidates
 		   FROM place_locations
-		  WHERE decided_by IS NULL AND rule_version < $1`,
+		  WHERE decided_at IS NULL AND rule_version < $1`,
 		[RULE_VERSION]
 	);
 	let changed = 0;
 	for (const r of res.rows) {
 		const d = redecide(r.looked_up_name, r.region ?? 'florida', r.candidates ?? []);
 		if (d.status !== r.status || d.reason !== r.reason || (d.pick?.placeId ?? null) !== r.google_place_id) changed++;
-		// decided_by IS NULL again in the WHERE: an admin decision made since the SELECT wins.
-		await query(
+		// Under the graph lock like every map write, and only if the row is
+		// still the undecided, old-rule row read above: an admin decision or
+		// a fresh lookup made since the SELECT wins (CODEX9 td-c6e871 #6).
+		await writeIfCanonical(r.entity_id, (client) => client.query(
 			`UPDATE place_locations
 			    SET status = $2, reason = $3, lat = $4, lon = $5, google_place_id = $6, matched_name = $7,
 			        address = $8, score = $9, candidates = $10::jsonb, rule_version = $11
-			  WHERE entity_id = $1 AND decided_by IS NULL`,
+			  WHERE entity_id = $1 AND decided_at IS NULL AND rule_version < $11`,
 			[
 				r.entity_id,
 				d.status,
@@ -180,7 +212,7 @@ export async function recheckOutdated(): Promise<number> {
 				JSON.stringify(d.candidates),
 				RULE_VERSION
 			]
-		);
+		));
 	}
 	if (res.rows.length > 0) {
 		console.log(`[PLACES] re-checked ${res.rows.length} automatic decisions under rule v${RULE_VERSION}: ${changed} changed`);
@@ -397,8 +429,10 @@ export async function getRow(entityId: number) {
 		query: string | null;
 		candidates: StoredCandidate[];
 		decided_by: number | null;
+		decided_at: string | null;
 	}>(
-		`SELECT status, reason, lat, lon, google_place_id, matched_name, address, region, query, candidates, decided_by
+		`SELECT status, reason, lat, lon, google_place_id, matched_name, address, region, query, candidates, decided_by,
+		        decided_at::text AS decided_at
 		   FROM place_locations WHERE entity_id = $1`,
 		[entityId]
 	);
@@ -427,27 +461,35 @@ export async function getActionablePlace(entityId: number): Promise<PendingPlace
 
 /** Use one of the stored candidates: confirmed, shown. */
 export async function chooseCandidate(entityId: number, index: number, userId: number): Promise<boolean> {
-	const row = await getRow(entityId);
-	const c = row?.candidates[index];
-	if (!row || !c) return false;
-	await query(
-		`UPDATE place_locations
-		    SET status = 'confirmed', reason = NULL, lat = $2, lon = $3, google_place_id = $4,
-		        matched_name = $5, address = $6, score = $7, decided_by = $8, decided_at = NOW()
-		  WHERE entity_id = $1`,
-		[entityId, c.lat, c.lon, c.placeId, c.name, c.address, c.score, userId]
-	);
-	return true;
+	const done = await writeIfCanonical(entityId, async (client) => {
+		const row = await client.query<{ candidates: StoredCandidate[] }>(
+			`SELECT candidates FROM place_locations WHERE entity_id = $1 FOR UPDATE`,
+			[entityId]
+		);
+		const c = row.rows[0]?.candidates?.[index];
+		if (!c) return false;
+		await client.query(
+			`UPDATE place_locations
+			    SET status = 'confirmed', reason = NULL, lat = $2, lon = $3, google_place_id = $4,
+			        matched_name = $5, address = $6, score = $7, decided_by = $8, decided_at = NOW()
+			  WHERE entity_id = $1`,
+			[entityId, c.lat, c.lon, c.placeId, c.name, c.address, c.score, userId]
+		);
+		return true;
+	});
+	return done === true;
 }
 
 /** Approve the automatic match as is. */
 export async function confirmAuto(entityId: number, userId: number): Promise<boolean> {
-	const res = await query(
-		`UPDATE place_locations SET status = 'confirmed', decided_by = $2, decided_at = NOW()
-		  WHERE entity_id = $1 AND status = 'auto'`,
-		[entityId, userId]
+	const res = await writeIfCanonical(entityId, (client) =>
+		client.query(
+			`UPDATE place_locations SET status = 'confirmed', decided_by = $2, decided_at = NOW()
+			  WHERE entity_id = $1 AND status = 'auto'`,
+			[entityId, userId]
+		)
 	);
-	return (res.rowCount ?? 0) > 0;
+	return (res?.rowCount ?? 0) > 0;
 }
 
 export interface PinnedLocation {
@@ -458,9 +500,12 @@ export interface PinnedLocation {
 	address: string;
 }
 
-/** Set the location by hand (the map picker): confirmed, shown. Works whether or not the place was looked up. */
-export async function setPin(place: PendingPlace, pin: PinnedLocation, userId: number): Promise<void> {
-	await query(
+/**
+ * Set the location by hand (the map picker): confirmed, shown. Works whether
+ * or not the place was looked up. False if the place was merged meanwhile.
+ */
+export async function setPin(place: PendingPlace, pin: PinnedLocation, userId: number): Promise<boolean> {
+	const res = await writeIfCanonical(place.id, (client) => client.query(
 		`INSERT INTO place_locations
 		   (entity_id, status, reason, lat, lon, google_place_id, matched_name, address, region,
 		    looked_up_name, score, decided_by, decided_at, rule_version)
@@ -470,7 +515,8 @@ export async function setPin(place: PendingPlace, pin: PinnedLocation, userId: n
 		   google_place_id = EXCLUDED.google_place_id, matched_name = EXCLUDED.matched_name,
 		   address = EXCLUDED.address, score = NULL, decided_by = EXCLUDED.decided_by, decided_at = NOW()`,
 		[place.id, pin.lat, pin.lon, pin.placeId, pin.name, pin.address, place.region, place.name, userId, RULE_VERSION]
-	);
+	));
+	return res !== null;
 }
 
 /** Search for the map picker: up to ten results, biased toward the place's home area. */
@@ -483,27 +529,29 @@ export function regionCentre(region: Region): { lat: number; lon: number } {
 	return CENTRES[region];
 }
 
-export async function markNoMap(entityId: number, userId: number): Promise<boolean> {
-	const res = await query(
-		`UPDATE place_locations
+/** "No map". Creates the row when the place was never looked up, so it sticks. */
+export async function markNoMap(place: PendingPlace, userId: number): Promise<boolean> {
+	const res = await writeIfCanonical(place.id, (client) => client.query(
+		`INSERT INTO place_locations (entity_id, status, reason, region, looked_up_name, decided_by, decided_at)
+		 VALUES ($1, 'no_location', 'admin', $3, $4, $2, NOW())
+		 ON CONFLICT (entity_id) DO UPDATE
 		    SET status = 'no_location', reason = 'admin', lat = NULL, lon = NULL, google_place_id = NULL,
-		        matched_name = NULL, address = NULL, decided_by = $2, decided_at = NOW()
-		  WHERE entity_id = $1`,
-		[entityId, userId]
-	);
-	return (res.rowCount ?? 0) > 0;
+		        matched_name = NULL, address = NULL, decided_by = $2, decided_at = NOW()`,
+		[place.id, userId, place.region, place.name]
+	));
+	return (res?.rowCount ?? 0) > 0;
 }
 
 /** "Wrong": hide it and put it in Needs a look, keeping the candidates. */
 export async function markWrong(entityId: number, userId: number): Promise<boolean> {
-	const res = await query(
+	const res = await writeIfCanonical(entityId, (client) => client.query(
 		`UPDATE place_locations
 		    SET status = 'needs_review', reason = NULL, lat = NULL, lon = NULL, google_place_id = NULL,
 		        matched_name = NULL, address = NULL, decided_by = $2, decided_at = NOW()
 		  WHERE entity_id = $1`,
 		[entityId, userId]
-	);
-	return (res.rowCount ?? 0) > 0;
+	));
+	return (res?.rowCount ?? 0) > 0;
 }
 
 /** Search with the admin's own words; stores fresh candidates for them to pick from. */
@@ -518,7 +566,7 @@ export async function searchAgain(
 	const candidates = result.candidates
 		.map((c) => ({ ...c, score: nameScore(place.name, c.name) }))
 		.sort((a, b) => b.score - a.score);
-	await query(
+	const res = await writeIfCanonical(place.id, (client) => client.query(
 		`INSERT INTO place_locations (entity_id, status, region, query, looked_up_name, candidates, decided_by, decided_at)
 		 VALUES ($1, 'needs_review', $2, $3, $4, $5::jsonb, $6, NOW())
 		 ON CONFLICT (entity_id) DO UPDATE SET
@@ -528,12 +576,16 @@ export async function searchAgain(
 		   candidates = EXCLUDED.candidates, looked_up_at = NOW(),
 		   decided_by = EXCLUDED.decided_by, decided_at = NOW()`,
 		[place.id, place.region, text, place.name, JSON.stringify(candidates), userId]
-	);
+	));
+	if (res === null) return { ok: false, error: 'that place was merged into another; reload the page' };
 	return { ok: true, count: candidates.length };
 }
 
 /** Undo: forget everything about this place and look it up again now. */
 export async function lookUpAgain(place: PendingPlace): Promise<string | null> {
-	await query(`DELETE FROM place_locations WHERE entity_id = $1`, [place.id]);
+	const cleared = await writeIfCanonical(place.id, (client) =>
+		client.query(`DELETE FROM place_locations WHERE entity_id = $1`, [place.id])
+	);
+	if (cleared === null) return 'that place was merged into another; reload the page';
 	return lookUp(place);
 }

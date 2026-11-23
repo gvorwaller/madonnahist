@@ -85,6 +85,7 @@ import {
 } from '../../src/lib/narrative-models.js';
 import { putObject } from './lib/spaces.js';
 import { slugifyTagLabel, isValidTagLabel, MAX_TAG_LABEL_LENGTH } from '../../src/lib/server/tags.js';
+import { ENTITY_DAY_LOCK_CLASS } from '../../src/lib/entity-locks.js';
 import { issueRenderToken, RENDER_TOKEN_COOKIE_NAME } from '../../src/lib/server/render-token.js';
 import { chromium, type Browser } from 'playwright-core';
 
@@ -375,6 +376,11 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 
 		let stale = false;
 		await withTransaction(async (client) => {
+			// The same per-day lock the admin's merge/move takes (td-c6e871,
+			// src/lib/entity-locks.ts), so a move can't land between the
+			// block read below and the AI-link rebuild. Only this one day's
+			// lock: the admin side takes the graph lock first, so no cycle.
+			await client.query('SELECT pg_advisory_xact_lock($1, $2)', [ENTITY_DAY_LOCK_CLASS, dayId]);
 			// CODEX1 review finding 3 (2026-07-24): the staleness guard above
 			// runs BEFORE the LLM call; a human re-accepting a changed
 			// correction during that call would get stale extraction committed
@@ -402,6 +408,16 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 			await client.query(`DELETE FROM day_entities WHERE day_id = $1 AND source = 'ai'`, [dayId]);
 			await client.query(`DELETE FROM day_tags WHERE day_id = $1 AND source = 'ai'`, [dayId]);
 
+			// Entities the admin moved this day away from (day_entity_blocks,
+			// always canonical ids). An extracted name is skipped when its
+			// canonical family is blocked: the same spelling after a merge
+			// and any other alias spelling are both caught.
+			const blockRes = await client.query<{ entity_id: string }>(
+				`SELECT entity_id FROM day_entity_blocks WHERE day_id = $1`,
+				[dayId]
+			);
+			const blocked = new Set(blockRes.rows.map((r) => Number(r.entity_id)));
+
 			const seenEntityIds = new Set<number>();
 			for (const e of entities) {
 				const slug = slugifyTagLabel(e.name);
@@ -413,12 +429,13 @@ async function processEntityExtract(job: ClaimedJob): Promise<void> {
 					 ON CONFLICT (entity_type, slug) DO NOTHING`,
 					[slug, e.name, e.type]
 				);
-				const entRes = await client.query<{ id: number }>(
-					`SELECT id FROM entities WHERE entity_type = $1 AND slug = $2`,
+				const entRes = await client.query<{ id: number; canon: string }>(
+					`SELECT id, COALESCE(alias_of_entity_id, id) AS canon FROM entities WHERE entity_type = $1 AND slug = $2`,
 					[e.type, slug]
 				);
 				const entityId = entRes.rows[0]?.id;
 				if (!entityId || seenEntityIds.has(entityId)) continue;
+				if (blocked.has(Number(entRes.rows[0].canon))) continue;
 				seenEntityIds.add(entityId);
 
 				await client.query(

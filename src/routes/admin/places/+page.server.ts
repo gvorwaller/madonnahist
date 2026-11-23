@@ -129,16 +129,8 @@ export const actions: Actions = {
 
 	nomap: ({ request, locals }) =>
 		onPlace(request, locals, async (place, _data, userId) => {
-			// A place never looked up has no row yet: create one so "no map" sticks.
-			if (!(await getRow(place.id))) {
-				await query(
-					`INSERT INTO place_locations (entity_id, status, reason, region, looked_up_name, decided_by, decided_at)
-					 VALUES ($1, 'no_location', 'admin', $2, $3, $4, NOW())`,
-					[place.id, place.region, place.name, userId]
-				);
-				return { ok: true, action: 'place_location_no_map', message: 'No map' };
-			}
-			return { ok: await markNoMap(place.id, userId), action: 'place_location_no_map', message: 'No map' };
+			// Creates the row for a place never looked up, under the same lock as merges.
+			return { ok: await markNoMap(place, userId), action: 'place_location_no_map', message: 'No map' };
 		}),
 
 	wrong: ({ request, locals }) =>
@@ -179,7 +171,9 @@ export const actions: Actions = {
 			if (placeId && !PLACE_ID.test(placeId)) return fail('That place could not be saved.');
 			const name = String(data.get('name') ?? '').trim().slice(0, MAX_LABEL) || place.name;
 			const address = String(data.get('address') ?? '').trim().slice(0, MAX_LABEL);
-			await setPin(place, { lat, lon, placeId: placeId || null, name, address }, userId);
+			if (!(await setPin(place, { lat, lon, placeId: placeId || null, name, address }, userId))) {
+				return fail('That place was merged into another. Reload the page.');
+			}
 			return { ok: true, action: 'place_location_pin', message: 'Location saved' };
 		}),
 

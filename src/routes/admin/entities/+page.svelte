@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fold, initialOf, squash } from '$lib/name-fold';
 	import Modal from '$lib/components/Modal.svelte';
 	import { modalOpen } from '$lib/dialog-opener';
 	import { enhance } from '$lib/forms';
 	import EntityPicker from '$lib/components/EntityPicker.svelte';
+	import EntityMentions from '$lib/components/EntityMentions.svelte';
 
 	const { data } = $props();
 
@@ -18,45 +20,16 @@
 	let aliasEditingId = $state<number | null>(null);
 	let aliasTargetId = $state<number | null>(null);
 
-	interface Mention {
-		entryDate: string;
-		source: string;
-		confidence: number | null;
-		snippet: { before: string; match: string; after: string };
-	}
-	interface MentionsState {
-		loading: boolean;
-		mentions: Mention[];
-		truncated: boolean;
-		error?: string;
-	}
-	// Per-entity expandable example entries — curation aid: read the actual
+	// Per-entity expandable example entries: curation aid. Read the actual
 	// day text before deciding merge vs typo-fix (e.g. "Arvie" turned out to
-	// be an uncorrected OCR error, not a person).
-	let mentionsOpen = $state<Record<number, MentionsState>>({});
-
-	async function toggleMentions(id: number) {
-		if (mentionsOpen[id]) {
-			const next = { ...mentionsOpen };
-			delete next[id];
-			mentionsOpen = next;
-			return;
-		}
-		mentionsOpen = { ...mentionsOpen, [id]: { loading: true, mentions: [], truncated: false } };
-		try {
-			const res = await fetch(`/admin/entities/${id}/mentions`);
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			const body = await res.json();
-			mentionsOpen = {
-				...mentionsOpen,
-				[id]: { loading: false, mentions: body.mentions, truncated: body.truncated }
-			};
-		} catch {
-			mentionsOpen = {
-				...mentionsOpen,
-				[id]: { loading: false, mentions: [], truncated: false, error: 'Failed to load example entries' }
-			};
-		}
+	// be an uncorrected OCR error, not a person), and move a day that's about
+	// someone else (td-c6e871).
+	let mentionsOpen = $state<Record<number, boolean>>({});
+	function toggleMentions(id: number) {
+		const next = { ...mentionsOpen };
+		if (next[id]) delete next[id];
+		else next[id] = true;
+		mentionsOpen = next;
 	}
 
 	// ── Finding your way in a long list: fold sections, search, jump by letter ──
@@ -65,19 +38,7 @@
 	type EntityType = (typeof TYPES)[number];
 	const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
 
-	/** Lower case, accents and ligatures off: "Zoë" is found by "zoe", "ﬂ" by "fl". */
-	function fold(s: string) {
-		return s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-	}
-	/** Letters and digits only (any script): "kmart" finds "K-Mart", "pamenoch" finds "Pam Enoch". */
-	function squash(s: string) {
-		return s.replace(/[^\p{L}\p{N}]/gu, '');
-	}
-	/** A–Z, or "#" for anything else (digits, symbols, letters like Ł or 東). Always one character. */
-	function letterOf(name: string) {
-		const c = fold(name.trim()).toUpperCase().charAt(0);
-		return c >= 'A' && c <= 'Z' ? c : '#';
-	}
+	const letterOf = initialOf;
 	const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
 
 	interface Row {
@@ -218,6 +179,10 @@
 		<p class="subtitle">
 			People, places, and events extracted by the enrichment worker. Rename, alias duplicates
 			together, merge, or delete unused entries.
+		</p>
+		<p class="subtitle">
+			<a href="/admin/entities/cleanup" class="cleanup-link">Find duplicates →</a> groups likely duplicates with their
+			entries, so you don't have to scan this list by eye.
 		</p>
 	</header>
 
@@ -403,7 +368,7 @@
 												</button>
 											{/if}
 										{/if}
-										{#if e.mention_count === 0}
+										{#if e.mention_count === 0 && !e.alias_of_display_name}
 											<button
 												class="btn btn-sm btn-danger"
 												onclick={() => (deleteTarget = { id: e.id, label: e.display_name })}
@@ -411,12 +376,7 @@
 												Delete
 											</button>
 										{:else}
-											<span
-												class="delete-na"
-												title="Only zero-mention entities can be deleted — use Merge into… to combine duplicates"
-											>
-												in&nbsp;use
-											</span>
+											<span class="delete-na">{e.alias_of_display_name ? 'kept spelling' : 'in\u00a0use'}</span>
 										{/if}
 									{/if}
 								</td>
@@ -424,30 +384,7 @@
 							{#if mentionsOpen[e.id]}
 								<tr class="mentions-row">
 									<td colspan="5">
-										{#if mentionsOpen[e.id].loading}
-											<p class="mentions-note">Loading example entries…</p>
-										{:else if mentionsOpen[e.id].error}
-											<p class="mentions-note">{mentionsOpen[e.id].error}</p>
-										{:else if mentionsOpen[e.id].mentions.length === 0}
-											<p class="mentions-note">No entries found.</p>
-										{:else}
-											<ul class="mentions-list">
-												{#each mentionsOpen[e.id].mentions as m (m.entryDate)}
-													<li>
-														<a
-															class="mention-date"
-															href={`/correct/day/${m.entryDate}`}
-															title="Open this day in the correction editor (fix typos at the source — re-accepting re-runs extraction)"
-														>{m.entryDate}</a>
-														<span class="mention-snippet"
-															>{m.snippet.before}{#if m.snippet.match}<mark>{m.snippet.match}</mark>{/if}{m.snippet.after}</span>
-													</li>
-												{/each}
-											</ul>
-											{#if mentionsOpen[e.id].truncated}
-												<p class="mentions-note">Showing the first 15 entries.</p>
-											{/if}
-										{/if}
+										<EntityMentions entityId={e.id} options={canonicalOptionsFor(type, -1)} />
 									</td>
 								</tr>
 							{/if}
@@ -714,6 +651,13 @@
 		margin: 0.25rem 0 0.2rem;
 		font-size: 1.4rem;
 	}
+	.cleanup-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		font-weight: 700;
+		color: #1a4731;
+	}
 	.subtitle {
 		margin: 0;
 		color: #595959;
@@ -821,35 +765,6 @@
 	.mentions-row td {
 		background: #faf7f0;
 		padding: 0.5rem 1rem 0.75rem;
-	}
-	.mentions-list {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-	}
-	.mentions-list li {
-		font-size: 0.9rem;
-		line-height: 1.45;
-	}
-	.mention-date {
-		font-family: ui-monospace, Menlo, monospace;
-		font-size: 0.85rem;
-		margin-right: 0.6rem;
-		color: #1a4731;
-	}
-	.mention-snippet mark {
-		background: #f5d78e;
-		color: #2b2417;
-		padding: 0 0.1em;
-	}
-	.mentions-note {
-		margin: 0.4rem 0 0;
-		font-size: 0.85rem;
-		font-style: italic;
-		color: #555;
 	}
 	.error-banner {
 		background: #fdecea;

@@ -52,6 +52,11 @@
 			<p>Review AI-extracted people/places/events, merge duplicates, and manage aliases.</p>
 		</a>
 
+		<a href="/admin/entities/cleanup" class="tool">
+			<h2>Find duplicates</h2>
+			<p>Names the extractor split in two (typos, nicknames, fuller names), grouped with their entries to merge or keep apart.</p>
+		</a>
+
 		<a href="/admin/places" class="tool">
 			<h2>Place Maps</h2>
 			<p>Map and directions links for places. Check the few lookups that need a look.</p>

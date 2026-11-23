@@ -36,6 +36,8 @@
 		"test:refresh": "tsx scripts/test-refresh.ts",
 		"test:signed-out": "tsx scripts/test-signed-out.ts",
 		"test:dialogs": "tsx scripts/test-dialogs.ts",
+		"test:entity-matcher": "tsx scripts/test-entity-matcher.ts",
+		"test:entity-cleanup": "node scripts/test-entity-cleanup.mjs",
 		"format": "prettier --write .",
 		"lint": "prettier --check ."
 	},

@@ -216,6 +216,57 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────
+# Migration 0036 (td-c6e871): exact grants on the cleanup tables.
+# ─────────────────────────────────────────────────────────────────
+expect_priv() {  # role table privilege yes|no
+  local got
+  got=$(psql_owner -tAc "SELECT has_table_privilege('$1', '$2', '$3');")
+  local want="f"; [[ "$4" == "yes" ]] && want="t"
+  if [[ "$got" == "$want" ]]; then green "0036: $1 $3 on $2 = $4"; else red "0036: $1 $3 on $2 expected $4, got $got"; fi
+}
+for p in SELECT INSERT DELETE; do expect_priv madonnahist_app entity_not_same "$p" yes; done
+expect_priv madonnahist_app entity_not_same UPDATE no
+for p in SELECT INSERT UPDATE DELETE; do expect_priv madonnahist_app entity_cleanup_checks "$p" yes; done
+for p in SELECT INSERT DELETE; do expect_priv madonnahist_app day_entity_blocks "$p" yes; done
+expect_priv madonnahist_app day_entity_blocks UPDATE no
+for p in SELECT INSERT UPDATE DELETE; do
+  expect_priv madonnahist_worker entity_not_same "$p" no
+  expect_priv madonnahist_worker entity_cleanup_checks "$p" no
+done
+expect_priv madonnahist_worker day_entity_blocks SELECT yes
+for p in INSERT UPDATE DELETE; do expect_priv madonnahist_worker day_entity_blocks "$p" no; done
+
+# Real attempts, as the roles themselves.
+if psql_worker -tAc "SELECT count(*) FROM day_entity_blocks;" > /dev/null 2>&1; then
+  green "0036: worker can read day_entity_blocks"
+else
+  red "0036: worker could not read day_entity_blocks"
+fi
+if psql_worker -tAc "INSERT INTO day_entity_blocks (day_id, entity_id) VALUES (1, 1);" > /dev/null 2>&1; then
+  red "0036: worker inserted into day_entity_blocks"
+else
+  green "0036: worker cannot write day_entity_blocks"
+fi
+if psql_worker -tAc "SELECT count(*) FROM entity_not_same;" > /dev/null 2>&1; then
+  red "0036: worker read entity_not_same"
+else
+  green "0036: worker cannot read entity_not_same"
+fi
+if psql_app -tAc "SELECT count(*) FROM entity_cleanup_checks;" > /dev/null 2>&1; then
+  green "0036: app can read entity_cleanup_checks"
+else
+  red "0036: app could not read entity_cleanup_checks"
+fi
+# The CHECK keeps pairs stored low id first.
+if psql_owner -tAc "INSERT INTO entities (slug, display_name, entity_type) VALUES ('zz-ns-a','A','person'),('zz-ns-b','B','person');
+  INSERT INTO entity_not_same (entity_a, entity_b) SELECT max(id), min(id) FROM entities WHERE slug LIKE 'zz-ns-%';" > /dev/null 2>&1; then
+  red "0036: entity_not_same accepted a pair stored high id first"
+else
+  green "0036: entity_not_same refuses a pair stored high id first"
+fi
+psql_owner -q -c "DELETE FROM entities WHERE slug LIKE 'zz-ns-%';" > /dev/null
+
+# ─────────────────────────────────────────────────────────────────
 echo "----"
 echo "PASS: $PASS"
 echo "FAIL: $FAIL"

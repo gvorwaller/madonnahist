@@ -1,5 +1,6 @@
 import { query, withTransaction } from '$lib/db';
 import { error, fail } from '@sveltejs/kit';
+import { deleteUnused, graphWrite, mergeEntities, moveDay, setAlias, toId } from '$lib/server/entity-graph';
 import type { Actions, PageServerLoad } from './$types';
 
 const ENTITY_TYPES = ['person', 'place', 'event'] as const;
@@ -27,14 +28,25 @@ interface EntityRow {
 export const load: PageServerLoad = async ({ locals }) => {
 	requireAdmin(locals);
 
+	// mention_count matches what the row's Entries list shows (the mentions
+	// endpoint, src/lib/server/entity-evidence.ts): a main name's whole
+	// family's distinct days, an alias's own direct links (CODEX9 td-c6e871
+	// #12). A main name whose mentions all sit on its aliases isn't "0".
 	const entitiesRes = await query<EntityRow>(
-		`SELECT e.id, e.slug, e.display_name, e.entity_type, e.alias_of_entity_id,
+		`WITH direct AS (
+		   SELECT entity_id, COUNT(*)::int AS n FROM day_entities GROUP BY entity_id
+		 ), fam AS (
+		   SELECT COALESCE(m.alias_of_entity_id, m.id) AS cid, COUNT(DISTINCT de.day_id)::int AS n
+		     FROM day_entities de JOIN entities m ON m.id = de.entity_id
+		    GROUP BY 1
+		 )
+		 SELECT e.id, e.slug, e.display_name, e.entity_type, e.alias_of_entity_id,
 		        alias.display_name AS alias_of_display_name, alias.slug AS alias_of_slug,
-		        COUNT(de.day_id)::int AS mention_count
+		        CASE WHEN e.alias_of_entity_id IS NULL THEN COALESCE(fam.n, 0) ELSE COALESCE(direct.n, 0) END AS mention_count
 		   FROM entities e
-		   LEFT JOIN day_entities de ON de.entity_id = e.id
 		   LEFT JOIN entities alias ON alias.id = e.alias_of_entity_id
-		  GROUP BY e.id, alias.display_name, alias.slug
+		   LEFT JOIN direct ON direct.entity_id = e.id
+		   LEFT JOIN fam ON fam.cid = e.id
 		  ORDER BY e.entity_type, e.display_name`
 	);
 
@@ -55,43 +67,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	};
 };
-
-/**
- * Re-parent any entity currently aliasing `entityId` to `targetId` instead.
- * Keeps COALESCE(alias_of_entity_id, id) resolution correct at one hop no
- * matter which action (setAlias or mergeInto) is about to make `entityId`
- * itself into an alias — without this, an entity that was already a
- * canonical target for other aliases would produce a 2-hop chain
- * (Z -> entityId -> targetId) the moment entityId became an alias.
- */
-async function reparentExistingAliases(
-	client: { query: (text: string, params?: unknown[]) => Promise<unknown> },
-	entityId: number,
-	targetId: number
-): Promise<void> {
-	await client.query(`UPDATE entities SET alias_of_entity_id = $2 WHERE alias_of_entity_id = $1`, [entityId, targetId]);
-}
-
-async function validateAliasTarget(entityId: number, targetId: number): Promise<string | null> {
-	if (entityId === targetId) return 'An entity cannot be an alias of itself';
-
-	const entityRes = await query<{ entity_type: EntityType }>(`SELECT entity_type FROM entities WHERE id = $1`, [entityId]);
-	if (!entityRes.rows[0]) return 'Entity not found';
-
-	const targetRes = await query<{ entity_type: EntityType; alias_of_entity_id: number | null }>(
-		`SELECT entity_type, alias_of_entity_id FROM entities WHERE id = $1`,
-		[targetId]
-	);
-	if (!targetRes.rows[0]) return 'Target entity not found';
-
-	if (targetRes.rows[0].entity_type !== entityRes.rows[0].entity_type) {
-		return 'Alias target must be the same entity type';
-	}
-	if (targetRes.rows[0].alias_of_entity_id !== null) {
-		return 'Alias target must itself be canonical (not already an alias) — no chains';
-	}
-	return null;
-}
 
 export const actions: Actions = {
 	rename: async ({ request, locals }) => {
@@ -128,132 +103,38 @@ export const actions: Actions = {
 	setAlias: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const data = await request.formData();
-		const id = Number(data.get('id'));
-		const targetId = Number(data.get('targetId'));
-
-		if (!Number.isFinite(id)) return fail(400, { error: 'Invalid entity ID' });
-		if (!Number.isFinite(targetId)) return fail(400, { error: 'Invalid alias target' });
-
-		const validationError = await validateAliasTarget(id, targetId);
-		if (validationError) return fail(409, { error: validationError });
-
-		const before = await query<{ display_name: string; entity_type: string; alias_of_entity_id: number | null }>(
-			`SELECT display_name, entity_type, alias_of_entity_id FROM entities WHERE id = $1`,
-			[id]
-		);
-		const target = await query<{ display_name: string }>(`SELECT display_name FROM entities WHERE id = $1`, [targetId]);
-		if (!before.rows[0] || !target.rows[0]) return fail(404, { error: 'Entity not found' });
-
-		await withTransaction(async (client) => {
-			await reparentExistingAliases(client, id, targetId);
-			await client.query(`UPDATE entities SET alias_of_entity_id = $2 WHERE id = $1`, [id, targetId]);
-			await client.query(
-				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
-				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
-				[Number(locals.user!.id), 'entity_set_alias', 'entities', id,
-				 JSON.stringify({ alias_of_entity_id: before.rows[0].alias_of_entity_id }),
-				 JSON.stringify({ alias_of_entity_id: targetId }),
-				 `Set "${before.rows[0].display_name}" (${before.rows[0].entity_type}) as an alias of "${target.rows[0].display_name}"`]
-			);
-		});
+		const id = toId(data.get('id'));
+		const targetId = toId(data.get('targetId'));
+		if (id === null) return fail(400, { error: 'Invalid entity ID' });
+		if (targetId === null) return fail(400, { error: 'Invalid alias target' });
+		return graphWrite((client) => setAlias(client, id, targetId, Number(locals.user!.id)));
 	},
 
 	mergeInto: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const data = await request.formData();
-		const sourceId = Number(data.get('sourceId'));
-		const targetId = Number(data.get('targetId'));
+		const sourceId = toId(data.get('sourceId'));
+		const targetId = toId(data.get('targetId'));
+		if (sourceId === null) return fail(400, { error: 'Invalid source entity' });
+		if (targetId === null) return fail(400, { error: 'Invalid merge target' });
+		return graphWrite((client) => mergeEntities(client, targetId, [sourceId], Number(locals.user!.id)));
+	},
 
-		if (!Number.isFinite(sourceId)) return fail(400, { error: 'Invalid source entity' });
-		if (!Number.isFinite(targetId)) return fail(400, { error: 'Invalid merge target' });
-
-		const validationError = await validateAliasTarget(sourceId, targetId);
-		if (validationError) return fail(409, { error: validationError });
-
-		const source = await query<{ display_name: string; entity_type: string }>(
-			`SELECT display_name, entity_type FROM entities WHERE id = $1`,
-			[sourceId]
-		);
-		const target = await query<{ display_name: string }>(`SELECT display_name FROM entities WHERE id = $1`, [targetId]);
-		if (!source.rows[0] || !target.rows[0]) return fail(404, { error: 'Entity not found' });
-
-		const mentionCountBefore = await query<{ count: number }>(
-			`SELECT COUNT(DISTINCT day_id)::int AS count FROM day_entities WHERE entity_id IN ($1, $2)`,
-			[sourceId, targetId]
-		);
-
-		await withTransaction(async (client) => {
-			// Rewrite day_entities from source to target: insert target-pointed
-			// copies first (skipping any day that already has a target row via
-			// ON CONFLICT DO NOTHING — a day already linked to both keeps a
-			// single row), then delete every remaining source row. Every
-			// distinct day that mentioned either source or target still
-			// mentions target afterward.
-			await client.query(
-				`INSERT INTO day_entities (day_id, entity_id, source, confidence_score)
-				 SELECT day_id, $2, source, confidence_score FROM day_entities WHERE entity_id = $1
-				 ON CONFLICT (day_id, entity_id) DO NOTHING`,
-				[sourceId, targetId]
-			);
-			await client.query(`DELETE FROM day_entities WHERE entity_id = $1`, [sourceId]);
-
-			// Keep source as an alias pointing at the canonical target, per
-			// plan Phase D item 6, rather than deleting it — re-parenting any
-			// of ITS OWN existing aliases first keeps one-hop resolution intact.
-			await reparentExistingAliases(client, sourceId, targetId);
-			await client.query(`UPDATE entities SET alias_of_entity_id = $2 WHERE id = $1`, [sourceId, targetId]);
-
-			await client.query(
-				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
-				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
-				[Number(locals.user!.id), 'entity_merge', 'entities', sourceId,
-				 JSON.stringify({ display_name: source.rows[0].display_name, distinct_days_before: mentionCountBefore.rows[0]?.count ?? null }),
-				 JSON.stringify({ merged_into: target.rows[0].display_name, merged_into_id: targetId }),
-				 `Merged "${source.rows[0].display_name}" (${source.rows[0].entity_type}) into "${target.rows[0].display_name}"`]
-			);
-		});
+	moveDay: async ({ request, locals }) => {
+		requireAdmin(locals);
+		const data = await request.formData();
+		const dayId = toId(data.get('dayId'));
+		const fromId = toId(data.get('fromId'));
+		const toEntity = toId(data.get('toId'));
+		if (dayId === null || fromId === null || toEntity === null) return fail(400, { error: 'Invalid move' });
+		return graphWrite((client) => moveDay(client, dayId, fromId, toEntity, Number(locals.user!.id)));
 	},
 
 	delete: async ({ request, locals }) => {
 		requireAdmin(locals);
 		const data = await request.formData();
-		const id = Number(data.get('id'));
-		if (!Number.isFinite(id)) return fail(400, { error: 'Invalid entity ID' });
-
-		const before = await query<{ display_name: string; entity_type: string; slug: string }>(
-			`SELECT display_name, entity_type, slug FROM entities WHERE id = $1`,
-			[id]
-		);
-		if (!before.rows[0]) return fail(404, { error: 'Entity not found' });
-
-		let blocked = false;
-		await withTransaction(async (client) => {
-			// Guard lives in the DELETE's own WHERE clause (atomic with the
-			// delete itself, no separate check-then-act race) — zero rows
-			// deleted means either condition failed; the audit insert is
-			// simply skipped and the transaction commits as a no-op.
-			const deleted = await client.query<{ id: number }>(
-				`DELETE FROM entities WHERE id = $1
-				   AND NOT EXISTS (SELECT 1 FROM day_entities WHERE entity_id = $1)
-				   AND NOT EXISTS (SELECT 1 FROM entities WHERE alias_of_entity_id = $1)
-				 RETURNING id`,
-				[id]
-			);
-			if (!deleted.rows[0]) {
-				blocked = true;
-				return;
-			}
-			await client.query(
-				`INSERT INTO audit_log (user_id, action, entity_type, entity_id, before_value, after_value, description)
-				 VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7)`,
-				[Number(locals.user!.id), 'entity_delete', 'entities', id,
-				 JSON.stringify(before.rows[0]), null,
-				 `Deleted ${before.rows[0].entity_type} "${before.rows[0].display_name}" (zero mentions, no aliases pointing to it)`]
-			);
-		});
-
-		if (blocked) {
-			return fail(409, { error: 'Cannot delete: entity has mentions or is an alias target for another entity' });
-		}
+		const id = toId(data.get('id'));
+		if (id === null) return fail(400, { error: 'Invalid entity ID' });
+		return graphWrite((client) => deleteUnused(client, id, Number(locals.user!.id)));
 	}
 };
