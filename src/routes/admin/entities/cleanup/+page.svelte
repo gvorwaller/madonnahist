@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { enhance } from '$lib/forms';
 	import Modal from '$lib/components/Modal.svelte';
 	import EntityMentions from '$lib/components/EntityMentions.svelte';
@@ -89,6 +90,20 @@
 	const likely = $derived(visible.filter((g) => g.tier === 'likely'));
 	const possible = $derived(visible.filter((g) => g.tier === 'possible'));
 	let shown = $state(20);
+	const backTo = (mainId: number) => `/admin/entities/cleanup?type=${data.type}#g-${mainId}`;
+
+	// Back from a day opened in a group's entries (td-8a7e37): the link ends
+	// in #g-<main id>. Show enough groups to include it, then put focus on its
+	// heading, which also scrolls it into view.
+	afterNavigate(async ({ to }) => {
+		const m = /^#g-(\d+)$/.exec(to?.url.hash ?? '');
+		if (!m) return;
+		const at = visible.findIndex((g) => g.main.id === Number(m[1]));
+		if (at < 0) return;
+		if (at >= shown) shown = Math.ceil((at + 1) / 20) * 20;
+		await tick();
+		document.getElementById(`g-${m[1]}`)?.focus();
+	});
 
 	let message = $state('');
 	let errorText = $state('');
@@ -289,7 +304,7 @@
 			</div>
 			<details class="entries" ontoggle={(e) => markOpened(`m${g.main.id}`, e)}>
 				<summary>Entries for {g.main.name}</summary>
-				{#if opened[`m${g.main.id}`]}<EntityMentions entityId={g.main.id} options={data.canonical} />{/if}
+				{#if opened[`m${g.main.id}`]}<EntityMentions entityId={g.main.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
 			</details>
 
 			<ul class="cands">
@@ -331,7 +346,7 @@
 						{/if}
 						<details class="entries" ontoggle={(e) => markOpened(`c${g.main.id}:${c.id}`, e)}>
 							<summary>Entries for {c.name}</summary>
-							{#if opened[`c${g.main.id}:${c.id}`]}<EntityMentions entityId={c.id} options={data.canonical} />{/if}
+							{#if opened[`c${g.main.id}:${c.id}`]}<EntityMentions entityId={c.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
 						</details>
 						<div class="cand-actions">
 							<label class="keep">

@@ -3,6 +3,7 @@ import { populateLexicon } from '$lib/correction-lexicon';
 import { heartbeat, completeSession, pauseActiveSession } from '$lib/server/claims';
 import { isValidTagLabel, slugifyTagLabel } from '$lib/server/tags';
 import { error, fail, redirect } from '@sveltejs/kit';
+import { parseBack, withBack } from '$lib/return-to';
 import type { Actions, PageServerLoad } from './$types';
 
 function validDate(s: string): boolean {
@@ -49,7 +50,7 @@ async function prevAnyDate(beforeDate: string, pageId: number): Promise<string |
 	return res.rows[0]?.entry_date ?? null;
 }
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
 	if (!locals.user) error(401, 'Not authenticated');
 	const entryDate = params.date;
 	if (!validDate(entryDate)) error(400, 'Invalid date');
@@ -144,11 +145,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		tags: tagsRes.rows,
 		tagSuggestions: tagSuggestionsRes.rows,
 		serverLoadedAt: new Date().toISOString(),
+		// Opened from Find duplicates: a link back to the group (td-8a7e37).
+		back: parseBack(url.searchParams.get('back'))
 	};
 };
 
 export const actions = {
-	save: async ({ params, request, locals }) => {
+	save: async ({ params, request, locals, url }) => {
 		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const entryDate = params.date;
 		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
@@ -187,7 +190,7 @@ export const actions = {
 		await heartbeat(userId, year, month, day_id);
 
 		if (wasAlreadyCorrected) {
-			redirect(303, `/correct/day/${entryDate}`);
+			redirect(303, withBack(`/correct/day/${entryDate}`, url.searchParams.get('back')));
 		}
 
 		const nextDate = await nextUncorrectedDate(entryDate);
@@ -211,7 +214,7 @@ export const actions = {
 			}
 		}
 
-		redirect(303, `/correct/day/${nextDate ?? entryDate}${conflictParam}`);
+		redirect(303, withBack(`/correct/day/${nextDate ?? entryDate}${conflictParam}`, url.searchParams.get('back')));
 	},
 
 	// Auto-save (td-b52a49 item 1). Client debounces ~1.5s after typing
@@ -295,7 +298,7 @@ export const actions = {
 	// exactly the same way; skips populateLexicon() since draft_text is
 	// being saved verbatim (diffing draft against itself can never surface a
 	// correction pattern).
-	acceptDraft: async ({ params, locals }) => {
+	acceptDraft: async ({ params, locals, url }) => {
 		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const entryDate = params.date;
 		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
@@ -332,7 +335,7 @@ export const actions = {
 			await completeSession(userId, year, month);
 		}
 
-		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+		redirect(303, withBack(`/correct/day/${nextDate ?? entryDate}`, url.searchParams.get('back')));
 	},
 
 	// "Done for now" (td-b52a49 item 4a) — pauses the user's active
@@ -344,7 +347,7 @@ export const actions = {
 		redirect(303, paused ? `/correct/session-done?session=${paused.sessionId}` : '/correct');
 	},
 
-	skip: async ({ params, locals }) => {
+	skip: async ({ params, locals, url }) => {
 		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const entryDate = params.date;
 		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
@@ -368,10 +371,10 @@ export const actions = {
 		await heartbeat(userId, year, month, day_id);
 
 		const nextDate = await nextUncorrectedDate(entryDate);
-		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+		redirect(303, withBack(`/correct/day/${nextDate ?? entryDate}`, url.searchParams.get('back')));
 	},
 
-	flag: async ({ params, request, locals }) => {
+	flag: async ({ params, request, locals, url }) => {
 		if (!locals.user) return fail(401, { error: 'Not authenticated' });
 		const entryDate = params.date;
 		if (!validDate(entryDate)) return fail(400, { error: 'Invalid date' });
@@ -397,7 +400,7 @@ export const actions = {
 		await heartbeat(userId, year, month, day_id);
 
 		const nextDate = await nextUncorrectedDate(entryDate);
-		redirect(303, `/correct/day/${nextDate ?? entryDate}`);
+		redirect(303, withBack(`/correct/day/${nextDate ?? entryDate}`, url.searchParams.get('back')));
 	},
 
 	addTag: async ({ params, request, locals }) => {

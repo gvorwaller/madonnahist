@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { enhance } from '$lib/forms';
 	import EntityPicker from './EntityPicker.svelte';
+	import { withBack } from '$lib/return-to';
 
 	/**
 	 * The entries an entity is mentioned on, a page at a time, each with
@@ -27,8 +28,10 @@
 		/** A day moved: the parent reloads its counts. */
 		onmoved?: () => void;
 		pageSize?: number;
+		/** Where the day page's "Back to …" link returns (td-8a7e37); see $lib/return-to. */
+		back?: string;
 	}
-	const { entityId, options, onmoved, pageSize = 15 }: Props = $props();
+	const { entityId, options, onmoved, pageSize = 15, back }: Props = $props();
 
 	interface Mention {
 		dayId: number;
@@ -131,7 +134,7 @@
 		{#each mentions as m (m.dayId)}
 			<li>
 				<div class="line">
-					<a class="date" href={`/correct/day/${m.entryDate}`}>{m.entryDate}</a>
+					<a class="date" href={withBack(`/correct/day/${m.entryDate}`, back)}>{m.entryDate}</a>
 					<span class="text">
 						{label(m)}{#if m.snippet.where === 'none'}<em>(name not found in the text)</em>
 						{/if}{m.snippet.before}{#if m.snippet.match}<mark>{m.snippet.match}</mark>{/if}{m.snippet.after}

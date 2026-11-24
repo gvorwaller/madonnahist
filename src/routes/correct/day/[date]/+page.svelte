@@ -1,10 +1,17 @@
 <script lang="ts">
 	import Modal from '$lib/components/Modal.svelte';
 	import { deserialize } from '$app/forms';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { enhance } from '$lib/forms';
 	import { page } from '$app/stores';
+	import { withBack } from '$lib/return-to';
 
 	const { data } = $props();
+
+	// Opened from Find duplicates (td-8a7e37): the actions that move to
+	// another day, and Prev/Next, keep the way back.
+	const dayAction = (name: string) => withBack(`/correct/day/${data.day.entry_date}?/${name}`, data.back);
+	const dayHref = (date: string) => withBack(`/correct/day/${date}`, data.back);
 
 	const conflictBy = $derived($page.url.searchParams.get('conflict'));
 	let conflictDismissed = $state(false);
@@ -119,6 +126,10 @@
 		const textChanged = correctedText !== lastSavedText;
 		const narrativeChanged = dayNarrative !== lastSavedNarrative;
 		if (!textChanged && !narrativeChanged) return;
+		// The day this text belongs to. Not '?/autosave': during the browser's
+		// Back/Forward the address bar already shows the other day, and the
+		// edit would be saved there (CODEX9 td-8a7e37).
+		const day = data.day.entry_date;
 
 		autosaveInFlight = true;
 		const snapshotText = correctedText;
@@ -127,13 +138,20 @@
 			const formData = new FormData();
 			if (textChanged) formData.set('correctedText', snapshotText);
 			if (narrativeChanged) formData.set('dayNarrative', snapshotNarrative);
-			const res = await fetch('?/autosave', { method: 'POST', body: formData });
+			const res = await fetch(`/correct/day/${day}?/autosave`, { method: 'POST', body: formData });
 			const result = deserialize(await res.text());
 			if (result.type === 'success') {
-				if (textChanged) lastSavedText = snapshotText;
+				// The server keeps an accepted day's text only on Save (autosave
+				// would knock it back to in progress), and says so with
+				// textSaved: false. Don't call that text saved (CODEX9 td-8a7e37).
+				const textSaved = (result.data as { textSaved?: boolean } | undefined)?.textSaved === true;
+				if (textChanged && textSaved) lastSavedText = snapshotText;
 				if (narrativeChanged) lastSavedNarrative = snapshotNarrative;
 				const now = new Date();
-				autosaveStatus = `Draft saved ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+				autosaveStatus =
+					textChanged && !textSaved
+						? 'Not saved yet: press Save to keep this change'
+						: `Draft saved ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 			} else {
 				autosaveStatus = 'Draft save failed';
 			}
@@ -149,6 +167,141 @@
 		// Wait out any in-flight request first so the final state wins.
 		if (autosaveActive) await autosaveActive;
 		await doAutosave();
+	}
+
+	// ── Leaving with a change that isn't saved (td-8a7e37, CODEX9) ──
+	// Any link, Back to Find duplicates, the browser's Back/Forward, or Done
+	// for now first saves what autosave can (an uncorrected day's text, any
+	// day's note) and goes on. An accepted day's text is kept only by Save,
+	// so if it still differs, ask: save and leave, leave without saving, or
+	// keep editing. Closing the tab or reloading gets the browser's own
+	// question. Save, Skip, Flag and Accept draft choose where they go, so
+	// they pass.
+	type Leave = { kind: 'url'; url: URL } | { kind: 'traverse'; delta: number } | { kind: 'pause' };
+	const unsaved = () => correctedText !== lastSavedText || dayNarrative !== lastSavedNarrative;
+	let submitLeaving = false;
+	// The Back/Forward step the person chose to go on with; used up when it starts.
+	let confirmedNav: string | null = null;
+	// Done for now chosen in the question; used up by that one submit.
+	let pauseConfirmed = false;
+	// A chosen goto is under way (it may be redirected on the way); cleared
+	// when it settles, whether or not it arrived.
+	let leavingNow = false;
+	let leaveChecking = false;
+	let leave = $state<Leave | null>(null);
+	let leaveSaving = $state(false);
+	let leaveError = $state('');
+	let pauseForm: HTMLFormElement | null = null;
+	const passRedirect = (type: string) => {
+		if (type === 'redirect') submitLeaving = true;
+	};
+
+	const navKey = (nav: { type: string; delta?: number }) =>
+		nav.type === 'popstate' && nav.delta ? `traverse:${nav.delta}` : null;
+
+	beforeNavigate((nav) => {
+		if (submitLeaving || leavingNow) return;
+		if (confirmedNav !== null && confirmedNav === navKey(nav)) {
+			confirmedNav = null;
+			return;
+		}
+		if (!unsaved()) return;
+		nav.cancel();
+		// Closing the tab or reloading: cancelling makes the browser ask.
+		if (nav.willUnload || !nav.to) return;
+		// Back/Forward: Kit undoes the step; going on repeats the same step,
+		// so history (and Forward) stay as they were.
+		void askOrGo(nav.type === 'popstate' && nav.delta ? { kind: 'traverse', delta: nav.delta } : { kind: 'url', url: nav.to.url });
+	});
+	afterNavigate(() => {
+		submitLeaving = false;
+		confirmedNav = null;
+		leave = null;
+	});
+
+	async function askOrGo(next: Leave) {
+		if (leave || leaveSaving || leaveChecking) return;
+		leaveChecking = true;
+		try {
+			await flushAutosave();
+		} finally {
+			leaveChecking = false;
+		}
+		if (!unsaved()) return goOn(next);
+		leaveError = '';
+		leave = next;
+	}
+
+	async function goOn(next: Leave) {
+		leave = null;
+		if (next.kind === 'url') {
+			leavingNow = true;
+			try {
+				await goto(next.url);
+			} finally {
+				leavingNow = false;
+			}
+		} else if (next.kind === 'traverse') {
+			confirmedNav = `traverse:${next.delta}`;
+			history.go(next.delta);
+		} else {
+			// Its redirect passes the guard as any submit's does; if the pause
+			// fails, the editor stays guarded.
+			pauseConfirmed = true;
+			pauseForm?.requestSubmit();
+		}
+	}
+
+	function keepEditing() {
+		if (leaveSaving) return;
+		leave = null;
+	}
+
+	async function leaveWithoutSaving() {
+		if (!leave || leaveSaving) return;
+		// Nothing typed so far may be saved now on the way out.
+		if (autosaveTimer) clearTimeout(autosaveTimer);
+		await goOn(leave);
+	}
+
+	async function saveAndLeave() {
+		const next = leave;
+		if (!next || leaveSaving) return;
+		if (correctedText.trim() === '') {
+			leaveError = 'The corrected text is empty, so there is nothing to save.';
+			return;
+		}
+		// Every way out of the question is locked until the save answers.
+		leaveSaving = true;
+		leaveError = '';
+		if (autosaveTimer) clearTimeout(autosaveTimer);
+		const sentText = correctedText;
+		const sentNarrative = dayNarrative;
+		try {
+			const form = new FormData();
+			form.set('correctedText', sentText);
+			form.set('dayNarrative', sentNarrative);
+			form.set('pageLoadedAt', data.serverLoadedAt);
+			const res = await fetch(`/correct/day/${data.day.entry_date}?/save`, {
+				method: 'POST',
+				body: form,
+				headers: { 'x-sveltekit-action': 'true' }
+			});
+			const result = deserialize(await res.text());
+			if (result.type === 'redirect' || result.type === 'success') {
+				lastSavedText = sentText;
+				lastSavedNarrative = sentNarrative;
+				await goOn(next);
+			} else {
+				leaveError =
+					(result.type === 'failure' && (result.data as { error?: string } | undefined)?.error) ||
+					'Save failed. Your text is still here.';
+			}
+		} catch {
+			leaveError = 'Save failed. Your text is still here.';
+		} finally {
+			leaveSaving = false;
+		}
 	}
 
 	let historyOpen = $state(false);
@@ -246,6 +399,9 @@
 
 <div class="page">
 	<header>
+		{#if data.back}
+			<a href={data.back.href} class="back-to">&larr; Back to {data.back.label}</a>
+		{/if}
 		<div class="breadcrumbs">
 			<a href="/correct" class="back">Queue</a>
 			<span class="crumb-sep">/</span>
@@ -259,14 +415,33 @@
 				<form
 					method="POST"
 					action="?/pause"
-					use:enhance={async () => {
+					use:enhance={async ({ cancel, formElement }) => {
+						const confirmed = pauseConfirmed;
+						pauseConfirmed = false;
+						// Chosen in the question ("Leave without saving", or after
+						// "Save and leave"): pause as is. Flushing here would store
+						// the text the person just chose to throw away (CODEX9).
+						if (confirmed) {
+							if (autosaveTimer) clearTimeout(autosaveTimer);
+							return async ({ result, update }) => { passRedirect(result.type); update(); };
+						}
 						// Flush any pending debounced autosave before navigating away
 						// — SvelteKit's enhance awaits this submit callback before
 						// firing the actual POST, so the last few keystrokes before
 						// "Done for now" aren't lost. See doAutosave()'s server-side
 						// safety gate for what happens on an already-accepted day.
 						await flushAutosave();
-						return async ({ update }) => { update(); };
+						// A change autosave can't keep (an accepted day's text): ask
+						// before pausing, so Keep editing leaves the session as it
+						// was (CODEX9 td-8a7e37 #2).
+						if (unsaved()) {
+							cancel();
+							pauseForm = formElement;
+							leaveError = '';
+							leave = { kind: 'pause' };
+							return;
+						}
+						return async ({ result, update }) => { passRedirect(result.type); update(); };
 					}}
 				>
 					<button type="submit" class="header-btn">Done for now</button>
@@ -277,19 +452,19 @@
 			<span class="position">Day {data.position} of {data.total}</span>
 			<div class="nav-links">
 				{#if data.prevAny}
-					<a href="/correct/day/{data.prevAny}" class="nav-link">Prev</a>
+					<a href={dayHref(data.prevAny)} class="nav-link">Prev</a>
 				{/if}
 				{#if data.nextAny}
-					<a href="/correct/day/{data.nextAny}" class="nav-link">Next</a>
+					<a href={dayHref(data.nextAny)} class="nav-link">Next</a>
 				{/if}
 				{#if data.prevDate || data.nextDate}
 					<span class="nav-sep"></span>
 				{/if}
 				{#if data.prevDate}
-					<a href="/correct/day/{data.prevDate}" class="nav-link uncorrected">Prev uncorrected</a>
+					<a href={dayHref(data.prevDate)} class="nav-link uncorrected">Prev uncorrected</a>
 				{/if}
 				{#if data.nextDate}
-					<a href="/correct/day/{data.nextDate}" class="nav-link uncorrected">Next uncorrected</a>
+					<a href={dayHref(data.nextDate)} class="nav-link uncorrected">Next uncorrected</a>
 				{/if}
 			</div>
 		</div>
@@ -487,10 +662,10 @@
 			Flag Illegible
 		</button>
 
-		<form method="POST" action="?/skip" use:enhance={() => {
+		<form method="POST" action={dayAction('skip')} use:enhance={() => {
 			saving = true;
 			if (autosaveTimer) clearTimeout(autosaveTimer);
-			return ({ update }) => { saving = false; update(); };
+			return ({ result, update }) => { saving = false; passRedirect(result.type); update(); };
 		}}>
 			<button type="submit" class="action-btn btn-secondary" disabled={saving}>
 				Skip
@@ -498,7 +673,7 @@
 		</form>
 
 		{#if canAcceptDraft}
-			<form method="POST" action="?/acceptDraft" use:enhance={() => {
+			<form method="POST" action={dayAction('acceptDraft')} use:enhance={() => {
 				saving = true;
 				saveError = '';
 				if (autosaveTimer) clearTimeout(autosaveTimer);
@@ -507,6 +682,7 @@
 					if (result.type === 'failure') {
 						saveError = (result.data as { error?: string })?.error ?? 'Accept draft failed';
 					} else {
+						passRedirect(result.type);
 						update();
 					}
 				};
@@ -524,15 +700,25 @@
 			</form>
 		{/if}
 
-		<form method="POST" action="?/save" use:enhance={() => {
+		<form method="POST" action={dayAction('save')} use:enhance={() => {
 			saving = true;
 			saveError = '';
 			if (autosaveTimer) clearTimeout(autosaveTimer);
+			const sentText = correctedText;
+			const sentNarrative = dayNarrative;
 			return ({ result, update }) => {
 				saving = false;
 				if (result.type === 'failure') {
 					saveError = (result.data as { error?: string })?.error ?? 'Save failed';
 				} else {
+					// Saved: an accepted day reloads as itself (same date, so the
+					// editor isn't reset); what was sent is what's stored now.
+					if (result.type === 'redirect' || result.type === 'success') {
+						lastSavedText = sentText;
+						lastSavedNarrative = sentNarrative;
+						autosaveStatus = '';
+					}
+					passRedirect(result.type);
 					update();
 				}
 			};
@@ -546,6 +732,25 @@
 		</form>
 	</div>
 </div>
+
+{#if leave}
+	<Modal labelledby="leave-h" onclose={keepEditing}>
+		<div class="modal-overlay">
+			<div class="modal">
+				<h2 id="leave-h">Save your change first?</h2>
+				<p>Your change to {dateLabel} isn't saved. If you leave now, it will be lost.</p>
+				{#if leaveError}<p class="leave-error" role="alert">{leaveError}</p>{/if}
+				<div class="modal-actions">
+					<button type="button" class="action-btn btn-secondary" onclick={keepEditing} disabled={leaveSaving}>Keep editing</button>
+					<button type="button" class="action-btn btn-danger" onclick={leaveWithoutSaving} disabled={leaveSaving}>Leave without saving</button>
+					<button type="button" class="action-btn btn-primary" onclick={saveAndLeave} disabled={leaveSaving}>
+						{leaveSaving ? 'Saving…' : 'Save and leave'}
+					</button>
+				</div>
+			</div>
+		</div>
+	</Modal>
+{/if}
 
 {#if showFlagModal}
 	<Modal label="Flag as illegible" onclose={() => {
@@ -565,10 +770,10 @@
 					<button class="action-btn btn-secondary" onclick={() => { showFlagModal = false; flagNote = ''; }}>
 						Cancel
 					</button>
-					<form method="POST" action="?/flag" use:enhance={() => {
+					<form method="POST" action={dayAction('flag')} use:enhance={() => {
 						saving = true;
 						if (autosaveTimer) clearTimeout(autosaveTimer);
-						return ({ update }) => { saving = false; showFlagModal = false; update(); };
+						return ({ result, update }) => { saving = false; showFlagModal = false; passRedirect(result.type); update(); };
 					}}>
 						<input type="hidden" name="reviewNote" value={flagNote} />
 						<button type="submit" class="action-btn btn-danger" disabled={saving}>
@@ -691,6 +896,14 @@
 	}
 	header {
 		margin-bottom: 1rem;
+	}
+	.back-to {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		margin-bottom: 0.25rem;
+		font-weight: 600;
+		color: #14551a;
 	}
 	.breadcrumbs {
 		display: flex;
@@ -1266,8 +1479,13 @@
 		box-sizing: border-box;
 		resize: vertical;
 	}
+	.leave-error {
+		color: #8a1010;
+		font-weight: 600;
+	}
 	.modal-actions {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: flex-end;
 		gap: 0.75rem;
 	}
