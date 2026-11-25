@@ -8,7 +8,7 @@ import {
 	loadGroups,
 	loadUnused
 } from '$lib/server/entity-cleanup';
-import { deleteUnused, graphWrite, markNotSame, mergeEntities, setAlias, toId, undoNotSame } from '$lib/server/entity-graph';
+import { deleteUnused, graphWrite, markNotSame, mergeEntities, toId, undoNotSame } from '$lib/server/entity-graph';
 import type { Actions, PageServerLoad } from './$types';
 
 /**
@@ -103,16 +103,6 @@ export const actions: Actions = {
 		);
 		if (r && 'merged' in r) return { done: `Merged ${r.merged.map((n) => `"${n}"`).join(', ')} into "${r.into}".` };
 		return r;
-	},
-
-	alias: async ({ request, locals }) => {
-		requireAdmin(locals);
-		const data = await request.formData();
-		const id = toId(data.get('id'));
-		const targetId = toId(data.get('targetId'));
-		if (id === null || targetId === null) return fail(400, { error: 'Invalid alias' });
-		const r = await graphWrite((c) => setAlias(c, id, targetId, user(locals)));
-		return r ?? { done: 'Alias set.' };
 	},
 
 	notSame: async ({ request, locals }) => {

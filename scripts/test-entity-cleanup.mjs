@@ -510,10 +510,10 @@ async function main() {
 	ck = await checkApi(admin, DANA, [OUT]);
 	check('check: a candidate outside the group is refused (409)', ck.status === 409, `${ck.status} ${JSON.stringify(ck.body)}`);
 
-	// ── Alias from a suggestion ──
+	// ── Alias (set on /admin/entities; same entity-graph code) ──
 	const AL = await mkEnt('Zqxdupdanaa');
-	r = await cleanupAct(admin, 'alias', { id: AL, targetId: DANA });
-	check('alias from a suggestion is set and audited', r.type === 'success' && (await ent(AL)).alias_of_entity_id == DANA && (await audits('entity_set_alias', AL)) === 1, r.text);
+	r = await act(admin, '/admin/entities', 'setAlias', { id: AL, targetId: DANA });
+	check('alias is set and audited', r.type === 'success' && (await ent(AL)).alias_of_entity_id == DANA && (await audits('entity_set_alias', AL)) === 1, r.text);
 
 	// ── CODEX code review round 1 ──
 	// #1 An alias is a kept spelling: never deletable, so a moved day can't come back as a new entity.
@@ -533,7 +533,7 @@ async function main() {
 	const NB = await mkEnt('Zqxdupnsb');
 	const NX = await mkEnt('Zqxdupnsx');
 	await cleanupAct(admin, 'notSame', { a: NA, b: NX });
-	r = await cleanupAct(admin, 'alias', { id: NA, targetId: NB });
+	r = await act(admin, '/admin/entities', 'setAlias', { id: NA, targetId: NB });
 	const nsCarried = await q(`SELECT 1 FROM entity_not_same WHERE entity_a = LEAST($1::bigint, $2::bigint) AND entity_b = GREATEST($1::bigint, $2::bigint)`, [NB, NX]);
 	check('#4 alias carries "A ≠ X" to "B ≠ X"', r.type === 'success' && nsCarried.rowCount === 1, r.text);
 	r = await cleanupAct(admin, 'mergeGroup', { keepId: NB, id: [NX] });
@@ -667,8 +667,8 @@ async function main() {
 	const XA = await mkEnt('Zqxdupstalea');
 	const XB = await mkEnt('Zqxdupstaleb');
 	const XC = await mkEnt('Zqxdupstalec');
-	await cleanupAct(admin, 'alias', { id: XA, targetId: XB });
-	r = await cleanupAct(admin, 'alias', { id: XA, targetId: XC });
+	await act(admin, '/admin/entities', 'setAlias', { id: XA, targetId: XB });
+	r = await act(admin, '/admin/entities', 'setAlias', { id: XA, targetId: XC });
 	check('#2 a stale alias request is refused and the alias stays put', r.type === 'failure' && Number((await ent(XA)).alias_of_entity_id) === XB, r.text);
 
 	// #3 Deleting an "unused" name while the extractor is linking a day to it

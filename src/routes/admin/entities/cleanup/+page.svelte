@@ -8,9 +8,10 @@
 
 	/**
 	 * Find duplicates (td-c6e871). Groups of likely-duplicate names around a
-	 * main name, with the evidence to decide, Claude's opinion on demand, and
-	 * merge / alias / not-the-same / move-a-day. Nothing merges without a
-	 * confirmed click.
+	 * main name, with the evidence to decide and Claude's opinion on demand.
+	 * Each name gets one question, answered "Yes, same …" (confirmed in a
+	 * dialog, then merged) or "No, different"; not sure means leave it
+	 * (td-7e0d72). Days can be moved from the entry lists.
 	 */
 	const { data, form } = $props();
 
@@ -46,38 +47,22 @@
 		return c.check;
 	}
 
-	// ── Ticks: defaults unless the admin touched the box ──
-	let touched = $state<Record<string, boolean>>({});
-	function defaultTick(g: Group, c: Cand): boolean {
-		if (c.outside > 0) return false; // some days look like someone else: decide by hand
-		const k = checkOf(g, c);
-		return k ? k.verdict === 'same' : c.tier === 'likely';
-	}
 	// The server said this pair's entries changed since the page loaded: it
-	// can't be ticked, kept or merged from here until a reload shows the new
-	// entries (CODEX9 final review #1). The server refuses such a merge too.
+	// can't be merged from here until a reload shows the new entries (CODEX9
+	// final review #1). The server refuses such a merge too.
 	const stale = (g: Group, c: Cand) => live[key(g, c)] === 'changed';
-	const ticked = (g: Group, c: Cand) =>
-		!stale(g, c) && (key(g, c) in touched ? touched[key(g, c)] : defaultTick(g, c));
-	// The name that survives: the main name unless another one in the group
-	// was chosen. A chosen name is always part of the merge: choosing it
-	// ticks it, and unticking it gives "keep" back to the main name (CODEX9
-	// #10). The choice is tied to the same pair-and-evidence key as its tick,
-	// so when that evidence changes both lapse together and "keep" goes back
-	// to the main name (CODEX9 re-review #4).
-	let keepChoice = $state<Record<number, string>>({});
-	const keepOf = (g: Group) => {
-		const k = keepChoice[g.main.id];
-		return g.candidates.find((c) => key(g, c) === k && !stale(g, c))?.id ?? g.main.id;
-	};
-	function chooseKeep(g: Group, c: Cand | null) {
-		keepChoice = { ...keepChoice, [g.main.id]: c ? key(g, c) : '' };
-		if (c) touched = { ...touched, [key(g, c)]: true };
+	/**
+	 * The answer to suggest (shown as the filled button): Claude's, else "yes"
+	 * for a very likely match. None when some days fall outside the main
+	 * name's years: those need reading first.
+	 */
+	function suggested(g: Group, c: Cand): 'same' | 'different' | null {
+		if (c.outside > 0) return null;
+		const k = checkOf(g, c);
+		if (k) return k.verdict === 'same' ? 'same' : k.verdict === 'different' ? 'different' : null;
+		return c.tier === 'likely' ? 'same' : null;
 	}
-	function setTick(g: Group, c: Cand, on: boolean) {
-		touched = { ...touched, [key(g, c)]: on };
-		if (!on && keepOf(g) === c.id) keepChoice = { ...keepChoice, [g.main.id]: '' };
-	}
+	const mergeable = (g: Group) => g.candidates.filter((c) => !stale(g, c));
 	// Entry lists mount on first opening (CODEX9 #11).
 	let opened = $state<Record<string, boolean>>({});
 	const markOpened = (k: string, e: Event) => {
@@ -160,6 +145,17 @@
 		}
 	}
 
+	/** The card's "Ask Claude": it disappears once nothing is left to ask, so keep focus in the card and say what happened. */
+	async function askClaude(g: Group, btn: HTMLButtonElement) {
+		const r = await checkGroup(g);
+		await tick();
+		// Only when focus was lost with the button (it falls back to BODY);
+		// a control the admin moved to meanwhile keeps it (CODEX9).
+		const a = document.activeElement;
+		if (!btn.isConnected && (!a || a === document.body || !a.isConnected)) document.getElementById(`g-${g.main.id}`)?.focus();
+		if (r === 'answered') message = `Claude answered for "${g.main.name}".`;
+	}
+
 	let batch = $state<{ list: Group[]; done: number; stop: boolean } | null>(null);
 	async function checkNext() {
 		errorText = ''; // a fresh batch: an earlier batch's failure banner no longer applies
@@ -190,28 +186,29 @@
 	}
 
 	// ── Confirm dialogs ──
-	let mergeAsk = $state<{
-		g: Group;
+	// "Yes, same …" for one name, or "All N are the same …" for the card.
+	// The dialog says what happens and asks which spelling to show (the main
+	// name unless changed). Names are copied in, so a reload behind the
+	// dialog can't change what it merges.
+	let sameAsk = $state<{
+		main: { id: number; name: string };
+		cands: { id: number; name: string; fp: string; outside: number }[];
 		keepId: number;
-		ids: number[];
-		keepName: string;
-		names: string[];
-		/** The evidence fingerprint shown for each name merged, besides the main name. */
-		fps: { id: number; fp: string }[];
 	} | null>(null);
 	let deleteAsk = $state<{ id: number; name: string } | null>(null);
 
-	function askMerge(g: Group) {
-		const keepId = keepOf(g);
-		const participants = [
-			{ id: g.main.id, name: g.main.name },
-			...g.candidates.filter((c) => ticked(g, c) || c.id === keepId).map((c) => ({ id: c.id, name: c.name }))
-		];
-		const keepName = participants.find((p) => p.id === keepId)!.name;
-		const rest = participants.filter((p) => p.id !== keepId);
-		const fps = g.candidates.filter((c) => participants.some((p) => p.id === c.id)).map((c) => ({ id: c.id, fp: c.fp }));
-		mergeAsk = { g, keepId, keepName, ids: rest.map((p) => p.id), names: rest.map((p) => p.name), fps };
+	function askSame(g: Group, cands: Cand[]) {
+		if (cands.length === 0) return;
+		sameAsk = {
+			main: { id: g.main.id, name: g.main.name },
+			cands: cands.map((c) => ({ id: c.id, name: c.name, fp: c.fp, outside: c.outside })),
+			keepId: g.main.id
+		};
 	}
+	const quoted = (names: string[]) =>
+		names.length <= 1
+			? `"${names[0] ?? ''}"`
+			: `${names.slice(0, -1).map((n) => `"${n}"`).join(', ')} and "${names[names.length - 1]}"`;
 
 	/** After an action removes a card, put focus on the next card (or the section). */
 	async function refocus(index: number) {
@@ -248,8 +245,9 @@
 		<a href="/admin/entities" class="back">Entities &amp; Aliases</a>
 		<h1>Find duplicates</h1>
 		<p class="subtitle">
-			Names the extractor may have split in two: typos, nicknames, fuller names. Read the entries, tick the ones
-			that are the same {kindWord[data.type]}, then merge. Nothing changes until you confirm.
+			Names the extractor may have split in two: typos, nicknames, fuller names. For each name, open its entries if
+			you need to, then answer <strong>Yes, same {kindWord[data.type]}</strong> (you confirm first) or <strong>No, different</strong>
+			(takes effect at once; undo it in the list at the bottom). Not sure? Leave it, or skip the card for now.
 		</p>
 	</header>
 
@@ -311,24 +309,17 @@
 				{#each g.candidates as c (c.id)}
 					{@const k = checkOf(g, c)}
 					{@const l = live[key(g, c)]}
+					{@const hint = suggested(g, c)}
 					<li class="cand">
 						<div class="cand-row">
-							<label class="tick">
-								<input
-									type="checkbox"
-									checked={ticked(g, c)}
-									disabled={stale(g, c)}
-									onchange={(e) => setTick(g, c, e.currentTarget.checked)}
-								/>
-								<span class="cand-name">{c.name}</span>
-							</label>
+							<span class="cand-name">{c.name}</span>
 							<span class="meta">{c.count} {c.count === 1 ? 'day' : 'days'}{c.years ? `, ${c.years}` : ''}</span>
 						</div>
 						<p class="why">Suggested because: {reasonText(c, g.main.name)}.</p>
 						{#if c.outside > 0}
 							<p class="warn">
 								⚠ {c.outside} of {c.count} {c.count === 1 ? 'day is' : 'days are'} well outside {g.main.name}'s years ({g.main.years}).
-								It may be someone else on those days: read them, and move those days instead of merging.
+								It may be someone else on those days: read them, and move those days instead.
 							</p>
 						{/if}
 						{#if k}
@@ -340,34 +331,26 @@
 							<p class="verdict">Claude: being checked in another tab.</p>
 						{:else if l === 'changed'}
 							<p class="verdict">
-								The entries for this name changed since this page loaded. Reload the page to see them; it can't be
-								merged from here until then.
+								The entries for this name changed since this page loaded. Reload the page to see them before deciding.
 							</p>
 						{/if}
 						<details class="entries" ontoggle={(e) => markOpened(`c${g.main.id}:${c.id}`, e)}>
 							<summary>Entries for {c.name}</summary>
 							{#if opened[`c${g.main.id}:${c.id}`]}<EntityMentions entityId={c.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
 						</details>
-						<div class="cand-actions">
-							<label class="keep">
-								<input
-									type="radio"
-									name="keep-{g.main.id}"
-									checked={keepOf(g) === c.id}
-									disabled={stale(g, c)}
-									onchange={() => chooseKeep(g, c)}
-								/>
-								Keep this name
-							</label>
-							<form method="POST" action="/admin/entities/cleanup?/alias" use:enhance={() => result(gi)}>
-								<input type="hidden" name="id" value={c.id} />
-								<input type="hidden" name="targetId" value={g.main.id} />
-								<button type="submit" class="btn small">Alias of {g.main.name}</button>
-							</form>
+						<div class="cand-actions" role="group" aria-label="Is {c.name} the same {kindWord[data.type]} as {g.main.name}?">
+							<span class="ask">Same {kindWord[data.type]} as "{g.main.name}"?</span>
+							<button
+								type="button"
+								class="btn small"
+								class:primary={hint === 'same'}
+								disabled={stale(g, c)}
+								onclick={() => askSame(g, [c])}>Yes, same {kindWord[data.type]}…</button
+							>
 							<form method="POST" action="/admin/entities/cleanup?/notSame" use:enhance={() => result(gi)}>
 								<input type="hidden" name="a" value={g.main.id} />
 								<input type="hidden" name="b" value={c.id} />
-								<button type="submit" class="btn small">Not the same</button>
+								<button type="submit" class="btn small" class:primary={hint === 'different'}>No, different</button>
 							</form>
 						</div>
 					</li>
@@ -375,31 +358,23 @@
 			</ul>
 
 			<div class="card-actions">
-				<label class="keep">
-					<input
-						type="radio"
-						name="keep-{g.main.id}"
-						checked={keepOf(g) === g.main.id}
-						onchange={() => chooseKeep(g, null)}
-					/>
-					Keep "{g.main.name}"
-				</label>
-				<button
-					type="button"
-					class="btn primary"
-					disabled={!g.candidates.some((c) => ticked(g, c))}
-					onclick={() => askMerge(g)}>Merge ticked…</button
-				>
-				<button type="button" class="btn" onclick={() => checkGroup(g)} disabled={mainChecking || unchecked(g).length === 0}>
-					{mainChecking ? 'Checking…' : unchecked(g).length === 0 ? 'Checked' : 'Check with Claude'}
-				</button>
+				{#if mergeable(g).length >= 2}
+					<button type="button" class="btn" onclick={() => askSame(g, mergeable(g))}
+						>All {mergeable(g).length + 1} are the same {kindWord[data.type]}…</button
+					>
+				{/if}
+				{#if mainChecking || unchecked(g).length > 0}
+					<button type="button" class="btn" onclick={(e) => askClaude(g, e.currentTarget)} disabled={mainChecking}>
+						{mainChecking ? 'Asking Claude…' : 'Ask Claude'}
+					</button>
+				{/if}
 				<button
 					type="button"
 					class="btn"
 					onclick={async () => {
 						skipped = { ...skipped, [g.main.id]: true };
 						await refocus(gi);
-					}}>Skip for now</button
+					}}>Not sure: skip for now</button
 				>
 			</div>
 			{#if groupError[g.main.id]}<p class="error" role="alert">{groupError[g.main.id]}</p>{/if}
@@ -444,34 +419,59 @@
 	{/if}
 </div>
 
-{#if mergeAsk}
-	<Modal labelledby="merge-h" onclose={() => (mergeAsk = null)}>
+{#if sameAsk}
+	{@const ask = sameAsk}
+	{@const all = [ask.main, ...ask.cands]}
+	{@const keepName = all.find((n) => n.id === ask.keepId)?.name ?? ask.main.name}
+	{@const changed = ask.cands.filter((c) => live[`${ask.main.id}:${c.id}:${c.fp}`] === 'changed')}
+	<Modal labelledby="same-h" onclose={() => (sameAsk = null)}>
 		<div class="modal-overlay">
 			<div class="modal-content">
-				<h3 id="merge-h">Merge into "{mergeAsk.keepName}"?</h3>
+				<h3 id="same-h">Same {kindWord[data.type]}?</h3>
 				<p>
-					{mergeAsk.names.map((n) => `"${n}"`).join(', ')}
-					{mergeAsk.names.length === 1 ? 'becomes' : 'become'} part of "{mergeAsk.keepName}": their days move to it and
-					the names are kept as aliases. This can't be undone.
+					{quoted(all.map((n) => n.name))} will become one {kindWord[data.type]}, shown as "{keepName}". All of their
+					days are listed under that name, and the other {all.length === 2 ? 'spelling is' : 'spellings are'} kept as
+					{all.length === 2 ? 'an alias' : 'aliases'}, so the extractor recognises {all.length === 2 ? 'it' : 'them'}.
 				</p>
+				{#each ask.cands.filter((c) => c.outside > 0) as c (c.id)}
+					<p class="warn">
+						⚠ Some of "{c.name}"'s days are well outside "{ask.main.name}"'s years. If those days are about someone else,
+						press Cancel and move them first.
+					</p>
+				{/each}
+				<fieldset class="show-as">
+					<legend>Show as</legend>
+					{#each all as n (n.id)}
+						<label class="keep">
+							<input type="radio" name="show-as" value={n.id} checked={ask.keepId === n.id} onchange={() => (ask.keepId = n.id)} />
+							{n.name}
+						</label>
+					{/each}
+				</fieldset>
+				<p>This can't be undone.</p>
+				{#if changed.length > 0}
+					<p class="warn" role="alert">
+						The entries for {quoted(changed.map((c) => c.name))} changed since this page loaded. Cancel and reload the page
+						before deciding.
+					</p>
+				{/if}
 				<div class="modal-actions">
-					<button type="button" class="btn" onclick={() => (mergeAsk = null)}>Cancel</button>
+					<button type="button" class="btn" onclick={() => (sameAsk = null)}>Cancel</button>
 					<form
 						method="POST"
 						action="/admin/entities/cleanup?/mergeGroup"
 						use:enhance={() => {
-							const t = mergeAsk;
-							// By id: mergeAsk is $state, so t.g is a proxy, never === a list item.
-							return result(t ? visible.findIndex((x) => x.main.id === t.g.main.id) : -1, () => {
-								if (mergeAsk === t) mergeAsk = null;
+							const t = sameAsk;
+							return result(t ? visible.findIndex((x) => x.main.id === t.main.id) : -1, () => {
+								if (sameAsk === t) sameAsk = null;
 							});
 						}}
 					>
-						<input type="hidden" name="keepId" value={mergeAsk.keepId} />
-						{#each mergeAsk.ids as id (id)}<input type="hidden" name="id" value={id} />{/each}
-						<input type="hidden" name="mainId" value={mergeAsk.g.main.id} />
-						{#each mergeAsk.fps as f (f.id)}<input type="hidden" name="fp:{f.id}" value={f.fp} />{/each}
-						<button type="submit" class="btn primary">Merge</button>
+						<input type="hidden" name="keepId" value={ask.keepId} />
+						{#each all.filter((n) => n.id !== ask.keepId) as n (n.id)}<input type="hidden" name="id" value={n.id} />{/each}
+						<input type="hidden" name="mainId" value={ask.main.id} />
+						{#each ask.cands as c (c.id)}<input type="hidden" name="fp:{c.id}" value={c.fp} />{/each}
+						<button type="submit" class="btn primary" disabled={changed.length > 0}>Yes, show as "{keepName}"</button>
 					</form>
 				</div>
 			</div>
@@ -680,14 +680,6 @@
 		align-items: center;
 		gap: 0.3rem 0.8rem;
 	}
-	.tick {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-height: 44px;
-		cursor: pointer;
-	}
-	.tick input,
 	.keep input {
 		width: 22px;
 		height: 22px;
@@ -719,6 +711,26 @@
 	.card-actions {
 		border-top: 1px solid #eee;
 		padding-top: 0.6rem;
+	}
+	.ask {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: #222;
+		margin-right: 0.2rem;
+	}
+	.show-as {
+		border: 1px solid #ddd;
+		border-radius: 6px;
+		margin: 0 0 1rem;
+		padding: 0.2rem 0.8rem 0.4rem;
+		display: flex;
+		flex-direction: column;
+	}
+	.show-as legend {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: #222;
+		padding: 0 0.3rem;
 	}
 	.keep {
 		display: inline-flex;
@@ -776,6 +788,11 @@
 		padding: 1.25rem 1.5rem;
 		max-width: 460px;
 		width: 90%;
+		/* Many names, or a short screen: scroll inside the box, never off-screen. */
+		max-height: calc(100vh - 2rem);
+		max-height: calc(100dvh - 2rem);
+		overflow-y: auto;
+		box-sizing: border-box;
 	}
 	.modal-content h3 {
 		margin: 0 0 0.5rem;
@@ -789,7 +806,11 @@
 	}
 	.modal-actions {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: flex-end;
 		gap: 0.6rem;
+	}
+	.modal-content .warn {
+		color: #6b3d00;
 	}
 </style>
