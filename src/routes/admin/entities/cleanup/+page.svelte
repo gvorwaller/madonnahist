@@ -77,14 +77,42 @@
 	let shown = $state(20);
 	const backTo = (mainId: number) => `/admin/entities/cleanup?type=${data.type}#g-${mainId}`;
 
+	// ── Sections: each folds; "Jump to" opens one and moves to it (td-a7920d) ──
+	type Sec = 'dups' | 'unused' | 'notsame';
+	const sec = $state<Record<Sec, boolean>>({ dups: true, unused: false, notsame: false });
+	// Focus goes to the section's own <summary>, so Enter or Space right
+	// after a jump folds it again (CODEX9).
+	const focusSection = (k: Sec) => document.querySelector<HTMLElement>(`#sec-${k} > summary`)?.focus();
+	async function openSection(k: Sec) {
+		sec[k] = true;
+		await tick();
+		focusSection(k);
+	}
+	// The link stays a real link: the address gets #sec-<name> (so reload and
+	// copy keep it), and a modified click (new tab) is left to the browser.
+	// Opening here, before the browser scrolls to the fragment, means it
+	// scrolls to the opened section. Focus moves after that fragment
+	// navigation (a task later), which would otherwise take it away again;
+	// SvelteKit doesn't run afterNavigate for an in-page hash link.
+	function jump(e: MouseEvent, k: Sec) {
+		if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+		sec[k] = true;
+		setTimeout(() => focusSection(k));
+	}
+
 	// Back from a day opened in a group's entries (td-8a7e37): the link ends
-	// in #g-<main id>. Show enough groups to include it, then put focus on its
-	// heading, which also scrolls it into view.
+	// in #g-<main id>. Open the duplicates, show enough groups to include it,
+	// then put focus on its heading, which also scrolls it into view. A
+	// #sec-<name> link opens that section.
 	afterNavigate(async ({ to }) => {
-		const m = /^#g-(\d+)$/.exec(to?.url.hash ?? '');
+		const hash = to?.url.hash ?? '';
+		const s = /^#sec-(dups|unused|notsame)$/.exec(hash);
+		if (s) return openSection(s[1] as Sec);
+		const m = /^#g-(\d+)$/.exec(hash);
 		if (!m) return;
 		const at = visible.findIndex((g) => g.main.id === Number(m[1]));
 		if (at < 0) return;
+		sec.dups = true;
 		if (at >= shown) shown = Math.ceil((at + 1) / 20) * 20;
 		await tick();
 		document.getElementById(`g-${m[1]}`)?.focus();
@@ -214,7 +242,7 @@
 	async function refocus(index: number) {
 		await tick();
 		const cards = [...document.querySelectorAll<HTMLElement>('[data-group-heading]')];
-		const el = cards[Math.min(index, cards.length - 1)] ?? document.getElementById('groups-heading');
+		const el = cards[Math.min(index, cards.length - 1)] ?? document.querySelector<HTMLElement>('#sec-dups > summary');
 		el?.focus({ preventScroll: false });
 	}
 
@@ -247,7 +275,7 @@
 		<p class="subtitle">
 			Names the extractor may have split in two: typos, nicknames, fuller names. For each name, open its entries if
 			you need to, then answer <strong>Yes, same {kindWord[data.type]}</strong> (you confirm first) or <strong>No, different</strong>
-			(takes effect at once; undo it in the list at the bottom). Not sure? Leave it, or skip the card for now.
+			(takes effect at once; undo it under Marked not the same). Not sure? Leave it, or skip the card for now.
 		</p>
 	</header>
 
@@ -269,154 +297,176 @@
 		</div>
 	{/if}
 
-	<div class="toolbar">
-		{#if batch}
-			<span>Checking with Claude: {batch.done} of {batch.list.length} groups done…</span>
-			<button type="button" class="btn" onclick={() => batch && (batch.stop = true)} disabled={batch.stop}>
-				{batch.stop ? 'Stopping after this group…' : 'Stop'}
-			</button>
-		{:else}
-			<button type="button" class="btn" onclick={checkNext}>Check the next 20 groups with Claude</button>
-			<span class="hint">Claude reads a few entries for each name and suggests which are the same. About a cent per group.</span>
+	<nav class="jump" aria-label="Sections on this page">
+		<span class="jump-label">Jump to:</span>
+		<a href="#sec-dups" onclick={(e) => jump(e, 'dups')}>Possible duplicates <span class="count">({visible.length})</span></a>
+		<a href="#sec-unused" onclick={(e) => jump(e, 'unused')}>Unused <span class="count">({data.unused.length})</span></a>
+		<a href="#sec-notsame" onclick={(e) => jump(e, 'notsame')}
+			>Marked not the same <span class="count">({data.notSame.length})</span></a
+		>
+	</nav>
+
+	<details class="section" id="sec-dups" bind:open={sec.dups}>
+		<summary>
+			<h2>
+				Possible duplicates <span class="count">very likely {likely.length}, possibly {possible.length}</span>
+			</h2>
+		</summary>
+
+		<div class="toolbar">
+			{#if batch}
+				<span>Checking with Claude: {batch.done} of {batch.list.length} groups done…</span>
+				<button type="button" class="btn" onclick={() => batch && (batch.stop = true)} disabled={batch.stop}>
+					{batch.stop ? 'Stopping after this group…' : 'Stop'}
+				</button>
+			{:else}
+				<button type="button" class="btn" onclick={checkNext}>Check the next 20 groups with Claude</button>
+				<span class="hint">Claude reads a few entries for each name and suggests which are the same. About a cent per group.</span>
+			{/if}
+		</div>
+
+		{#if visible.length === 0}
+			<p class="empty">No likely duplicates among these {TABS.find((t) => t.type === data.type)?.label.toLowerCase()}.</p>
 		{/if}
-	</div>
 
-	<h2 id="groups-heading" tabindex="-1">
-		Very likely the same <span class="count">{likely.length}</span>, possibly the same
-		<span class="count">{possible.length}</span>
-	</h2>
+		{#each visible.slice(0, shown) as g, gi (g.main.id)}
+			{@const mainChecking = checking[g.main.id]}
+			<section class="card" data-group aria-labelledby="g-{g.main.id}">
+				<div class="card-head">
+					<h3 id="g-{g.main.id}" data-group-heading tabindex="-1">
+						{g.main.name}
+						<span class="meta">{g.main.count} {g.main.count === 1 ? 'day' : 'days'}{g.main.years ? `, ${g.main.years}` : ''}</span>
+					</h3>
+					<span class="tier {g.tier}">{g.tier === 'likely' ? 'Very likely' : 'Possibly'}</span>
+				</div>
+				<details class="entries" ontoggle={(e) => markOpened(`m${g.main.id}`, e)}>
+					<summary>Entries for {g.main.name}</summary>
+					{#if opened[`m${g.main.id}`]}<EntityMentions entityId={g.main.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
+				</details>
 
-	{#if visible.length === 0}
-		<p class="empty">No likely duplicates among these {TABS.find((t) => t.type === data.type)?.label.toLowerCase()}.</p>
-	{/if}
+				<ul class="cands">
+					{#each g.candidates as c (c.id)}
+						{@const k = checkOf(g, c)}
+						{@const l = live[key(g, c)]}
+						{@const hint = suggested(g, c)}
+						<li class="cand">
+							<div class="cand-row">
+								<span class="cand-name">{c.name}</span>
+								<span class="meta">{c.count} {c.count === 1 ? 'day' : 'days'}{c.years ? `, ${c.years}` : ''}</span>
+							</div>
+							<p class="why">Suggested because: {reasonText(c, g.main.name)}.</p>
+							{#if c.outside > 0}
+								<p class="warn">
+									⚠ {c.outside} of {c.count} {c.count === 1 ? 'day is' : 'days are'} well outside {g.main.name}'s years ({g.main.years}).
+									It may be someone else on those days: read them, and move those days instead.
+								</p>
+							{/if}
+							{#if k}
+								<p class="verdict {k.verdict}">
+									Claude: <strong>{k.verdict === 'same' ? 'Same' : k.verdict === 'different' ? 'Different' : 'Not sure'}</strong>
+									— {k.reason}
+								</p>
+							{:else if l === 'busy'}
+								<p class="verdict">Claude: being checked in another tab.</p>
+							{:else if l === 'changed'}
+								<p class="verdict">
+									The entries for this name changed since this page loaded. Reload the page to see them before deciding.
+								</p>
+							{/if}
+							<details class="entries" ontoggle={(e) => markOpened(`c${g.main.id}:${c.id}`, e)}>
+								<summary>Entries for {c.name}</summary>
+								{#if opened[`c${g.main.id}:${c.id}`]}<EntityMentions entityId={c.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
+							</details>
+							<div class="cand-actions" role="group" aria-label="Is {c.name} the same {kindWord[data.type]} as {g.main.name}?">
+								<span class="ask">Same {kindWord[data.type]} as "{g.main.name}"?</span>
+								<button
+									type="button"
+									class="btn small"
+									class:primary={hint === 'same'}
+									disabled={stale(g, c)}
+									onclick={() => askSame(g, [c])}>Yes, same {kindWord[data.type]}…</button
+								>
+								<form method="POST" action="/admin/entities/cleanup?/notSame" use:enhance={() => result(gi)}>
+									<input type="hidden" name="a" value={g.main.id} />
+									<input type="hidden" name="b" value={c.id} />
+									<button type="submit" class="btn small" class:primary={hint === 'different'}>No, different</button>
+								</form>
+							</div>
+						</li>
+					{/each}
+				</ul>
 
-	{#each visible.slice(0, shown) as g, gi (g.main.id)}
-		{@const mainChecking = checking[g.main.id]}
-		<section class="card" data-group aria-labelledby="g-{g.main.id}">
-			<div class="card-head">
-				<h3 id="g-{g.main.id}" data-group-heading tabindex="-1">
-					{g.main.name}
-					<span class="meta">{g.main.count} {g.main.count === 1 ? 'day' : 'days'}{g.main.years ? `, ${g.main.years}` : ''}</span>
-				</h3>
-				<span class="tier {g.tier}">{g.tier === 'likely' ? 'Very likely' : 'Possibly'}</span>
-			</div>
-			<details class="entries" ontoggle={(e) => markOpened(`m${g.main.id}`, e)}>
-				<summary>Entries for {g.main.name}</summary>
-				{#if opened[`m${g.main.id}`]}<EntityMentions entityId={g.main.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
-			</details>
+				<div class="card-actions">
+					{#if mergeable(g).length >= 2}
+						<button type="button" class="btn" onclick={() => askSame(g, mergeable(g))}
+							>All {mergeable(g).length + 1} are the same {kindWord[data.type]}…</button
+						>
+					{/if}
+					{#if mainChecking || unchecked(g).length > 0}
+						<button type="button" class="btn" onclick={(e) => askClaude(g, e.currentTarget)} disabled={mainChecking}>
+							{mainChecking ? 'Asking Claude…' : 'Ask Claude'}
+						</button>
+					{/if}
+					<button
+						type="button"
+						class="btn"
+						onclick={async () => {
+							skipped = { ...skipped, [g.main.id]: true };
+							await refocus(gi);
+						}}>Not sure: skip for now</button
+					>
+				</div>
+				{#if groupError[g.main.id]}<p class="error" role="alert">{groupError[g.main.id]}</p>{/if}
+			</section>
+		{/each}
 
-			<ul class="cands">
-				{#each g.candidates as c (c.id)}
-					{@const k = checkOf(g, c)}
-					{@const l = live[key(g, c)]}
-					{@const hint = suggested(g, c)}
-					<li class="cand">
-						<div class="cand-row">
-							<span class="cand-name">{c.name}</span>
-							<span class="meta">{c.count} {c.count === 1 ? 'day' : 'days'}{c.years ? `, ${c.years}` : ''}</span>
-						</div>
-						<p class="why">Suggested because: {reasonText(c, g.main.name)}.</p>
-						{#if c.outside > 0}
-							<p class="warn">
-								⚠ {c.outside} of {c.count} {c.count === 1 ? 'day is' : 'days are'} well outside {g.main.name}'s years ({g.main.years}).
-								It may be someone else on those days: read them, and move those days instead.
-							</p>
-						{/if}
-						{#if k}
-							<p class="verdict {k.verdict}">
-								Claude: <strong>{k.verdict === 'same' ? 'Same' : k.verdict === 'different' ? 'Different' : 'Not sure'}</strong>
-								— {k.reason}
-							</p>
-						{:else if l === 'busy'}
-							<p class="verdict">Claude: being checked in another tab.</p>
-						{:else if l === 'changed'}
-							<p class="verdict">
-								The entries for this name changed since this page loaded. Reload the page to see them before deciding.
-							</p>
-						{/if}
-						<details class="entries" ontoggle={(e) => markOpened(`c${g.main.id}:${c.id}`, e)}>
-							<summary>Entries for {c.name}</summary>
-							{#if opened[`c${g.main.id}:${c.id}`]}<EntityMentions entityId={c.id} options={data.canonical} back={backTo(g.main.id)} />{/if}
-						</details>
-						<div class="cand-actions" role="group" aria-label="Is {c.name} the same {kindWord[data.type]} as {g.main.name}?">
-							<span class="ask">Same {kindWord[data.type]} as "{g.main.name}"?</span>
-							<button
-								type="button"
-								class="btn small"
-								class:primary={hint === 'same'}
-								disabled={stale(g, c)}
-								onclick={() => askSame(g, [c])}>Yes, same {kindWord[data.type]}…</button
-							>
-							<form method="POST" action="/admin/entities/cleanup?/notSame" use:enhance={() => result(gi)}>
-								<input type="hidden" name="a" value={g.main.id} />
-								<input type="hidden" name="b" value={c.id} />
-								<button type="submit" class="btn small" class:primary={hint === 'different'}>No, different</button>
-							</form>
-						</div>
+		{#if visible.length > shown}
+			<button type="button" class="btn" onclick={() => (shown += 20)}>Show 20 more groups ({visible.length - shown} left)</button>
+		{/if}
+	</details>
+
+	<details class="section" id="sec-unused" bind:open={sec.unused}>
+		<summary><h2>Unused <span class="count">{data.unused.length}</span></h2></summary>
+		{#if data.unused.length === 0}
+			<p class="empty">None: every name is mentioned, aliased, or has a map decision or a "not the same" mark.</p>
+		{:else}
+			<p class="hint">
+				Names no day mentions any more, for example after a correction removed the last one. Names with aliases, moved
+				days, a map decision or a "not the same" mark are kept and not listed.
+			</p>
+			<ul class="plain">
+				{#each data.unused as u (u.id)}
+					<li>
+						{u.name}
+						<button type="button" class="btn small danger" onclick={() => (deleteAsk = { id: u.id, name: u.name })}>Delete…</button>
 					</li>
 				{/each}
 			</ul>
+		{/if}
 
-			<div class="card-actions">
-				{#if mergeable(g).length >= 2}
-					<button type="button" class="btn" onclick={() => askSame(g, mergeable(g))}
-						>All {mergeable(g).length + 1} are the same {kindWord[data.type]}…</button
-					>
-				{/if}
-				{#if mainChecking || unchecked(g).length > 0}
-					<button type="button" class="btn" onclick={(e) => askClaude(g, e.currentTarget)} disabled={mainChecking}>
-						{mainChecking ? 'Asking Claude…' : 'Ask Claude'}
-					</button>
-				{/if}
-				<button
-					type="button"
-					class="btn"
-					onclick={async () => {
-						skipped = { ...skipped, [g.main.id]: true };
-						await refocus(gi);
-					}}>Not sure: skip for now</button
-				>
-			</div>
-			{#if groupError[g.main.id]}<p class="error" role="alert">{groupError[g.main.id]}</p>{/if}
-		</section>
-	{/each}
+	</details>
 
-	{#if visible.length > shown}
-		<button type="button" class="btn" onclick={() => (shown += 20)}>Show 20 more groups ({visible.length - shown} left)</button>
-	{/if}
-
-	<h2>Unused <span class="count">{data.unused.length}</span></h2>
-	{#if data.unused.length === 0}
-		<p class="empty">None: every name is mentioned, aliased, or has a map decision or a "not the same" mark.</p>
-	{:else}
-		<p class="hint">Mentioned on no day, with no aliases, moved days, map decision or "not the same" mark.</p>
-		<ul class="plain">
-			{#each data.unused as u (u.id)}
-				<li>
-					{u.name}
-					<button type="button" class="btn small danger" onclick={() => (deleteAsk = { id: u.id, name: u.name })}>Delete…</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
-
-	<h2>Marked not the same <span class="count">{data.notSame.length}</span></h2>
-	{#if data.notSame.length === 0}
-		<p class="empty">None yet.</p>
-	{:else}
-		<ul class="plain">
-			{#each data.notSame as p (`${p.a.id}:${p.b.id}`)}
-				<li>
-					"{p.a.name}" and "{p.b.name}"
-					<form method="POST" action="/admin/entities/cleanup?/undoNotSame" use:enhance={() => result()}>
-						<input type="hidden" name="a" value={p.a.id} />
-						<input type="hidden" name="b" value={p.b.id} />
-						<button type="submit" class="btn small">Undo</button>
-					</form>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	<details class="section" id="sec-notsame" bind:open={sec.notsame}>
+		<summary
+			><h2>Marked not the same <span class="count">{data.notSame.length}</span></h2></summary
+		>
+		{#if data.notSame.length === 0}
+			<p class="empty">None yet.</p>
+		{:else}
+			<ul class="plain">
+				{#each data.notSame as p (`${p.a.id}:${p.b.id}`)}
+					<li>
+						"{p.a.name}" and "{p.b.name}"
+						<form method="POST" action="/admin/entities/cleanup?/undoNotSame" use:enhance={() => result()}>
+							<input type="hidden" name="a" value={p.a.id} />
+							<input type="hidden" name="b" value={p.b.id} />
+							<button type="submit" class="btn small">Undo</button>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</details>
 </div>
 
 {#if sameAsk}
@@ -565,6 +615,65 @@
 		margin: 0.4rem 0;
 		color: #1a4731;
 		font-weight: 600;
+	}
+	.jump {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.6rem;
+		margin: 0.4rem 0 0.8rem;
+	}
+	.jump-label {
+		font-size: 0.9rem;
+		color: #222;
+	}
+	.jump a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		min-height: 44px;
+		padding: 0 0.8rem;
+		border: 1px solid #bbb;
+		border-radius: 6px;
+		color: #1a4731;
+		text-decoration: none;
+		font-size: 0.9rem;
+	}
+	.jump a:focus-visible {
+		outline: 2px solid #1a4731;
+		outline-offset: 2px;
+	}
+	.section {
+		border-top: 1px solid #ccc;
+		margin-top: 0.8rem;
+	}
+	.section > summary {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 44px;
+		cursor: pointer;
+		list-style: none;
+	}
+	.section > summary::-webkit-details-marker {
+		display: none;
+	}
+	.section > summary::before {
+		content: '▶';
+		font-size: 0.85rem;
+		color: #1a4731;
+		width: 1.1rem;
+		flex: none;
+	}
+	.section[open] > summary::before {
+		content: '▼';
+	}
+	.section > summary h2 {
+		margin: 0.8rem 0;
+	}
+	.section > summary:focus-visible {
+		outline: 2px solid #1a4731;
+		outline-offset: 2px;
 	}
 	.toolbar {
 		display: flex;

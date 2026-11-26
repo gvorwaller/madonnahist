@@ -48,6 +48,9 @@ const people = [
 	ent('Rebeky', 1, ['1985-10-18']),
 	ent('Ghost', 0, []),
 	ent('Ghosts', 0, []),
+	ent('Paige', 30),
+	ent('J S Paige', 0, []),
+	ent('Gaylon Vorwaller', 0, []),
 	ent('...', 3)
 ];
 let g = run(people);
@@ -67,7 +70,8 @@ check('Janie ~ Jamie is suggested (a known false positive the reviewer rejects)'
 m = find(g, 'Rebeky');
 check('Rebeky ~ Rebekah is suggested', m?.main === 'Rebekah', JSON.stringify(m));
 check('Becky is not grouped with Rebekah by spelling (needs Move from search)', find(g, 'Becky')?.main !== 'Rebekah');
-check('zero-mention names are never "very likely" by the 10× rule', find(g, 'Ghost')?.tier !== 'likely' || find(g, 'Ghost')?.reason === 'same-letters', JSON.stringify(find(g, 'Ghost')));
+const inAnyGroup = (name: string) => g.some((x) => x.main.name === name || x.candidates.some((c) => c.entity.name === name));
+check('names with no days are never suggested (Ghost/Ghosts, J S Paige, Gaylon Vorwaller)', !['Ghost', 'Ghosts', 'J S Paige', 'Gaylon Vorwaller'].some(inAnyGroup));
 check('a name that folds to nothing is never matched', !g.some((x) => x.main.name === '...' || x.candidates.some((c) => c.entity.name === '...')));
 const names = g.flatMap((x) => x.candidates.map((c) => c.entity.id));
 check('each candidate is placed exactly once', names.length === new Set(names).size);

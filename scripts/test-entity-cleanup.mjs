@@ -882,8 +882,32 @@ async function main() {
 	);
 
 	// ── Page renders ──
-	const html = await (await fetch(`${BASE}/admin/entities/cleanup?type=person`, { headers: { cookie: admin } })).text();
-	check('the page lists a fixture group', html.includes('Zqxdupdana') && html.includes('Find duplicates'));
+	const page = async () => {
+		const h = await (await fetch(`${BASE}/admin/entities/cleanup?type=person`, { headers: { cookie: admin } })).text();
+		const u = h.indexOf('id="sec-unused"');
+		const n = h.indexOf('id="sec-notsame"');
+		return { html: h, dups: h.slice(h.indexOf('id="sec-dups"'), u), unused: h.slice(u, n) };
+	};
+	let pg = await page();
+	check('the page lists a fixture group', pg.html.includes('Zqxdupdana') && pg.html.includes('Find duplicates'));
+	check('the page has the three sections and jump links', pg.dups.length > 0 && pg.unused.length > 0 && /href="#sec-unused"/.test(pg.html) && /href="#sec-notsame"/.test(pg.html));
+
+	// ── td-a7920d: a correction removes a name's last day ("J S Paige") ──
+	// It stops being suggested and is offered under Unused instead.
+	const jm = await mkEnt('Zqxdupjspaige');
+	const jc = await mkEnt('Zqxdup J S Paige');
+	for (const d of ['1914-03-01', '1914-03-02', '1914-03-03']) await link(await mkDay(d, 'Zqxdupjspaige came by.'), jm);
+	const jday = await mkDay('1914-03-04', 'Zqxdup J S Paige.');
+	await link(jday, jc);
+	pg = await page();
+	check('td-a7920d before: the name with a day is suggested, not unused', pg.dups.includes('Zqxdup J S Paige') && !pg.unused.includes('Zqxdup J S Paige'));
+	// The corrected day now names only the main person; re-extraction drops the stray link.
+	await reextract(jday, [P('Zqxdupjspaige')]);
+	pg = await page();
+	check(
+		'td-a7920d after the correction: no longer suggested, listed under Unused with Delete',
+		(await links(jday)).every((l) => l.e !== jc) && !pg.dups.includes('Zqxdup J S Paige') && pg.unused.includes('Zqxdup J S Paige') && /Delete…/.test(pg.unused)
+	);
 }
 
 // One suite at a time: every run shares the fixture users and the zqxdup

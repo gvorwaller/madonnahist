@@ -134,7 +134,13 @@ export function findGroups(
 	entities: MatchEntity[],
 	opts: { notSame: Set<string>; firstWord: boolean }
 ): Group[] {
-	const prepared = entities.map(prepare).filter((p): p is Prepared => p !== null);
+	// A name with no days (e.g. a correction removed its last mention) has no
+	// evidence and nothing to merge: it is never suggested, either way round.
+	// The cleanup page lists it under Unused instead (td-a7920d).
+	const prepared = entities
+		.filter((e) => e.count > 0)
+		.map(prepare)
+		.filter((p): p is Prepared => p !== null);
 	// Best pair for each candidate id.
 	const best = new Map<number, { main: Prepared; tier: Tier; reason: MatchReason }>();
 	for (let i = 0; i < prepared.length; i++) {
